@@ -1732,7 +1732,7 @@ addEventListener('mouseup',   e => {
   if (e.button === 0) mouseDown = false;
   if (e.button === 2) setADS(false);
 });
-addEventListener('contextmenu', e => e.preventDefault());
+addEventListener('contextmenu', e => { if (pointerLocked) e.preventDefault(); });
 function setADS(on) {
   const g = GUNS[currentGun];
   adsActive = !!(on && g.scopeFov);
@@ -3476,17 +3476,19 @@ async function startMultiplayer() {
     return;
   }
   document.getElementById('mpStartBtn').disabled = true;
-  mpStatus('Opening Playroom lobby…', '#ffd166');
-  const wasOverlayVisible = !overlay.classList.contains('hidden');
-  if (wasOverlayVisible) overlay.classList.add('hidden');
-  // Hide the 3D canvas and HUD entirely so nothing can possibly intercept clicks on Playroom's lobby
-  canvas.style.visibility = 'hidden';
+  mpStatus('Starting multiplayer…', '#ffd166');
   try {
-    await Playroom.insertCoin({ skipLobby: false, maxPlayersPerRoom: 2 });
-    canvas.style.visibility = 'visible';
-    if (wasOverlayVisible) overlay.classList.remove('hidden');
+    // skipLobby: true bypasses Playroom's built-in avatar/room UI entirely.
+    // Playroom picks a room code automatically and encodes it in the URL.
+    // Share the URL with your friend; they open it and join automatically.
+    await Playroom.insertCoin({ skipLobby: true, maxPlayersPerRoom: 2 });
     mpRole = Playroom.isHost() ? 'host' : 'client';
-    mpStatus(`Connected ✓  (you are the ${mpRole})`, '#7fff8d');
+    // If we're the host, show the shareable URL; if we're the client, we joined an existing room
+    const currentUrl = window.location.href;
+    const shareMsg = mpRole === 'host'
+      ? `Connected ✓ — You're the HOST. Share this exact URL with your friend: ${currentUrl}`
+      : `Connected ✓ — You joined as CLIENT.`;
+    mpStatus(shareMsg, '#7fff8d');
     document.getElementById('mpLeaveBtn').style.display = 'inline-block';
 
     // Track remote players joining/leaving
@@ -3519,8 +3521,6 @@ async function startMultiplayer() {
     }, 50);
   } catch (e) {
     console.error('[mp] insertCoin failed', e);
-    canvas.style.visibility = 'visible';
-    if (wasOverlayVisible) overlay.classList.remove('hidden');
     mpStatus('Multiplayer failed to start: ' + (e && e.message || e), '#ff8080');
     document.getElementById('mpStartBtn').disabled = false;
   }
