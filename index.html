@@ -224,8 +224,9 @@
   <p style="opacity:0.7;font-size:12px;margin-top:8px">Press P to toggle • Esc also resumes</p>
 </div>
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
+<div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.31</div>
+<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.33</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -1897,6 +1898,8 @@ function tryShoot(now) {
         dx: dir.x, dy: dir.y, dz: dir.z,
         radius: g.blastRadius, damage: g.damage,
       }, Playroom.RPC.Mode.HOST); } catch {}
+      // Local visual-only rocket so client sees their own shot (no damage — enemies array is empty on client)
+      spawnRocket(muzzle.clone(), dir.clone(), g.blastRadius, 0);
     } else {
       spawnRocket(muzzle, dir, g.blastRadius, g.damage);
     }
@@ -1917,6 +1920,15 @@ function tryShoot(now) {
         dx: dir.x, dy: dir.y, dz: dir.z,
         radius: g.blastRadius, damage: g.damage, pellets, spread: g.spread,
       }, Playroom.RPC.Mode.HOST); } catch {}
+      for (let i = 0; i < pellets; i++) {
+        const d = dir.clone();
+        d.x += (Math.random() - 0.5) * g.spread * 2;
+        d.y += (Math.random() - 0.5) * g.spread * 2;
+        d.z += (Math.random() - 0.5) * g.spread * 2;
+        d.normalize();
+        const start = muzzle.clone().addScaledVector(d, 0.3);
+        spawnArrow(start, d, g.blastRadius, 0); // visual only
+      }
     } else {
       for (let i = 0; i < pellets; i++) {
         const d = dir.clone();
@@ -1949,6 +1961,7 @@ function tryShoot(now) {
         dx: dir.x, dy: dir.y, dz: dir.z,
         radius: g.blastRadius, damage: g.damage,
       }, Playroom.RPC.Mode.HOST); } catch {}
+      spawnPlasma(muzzle.clone(), dir.clone(), g.blastRadius, 0); // visual only
     } else {
       spawnPlasma(muzzle, dir, g.blastRadius, g.damage);
     }
@@ -3143,10 +3156,36 @@ function hideWinScreen() {
   document.getElementById('winScreen').style.display = 'none';
 }
 document.getElementById('winContinueBtn').addEventListener('click', () => {
+  if (mpActive()) {
+    const me = Playroom.myPlayer();
+    me.setState('winReady', !me.getState('winReady'), true);
+    updateWinReadyUI();
+    return;
+  }
   survivorMode = true;
   hideWinScreen();
   startRound();
 });
+
+function updateWinReadyUI() {
+  if (!mpActive()) return;
+  const btn = document.getElementById('winContinueBtn');
+  const me = Playroom.myPlayer();
+  const myReady = !!me.getState('winReady');
+  const readyCount = Array.from(mpAllPlayers.values()).filter(p => p.getState('winReady') === true).length;
+  const total = mpAllPlayers.size;
+  btn.textContent = myReady
+    ? `Ready ✓  (${readyCount}/${total})`
+    : 'Ready Up for Survivor Mode';
+  // Host starts Survivor once every player has readied up
+  const allReady = total > 0 && Array.from(mpAllPlayers.values()).every(p => p.getState('winReady') === true);
+  if (mpIsHost() && allReady) {
+    for (const p of mpAllPlayers.values()) { try { p.setState('winReady', false, true); } catch {} }
+    survivorMode = true;
+    hideWinScreen();
+    startRound();
+  }
+}
 document.getElementById('winSettingsBtn').addEventListener('click', openSettings);
 document.getElementById('winHomeBtn').addEventListener('click', () => {
   hideWinScreen();
@@ -3207,16 +3246,25 @@ function loop() {
   // so round transitions (start AND end) propagate correctly.
   if (mpIsClient()) safeCall(mpClientSync, dt);
   if (mpIsHost())   safeCall(mpBroadcastWorld, dt);
+  // Check if the host is paused (applies only to clients)
+  let hostPaused = false;
+  if (mpIsClient() && mpHostPlayer) {
+    try { hostPaused = !!mpHostPlayer.getState('hostPaused'); } catch {}
+  }
+  document.getElementById('hostPausedBanner').style.display = (mpIsClient() && hostPaused) ? 'block' : 'none';
   // Keep the ready-up button label in sync between rounds in multiplayer
   if (mpActive() && !roundActive) updateReadyUI();
-  if (roundActive && !paused) {
+  if (mpActive() && document.getElementById('winScreen').style.display === 'flex') updateWinReadyUI();
+  if (roundActive && !paused && !(mpIsClient() && hostPaused)) {
     safeCall(updatePlayer, dt);
     if (!mpActive() || mpIsHost()) {
       safeCall(updateEnemies, dt);
       safeCall(updateBullets, dt);
       safeCall(updateAmmoBoxes, dt);
-      safeCall(updateRockets, dt);
     }
+    // Rockets/plasma/arrows run on both sides: host's do real damage; client's are visual-only
+    // because the client's enemies array is empty, so collision finds nothing to hurt.
+    safeCall(updateRockets, dt);
     if (mouseDown) {
       const g = GUNS[currentGun];
       const mul = (boostActive ? 2 : 1) * (cheats.rate ? 3 : 1);
@@ -3362,11 +3410,14 @@ const pauseMenu = document.getElementById('pauseMenu');
 function setPaused(p) {
   paused = p;
   pauseMenu.style.display = p ? 'flex' : 'none';
-  // Round-skip row is only available when the cheat is enabled
   const skipRow = document.getElementById('pauseSkipRow');
   if (skipRow) skipRow.style.display = (p && cheats.skip) ? 'flex' : 'none';
   if (p) { document.exitPointerLock?.(); mouseDown = false; }
   else if (roundActive && !gameOver) canvas.requestPointerLock();
+  // Host's pause is authoritative — broadcast so clients freeze their world with us
+  if (mpActive() && mpIsHost() && window.Playroom) {
+    try { Playroom.myPlayer().setState('hostPaused', p, true); } catch {}
+  }
 }
 addEventListener('keydown', e => {
   if (e.code === 'KeyP' && roundActive && !gameOver) {
@@ -3743,7 +3794,9 @@ function pickEnemyTarget(enemy) {
 // Ghost enemies on the client — created per enemy ID received from the host
 const ghostEnemies = new Map();
 const ghostBulletMeshes = []; // pool of meshes used to render the host's enemy bullets on the client
+const ghostRockets = new Map(); // rocket/plasma/arrow ghosts from host → id → mesh
 let mpLastBossSpawned = false;
+let mpRocketNetIdCounter = 1;
 const mpAllPlayers = new Map(); // all connected players keyed by id
 let mpHostPlayer = null;        // reference to the player object that is the host
 let mpBroadcastAccum = 0;
@@ -3772,11 +3825,19 @@ function mpBroadcastWorld(dt) {
     x: +b.mesh.position.x.toFixed(2), y: +b.mesh.position.y.toFixed(2), z: +b.mesh.position.z.toFixed(2),
     t: b.type,
   }));
+  // Rockets / plasma / arrows — include velocity so the client can orient the mesh
+  const rocketSnap = rockets.slice(0, 24).map((r) => ({
+    id: r._netId || (r._netId = 'r' + (mpRocketNetIdCounter++)),
+    x: +r.mesh.position.x.toFixed(2), y: +r.mesh.position.y.toFixed(2), z: +r.mesh.position.z.toFixed(2),
+    vx: +r.vel.x.toFixed(2), vy: +r.vel.y.toFixed(2), vz: +r.vel.z.toFixed(2),
+    k: r.kind,
+  }));
   try {
     me.setState('isHostFlag', true, true);
     me.setState('enemies', enemySnap, false);
     me.setState('ebullets', bulletSnap, false);
     me.setState('pickups', pickupSnap, false);
+    me.setState('rockets', rocketSnap, false);
     me.setState('round', { n: round, active: roundActive, map: currentMap, bossSpawned, won: (round >= 13 && !survivorMode) }, true);
   } catch (e) { console.warn('[mp] broadcast failed', e); }
 }
@@ -3879,6 +3940,31 @@ function mpClientSync(dt) {
     } else {
       m.visible = false;
     }
+  }
+  // Render host's projectiles (rockets/plasma/arrows)
+  const rocketState = (() => { try { return hp.getState('rockets'); } catch { return null; } })() || [];
+  const rocketSeen = new Set();
+  for (const r of rocketState) {
+    rocketSeen.add(r.id);
+    let m = ghostRockets.get(r.id);
+    if (!m) {
+      if (r.k === 'plasma') m = new THREE.Mesh(plasmaGeom, plasmaMat);
+      else if (r.k === 'arrow') m = new THREE.Mesh(arrowGeom, arrowMat);
+      else m = new THREE.Mesh(rocketGeom, rocketMat);
+      scene.add(m);
+      ghostRockets.set(r.id, m);
+    }
+    m.position.set(r.x, r.y, r.z);
+    if (r.k !== 'plasma') {
+      const dir = new THREE.Vector3(r.vx, r.vy, r.vz);
+      if (dir.lengthSq() > 0.001) {
+        dir.normalize();
+        m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      }
+    }
+  }
+  for (const [id, m] of ghostRockets) {
+    if (!rocketSeen.has(id)) { scene.remove(m); ghostRockets.delete(id); }
   }
 }
 
@@ -4000,6 +4086,8 @@ function leaveLobby() {
   ghostEnemies.clear();
   for (const m of ghostBulletMeshes) scene.remove(m);
   ghostBulletMeshes.length = 0;
+  for (const [id, m] of ghostRockets) scene.remove(m);
+  ghostRockets.clear();
   mpRole = 'none';
   document.getElementById('mpLeaveBtn').style.display = 'none';
   document.getElementById('mpStartBtn').disabled = false;
