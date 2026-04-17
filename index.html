@@ -2826,9 +2826,12 @@ function startRound() {
   }
   reloading = false;
   reloadToken++;
-  const count = 3 + round * 2 + Math.floor(round / 3);
-  for (let i = 0; i < count; i++) spawnEnemy();
-  scatterAmmoBoxes(2 + Math.floor(round / 2));
+  // In multiplayer, only the host spawns the shared enemies/pickups. Client sees them via broadcast.
+  if (!mpActive() || mpIsHost()) {
+    const count = 3 + round * 2 + Math.floor(round / 3);
+    for (let i = 0; i < count; i++) spawnEnemy();
+    scatterAmmoBoxes(2 + Math.floor(round / 2));
+  }
   updateHUD();
   updateHotbar();
   canvas.requestPointerLock();
@@ -3481,8 +3484,10 @@ function mpActive() { return mpRole === 'host' || mpRole === 'client'; }
 function mpIsHost()   { return mpRole === 'host'; }
 function mpIsClient() { return mpRole === 'client'; }
 
-// Ghost enemies on the client — we create a simple mesh per enemy ID received from the host
-const ghostEnemies = new Map(); // id → THREE.Group
+// Ghost enemies on the client — created per enemy ID received from the host
+const ghostEnemies = new Map();
+const mpAllPlayers = new Map(); // all connected players keyed by id
+let mpHostPlayer = null;        // reference to the player object that is the host
 let mpBroadcastAccum = 0;
 const MP_BROADCAST_HZ = 15;
 const MP_BROADCAST_INTERVAL = 1 / MP_BROADCAST_HZ;
@@ -3492,45 +3497,43 @@ function mpBroadcastWorld(dt) {
   mpBroadcastAccum += dt;
   if (mpBroadcastAccum < MP_BROADCAST_INTERVAL) return;
   mpBroadcastAccum = 0;
-  // Encode enemies
+  const me = Playroom.myPlayer();
+  if (!me) return;
   const enemySnap = enemies.map((e, i) => ({
     id: e.userData._netId || (e.userData._netId = 'e' + i + '_' + Math.random().toString(36).slice(2, 8)),
-    x: +e.position.x.toFixed(2),
-    y: +e.position.y.toFixed(2),
-    z: +e.position.z.toFixed(2),
+    x: +e.position.x.toFixed(2), y: +e.position.y.toFixed(2), z: +e.position.z.toFixed(2),
     r: +e.rotation.y.toFixed(2),
-    hp: e.userData.hp,
-    mh: e.userData.maxHp,
-    b: e.userData.isBoss ? 1 : 0,
-    s: e.scale.x,
+    hp: e.userData.hp, mh: e.userData.maxHp,
+    b: e.userData.isBoss ? 1 : 0, s: e.scale.x,
   }));
-  // Encode enemy bullets (simpler — position only)
-  const bulletSnap = enemyBullets.slice(0, 40).map((b, i) => ({
-    x: +b.pos.x.toFixed(2),
-    y: +b.pos.y.toFixed(2),
-    z: +b.pos.z.toFixed(2),
+  const bulletSnap = enemyBullets.slice(0, 40).map((b) => ({
+    x: +b.pos.x.toFixed(2), y: +b.pos.y.toFixed(2), z: +b.pos.z.toFixed(2),
   }));
-  // Encode pickups
-  const pickupSnap = ammoBoxes.map((b, i) => ({
+  const pickupSnap = ammoBoxes.map((b) => ({
     id: b.mesh.uuid,
-    x: +b.mesh.position.x.toFixed(2),
-    z: +b.mesh.position.z.toFixed(2),
-    y: +b.mesh.position.y.toFixed(2),
+    x: +b.mesh.position.x.toFixed(2), y: +b.mesh.position.y.toFixed(2), z: +b.mesh.position.z.toFixed(2),
     t: b.type,
   }));
-  // Encode round state + map
   try {
-    Playroom.setState('enemies', enemySnap, false);
-    Playroom.setState('ebullets', bulletSnap, false);
-    Playroom.setState('pickups', pickupSnap, false);
-    Playroom.setState('round', { n: round, active: roundActive, map: currentMap, bossSpawned }, true);
-  } catch (e) { /* playroom may not be fully ready */ }
+    me.setState('isHostFlag', true, true);
+    me.setState('enemies', enemySnap, false);
+    me.setState('ebullets', bulletSnap, false);
+    me.setState('pickups', pickupSnap, false);
+    me.setState('round', { n: round, active: roundActive, map: currentMap, bossSpawned }, true);
+  } catch (e) { console.warn('[mp] broadcast failed', e); }
 }
 
-// On the client, mirror the host's state each frame
 function mpClientSync(dt) {
   if (!mpIsClient() || !window.Playroom) return;
-  const roundState = Playroom.getState('round');
+  // Find the host player if we haven't yet
+  if (!mpHostPlayer) {
+    for (const p of mpAllPlayers.values()) {
+      try { if (p.getState('isHostFlag')) { mpHostPlayer = p; break; } } catch {}
+    }
+    if (!mpHostPlayer) return; // host hasn't broadcasted yet
+  }
+  const hp = mpHostPlayer;
+  const roundState = (() => { try { return hp.getState('round'); } catch { return null; } })();
   if (roundState && roundState.map && roundState.map !== currentMap) {
     currentMap = roundState.map;
     buildMap(currentMap);
@@ -3538,9 +3541,10 @@ function mpClientSync(dt) {
   if (roundState) {
     round = roundState.n || 1;
     roundActive = !!roundState.active;
+    // Close the home overlay on the client when the host's round starts
+    if (roundActive) overlay.classList.add('hidden');
   }
-  // Sync enemies — create/update ghosts
-  const enemyState = Playroom.getState('enemies') || [];
+  const enemyState = (() => { try { return hp.getState('enemies'); } catch { return null; } })() || [];
   const seen = new Set();
   for (const es of enemyState) {
     seen.add(es.id);
@@ -3551,7 +3555,6 @@ function mpClientSync(dt) {
       scene.add(ghost);
       ghostEnemies.set(es.id, ghost);
     }
-    // Smoothly interpolate toward the target position (we update ~15Hz)
     ghost.position.x += (es.x - ghost.position.x) * 0.35;
     ghost.position.y += (es.y - ghost.position.y) * 0.35;
     ghost.position.z += (es.z - ghost.position.z) * 0.35;
@@ -3562,7 +3565,6 @@ function mpClientSync(dt) {
       ghost.userData.hpBar.update(es.hp, es.mh);
     }
   }
-  // Remove ghosts whose IDs disappeared
   for (const [id, ghost] of ghostEnemies) {
     if (!seen.has(id)) {
       scene.remove(ghost);
@@ -3594,18 +3596,29 @@ async function startMultiplayer() {
     mpStatus(shareMsg, '#7fff8d');
     document.getElementById('mpLeaveBtn').style.display = 'inline-block';
 
-    // Track remote players joining/leaving
+    // Mark ourselves as host immediately so clients can identify us
+    if (mpRole === 'host') {
+      try { Playroom.myPlayer().setState('isHostFlag', true, true); } catch {}
+    }
+    // Track every player (including ourselves) so the client-side sync can locate the host
     Playroom.onPlayerJoin((p) => {
-      if (p.id === Playroom.myPlayer().id) return; // ignore self
-      console.log('[mp] remote player joined:', p.id);
-      remotePlayer = {
-        playroomPlayer: p,
-        pose: { x: 0, y: 1.7, z: 0, yaw: 0, pitch: 0 },
-        mesh: makeRemotePlayerMesh(),
-      };
-      scene.add(remotePlayer.mesh);
+      mpAllPlayers.set(p.id, p);
+      const myId = Playroom.myPlayer().id;
+      if (p.id !== myId) {
+        console.log('[mp] remote player joined:', p.id);
+        remotePlayer = {
+          playroomPlayer: p,
+          pose: { x: 0, y: 1.7, z: 0, yaw: 0, pitch: 0 },
+          mesh: makeRemotePlayerMesh(),
+        };
+        scene.add(remotePlayer.mesh);
+      }
       p.onQuit(() => {
-        if (remotePlayer) { scene.remove(remotePlayer.mesh); remotePlayer = null; }
+        mpAllPlayers.delete(p.id);
+        if (mpHostPlayer && mpHostPlayer.id === p.id) mpHostPlayer = null;
+        if (remotePlayer && remotePlayer.playroomPlayer.id === p.id) {
+          scene.remove(remotePlayer.mesh); remotePlayer = null;
+        }
       });
     });
 
