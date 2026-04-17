@@ -225,7 +225,7 @@
 </div>
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.26</div>
+<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.27</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -2394,7 +2394,12 @@ function updateEnemies(dt) {
       continue; // don't move or shoot while reloading
     }
 
-    const toP = camera.position.clone().sub(e.position); toP.y = 0;
+    // Pick the nearest alive player to target (works for both solo and MP)
+    const targetInfo = pickEnemyTarget(e);
+    if (!targetInfo) continue; // no one to attack
+    const targetPos = targetInfo.pos;
+    e.userData.targetPlayerId = targetInfo.playerId;
+    const toP = targetPos.clone().sub(e.position); toP.y = 0;
     const dist = toP.length();
     toP.normalize();
 
@@ -2403,7 +2408,7 @@ function updateEnemies(dt) {
     if (e.userData.losCd <= 0) {
       e.userData.losCd = 0.1 + Math.random() * 0.05;
       const eyePos = e.position.clone().add(new THREE.Vector3(0, 1.4 * (e.userData.isBoss ? 1.4 : 1), 0));
-      const losDir = camera.position.clone().sub(eyePos);
+      const losDir = targetPos.clone().sub(eyePos);
       const losDist = losDir.length();
       losDir.normalize();
       raycaster.set(eyePos, losDir);
@@ -2476,7 +2481,7 @@ function updateEnemies(dt) {
       e.position.x = px;
       e.position.z = pz;
     }
-    e.lookAt(camera.position.x, e.position.y + 1, camera.position.z);
+    e.lookAt(targetPos.x, e.position.y + 1, targetPos.z);
 
     e.userData.shootCd -= dt;
     if (e.userData.shootCd <= 0 && dist < 35 && e.userData.hasLOS) {
@@ -2489,8 +2494,8 @@ function updateEnemies(dt) {
       const dmg = Math.max(1, Math.floor(profile.dmg * dmgMul));
       const gunWorld = new THREE.Vector3();
       e.userData.gunMesh.getWorldPosition(gunWorld);
-      // per-shot LOS safety check from the gun's actual position
-      const gunToP = camera.position.clone().sub(gunWorld);
+      // per-shot LOS safety check from the gun's actual position (toward picked target)
+      const gunToP = targetPos.clone().sub(gunWorld);
       const gunDist = gunToP.length();
       gunToP.normalize();
       raycaster.set(gunWorld, gunToP);
@@ -2501,9 +2506,8 @@ function updateEnemies(dt) {
       }
       const shots = profile.shots;
       for (let s = 0; s < shots; s++) {
-        // Global bullet cap to keep perf sane at high fire rates
         if (profile.kind === 'bullet' && enemyBullets.length > 90) break;
-        const dir = camera.position.clone().sub(gunWorld).normalize();
+        const dir = targetPos.clone().sub(gunWorld).normalize();
         dir.x += (Math.random() - 0.5) * spread * 2;
         dir.y += (Math.random() - 0.5) * spread * 2;
         dir.z += (Math.random() - 0.5) * spread * 2;
@@ -2548,12 +2552,24 @@ function updateBullets(dt) {
     b.pos.addScaledVector(b.vel, dt);
     b.mesh.position.copy(b.pos);
     b.life -= dt;
-    if (b.pos.distanceTo(camera.position) < 0.6) {
-      damagePlayer(b.damage ?? 6);
-      scene.remove(b.mesh);
-      enemyBullets.splice(i, 1);
-      continue;
+    // Check the bullet against every alive player — damage whoever gets hit
+    const players = getAlivePlayers();
+    let bulletConsumed = false;
+    for (const pp of players) {
+      if (b.pos.distanceTo(pp.pos) < 0.6) {
+        if (pp.isLocal) {
+          damagePlayer(b.damage ?? 6);
+        } else {
+          // Tell that remote player to take damage
+          try { Playroom.RPC.call('takeDamage', { playerId: pp.playerId, amount: b.damage ?? 6 }, Playroom.RPC.Mode.ALL); } catch {}
+        }
+        scene.remove(b.mesh);
+        enemyBullets.splice(i, 1);
+        bulletConsumed = true;
+        break;
+      }
     }
+    if (bulletConsumed) continue;
     let hit = false;
     for (const w of walls) {
       if (b.pos.x > w.min.x && b.pos.x < w.max.x &&
@@ -3631,6 +3647,37 @@ function mpActive() { return mpRole === 'host' || mpRole === 'client'; }
 function mpIsHost()   { return mpRole === 'host'; }
 function mpIsClient() { return mpRole === 'client'; }
 
+// Return all alive player positions in the room (local + remote) — used by enemy AI on the host.
+function getAlivePlayers() {
+  const out = [];
+  const myId = (window.Playroom && Playroom.myPlayer()) ? Playroom.myPlayer().id : null;
+  if (player.alive && !spectating) {
+    out.push({ pos: camera.position, playerId: myId, isLocal: true });
+  }
+  if (mpActive()) {
+    for (const p of mpAllPlayers.values()) {
+      if (p.id === myId) continue;
+      const alive = p.getState('alive') !== false;
+      const pose  = p.getState('pose');
+      if (alive && pose) {
+        out.push({ pos: new THREE.Vector3(pose.x, pose.y, pose.z), playerId: p.id, isLocal: false });
+      }
+    }
+  }
+  return out;
+}
+function pickEnemyTarget(enemy) {
+  const players = getAlivePlayers();
+  if (!players.length) return null;
+  let best = players[0];
+  let bestD = enemy.position.distanceTo(players[0].pos);
+  for (let i = 1; i < players.length; i++) {
+    const d = enemy.position.distanceTo(players[i].pos);
+    if (d < bestD) { bestD = d; best = players[i]; }
+  }
+  return best;
+}
+
 // Ghost enemies on the client — created per enemy ID received from the host
 const ghostEnemies = new Map();
 const ghostBulletMeshes = []; // pool of meshes used to render the host's enemy bullets on the client
@@ -3808,6 +3855,12 @@ async function startMultiplayer() {
         if (!boostActive && killStreak >= BOOST_THRESHOLD) activateBoost();
         updateStreakUI();
         updateHUD();
+      });
+      Playroom.RPC.register('takeDamage', (data) => {
+        if (!window.Playroom) return;
+        const me = Playroom.myPlayer();
+        if (!me || data.playerId !== me.id) return;
+        damagePlayer(data.amount);
       });
     } catch (e) { console.warn('[mp] RPC register failed', e); }
     // Track every player (including ourselves) so the client-side sync can locate the host
