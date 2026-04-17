@@ -106,10 +106,10 @@
   }
   #streak.on { display: block; color: #ffcc00; font-weight: bold; }
   #hpbar {
-    width: 140px; height: 14px; background: #330000; border: 1px solid #000;
+    width: 140px; height: 14px; background: #082010; border: 1px solid #000;
     border-radius: 3px; overflow: hidden; margin-top: 2px;
   }
-  #hpbar > div { height: 100%; background: #ff2222; width: 100%; transition: width 0.15s; }
+  #hpbar > div { height: 100%; background: #33dd55; width: 100%; transition: width 0.15s; }
   #hotbar {
     position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
     display: flex; gap: 6px; z-index: 5;
@@ -224,7 +224,8 @@
   <p style="opacity:0.7;font-size:12px;margin-top:8px">Press P to toggle • Esc also resumes</p>
 </div>
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
-<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.22</div>
+<div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
+<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.23</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -1801,6 +1802,7 @@ function applyDamage(enemy, amount, isHead) {
 }
 
 function tryShoot(now) {
+  if (spectating) return;
   if (reloading && !cheats.mag || !player.alive) return;
   const g = GUNS[currentGun];
   let rateMul = 1;
@@ -2542,9 +2544,39 @@ function damagePlayer(amt) {
     player.hp = 0;
     player.alive = false;
     SFX.death();
-    endGame();
+    if (mpActive()) {
+      // Enter spectate — survivor can finish the round. Host also remains in-simulation (host logic still runs).
+      enterSpectate();
+      // If EVERY player in the room is dead, end the round as a loss.
+      if (mpIsHost() && allPlayersDead()) endGame();
+    } else {
+      endGame();
+    }
   }
   updateHUD();
+}
+
+let spectating = false;
+function enterSpectate() {
+  spectating = true;
+  document.getElementById('spectateLabel').style.display = 'block';
+  // Hide our own weapon so the camera view is clean while spectating
+  for (const k of Object.keys(weaponModels)) weaponModels[k].visible = false;
+}
+function exitSpectate() {
+  spectating = false;
+  document.getElementById('spectateLabel').style.display = 'none';
+  if (weaponModels[currentGun]) weaponModels[currentGun].visible = true;
+}
+function allPlayersDead() {
+  if (!window.Playroom) return false;
+  const me = Playroom.myPlayer();
+  if (me && me.getState('alive') !== false && player.alive) return false;
+  for (const p of mpAllPlayers.values()) {
+    if (p.id === (me && me.id)) continue;
+    if (p.getState('alive') !== false) return false;
+  }
+  return true;
 }
 
 // ---------- Movement & collisions ----------
@@ -2563,7 +2595,7 @@ function tryJump() {
 }
 
 function updatePlayer(dt) {
-  if (!player.alive) return;
+  if (!player.alive || spectating) return;
   camera.rotation.order = 'YXZ';
   camera.rotation.y = player.yaw;
   camera.rotation.x = player.pitch;
@@ -2805,9 +2837,15 @@ function startRound() {
     player.onGround = true;
     player.jumpsUsed = 0;
   }
-  // HP resets every round
+  // HP resets every round + exit spectate + respawn local camera at spawn
   player.hp = 100;
   player.alive = true;
+  if (spectating) {
+    exitSpectate();
+    camera.position.set(0, 1.7, 0);
+    player.yaw = 0; player.pitch = 0;
+    player.vy = 0;
+  }
   // Defensive: if somehow currentGun isn't marked owned, fall back to pistol
   if (!owned[currentGun]) currentGun = 'pistol';
   // reset ammo for every owned gun at round start
@@ -3028,17 +3066,16 @@ function loop() {
   const dt = Math.min((now - prev) / 1000, 0.05);
   prev = now;
 
+  // Always sync multiplayer state regardless of local round status so the
+  // client auto-enters the round the moment the host starts.
+  if (mpIsClient()) safeCall(mpClientSync, dt);
   if (roundActive && !paused) {
     safeCall(updatePlayer, dt);
-    // In multiplayer, only the host simulates the shared world.
     if (!mpActive() || mpIsHost()) {
       safeCall(updateEnemies, dt);
       safeCall(updateBullets, dt);
       safeCall(updateAmmoBoxes, dt);
       safeCall(updateRockets, dt);
-    } else {
-      // Client: replay world state from host
-      safeCall(mpClientSync, dt);
     }
     if (mouseDown) {
       const g = GUNS[currentGun];
@@ -3071,6 +3108,15 @@ function loop() {
 
   // Multiplayer: update remote player's visual position
   if (typeof updateRemotePlayer === 'function') updateRemotePlayer();
+
+  // Spectate: orbit the camera behind the alive remote player
+  if (spectating && remotePlayer && remotePlayer.pose) {
+    const p = remotePlayer.pose;
+    camera.position.x = p.x + Math.sin(p.yaw) * 3.5;
+    camera.position.y = p.y + 1.8;
+    camera.position.z = p.z + Math.cos(p.yaw) * 3.5;
+    camera.lookAt(p.x, p.y - 0.2, p.z);
+  }
 
   // knife swing animation
   if (playerSwingT > 0 && GUNS[currentGun].melee) {
@@ -3461,9 +3507,20 @@ function makeRemotePlayerMesh() {
   const tex = new THREE.CanvasTexture(canvas);
   const labelMat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
   const label = new THREE.Sprite(labelMat);
-  label.position.set(0, 2.3, 0);
+  label.position.set(0, 2.6, 0);
   label.scale.set(1.2, 0.3, 1);
   g.add(label);
+  // Green HP bar above the remote player (width, outline, bg, fg)
+  const hpGroup = new THREE.Group();
+  const outl = new THREE.Mesh(new THREE.PlaneGeometry(1.06, 0.24), new THREE.MeshBasicMaterial({ color: 0x000000, depthTest: false }));
+  const bg   = new THREE.Mesh(new THREE.PlaneGeometry(1.00, 0.18), new THREE.MeshBasicMaterial({ color: 0x0a2a14, depthTest: false }));
+  const fg   = new THREE.Mesh(new THREE.PlaneGeometry(1.00, 0.16), new THREE.MeshBasicMaterial({ color: 0x33dd55, depthTest: false }));
+  outl.renderOrder = 998; bg.renderOrder = 999; fg.renderOrder = 1000;
+  bg.position.z = 0.001; fg.position.z = 0.002;
+  hpGroup.add(outl, bg, fg);
+  hpGroup.position.y = 2.25;
+  g.add(hpGroup);
+  g.userData.hpBarFg = fg;
   return g;
 }
 
@@ -3627,18 +3684,16 @@ async function startMultiplayer() {
       });
     });
 
-    // Broadcast our pose 20× per second via Playroom's player state
     if (mpPoseTimer) clearInterval(mpPoseTimer);
     mpPoseTimer = setInterval(() => {
       const me = Playroom.myPlayer();
       if (!me) return;
       me.setState('pose', {
-        x: camera.position.x,
-        y: camera.position.y,
-        z: camera.position.z,
-        yaw: player.yaw,
-        pitch: player.pitch,
+        x: camera.position.x, y: camera.position.y, z: camera.position.z,
+        yaw: player.yaw, pitch: player.pitch,
       });
+      me.setState('hp', player.hp, false);
+      me.setState('alive', !!player.alive, true);
     }, 50);
   } catch (e) {
     console.error('[mp] insertCoin failed', e);
@@ -3661,10 +3716,20 @@ function leaveLobby() {
 // Update the remote player's visual mesh using the pose state we read from Playroom each frame
 function updateRemotePlayer() {
   if (!remotePlayer || !remotePlayer.playroomPlayer) return;
-  const pose = remotePlayer.playroomPlayer.getState('pose');
+  const p = remotePlayer.playroomPlayer;
+  const pose = p.getState('pose');
   if (!pose) return;
   remotePlayer.mesh.position.set(pose.x, pose.y - 1.7, pose.z);
   remotePlayer.mesh.rotation.y = pose.yaw + Math.PI;
+  // Green HP bar scale from 0..1
+  const hp = p.getState('hp');
+  const fg = remotePlayer.mesh.userData.hpBarFg;
+  if (fg && typeof hp === 'number') {
+    const ratio = Math.max(0, Math.min(1, hp / 100));
+    fg.scale.x = ratio || 0.001;
+    fg.position.x = -1.0 * (1 - ratio) / 2;
+  }
+  remotePlayer.pose = pose; // used by spectate camera
 }
 
 document.getElementById('mpStartBtn').addEventListener('click', startMultiplayer);
