@@ -225,7 +225,7 @@
 </div>
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.27</div>
+<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.29</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -2560,8 +2560,8 @@ function updateBullets(dt) {
         if (pp.isLocal) {
           damagePlayer(b.damage ?? 6);
         } else {
-          // Tell that remote player to take damage
-          try { Playroom.RPC.call('takeDamage', { playerId: pp.playerId, amount: b.damage ?? 6 }, Playroom.RPC.Mode.ALL); } catch {}
+          console.log('[mp] bullet hit remote player', pp.playerId, 'dmg', b.damage ?? 6);
+          queueRemoteDamage(pp.playerId, b.damage ?? 6);
         }
         scene.remove(b.mesh);
         enemyBullets.splice(i, 1);
@@ -3146,9 +3146,11 @@ function updateHUD() {
   HUD.reserve.textContent = (cheats.mag || reserve === Infinity) ? '∞' : reserve;
   HUD.round.textContent = round;
   HUD.cornerRound.textContent = round;
-  HUD.remaining.textContent = enemies.length;
+  // On the client, the local `enemies` array is empty; use the ghost copies.
+  const enemySrc = mpIsClient() ? Array.from(ghostEnemies.values()) : enemies;
+  HUD.remaining.textContent = enemySrc.length;
   let bossHp = 0, bossMax = 0;
-  for (const e of enemies) if (e.userData.isBoss) { bossHp += e.userData.hp; bossMax += e.userData.maxHp; }
+  for (const e of enemySrc) if (e.userData.isBoss) { bossHp += e.userData.hp; bossMax += e.userData.maxHp; }
   if (bossMax > 0) {
     HUD.bossHud.style.display = 'block';
     HUD.bossHudFill.style.width = Math.max(0, (bossHp / bossMax) * 100) + '%';
@@ -3647,6 +3649,33 @@ function mpActive() { return mpRole === 'host' || mpRole === 'client'; }
 function mpIsHost()   { return mpRole === 'host'; }
 function mpIsClient() { return mpRole === 'client'; }
 
+// Damage queue (state-based) — host appends events, clients read and apply ones addressed to them.
+// State-based is more reliable than RPC in our experience.
+let mpDamageQueue = [];
+let mpDamageNextId = 1;
+const mpAppliedDamage = new Set();
+function queueRemoteDamage(playerId, amount) {
+  if (!mpIsHost() || !window.Playroom) return;
+  const id = mpDamageNextId++;
+  mpDamageQueue.push({ id, playerId, amount, t: Date.now() });
+  // Trim old entries
+  const now = Date.now();
+  mpDamageQueue = mpDamageQueue.filter(e => now - e.t < 8000);
+  try { Playroom.myPlayer().setState('damageQueue', mpDamageQueue, true); } catch (e) { console.warn(e); }
+}
+function processRemoteDamage() {
+  if (!mpIsClient() || !mpHostPlayer) return;
+  const q = (() => { try { return mpHostPlayer.getState('damageQueue'); } catch { return null; } })() || [];
+  const myId = Playroom.myPlayer().id;
+  for (const ev of q) {
+    if (ev.playerId === myId && !mpAppliedDamage.has(ev.id)) {
+      mpAppliedDamage.add(ev.id);
+      console.log('[mp] applying queued damage', ev);
+      damagePlayer(ev.amount);
+    }
+  }
+}
+
 // Return all alive player positions in the room (local + remote) — used by enemy AI on the host.
 function getAlivePlayers() {
   const out = [];
@@ -3792,6 +3821,10 @@ function mpClientSync(dt) {
       ghostEnemies.delete(id);
     }
   }
+  // Apply any pending damage the host has queued for us
+  processRemoteDamage();
+  // Refresh HUD so the client's boss HP bar + remaining count stay live
+  updateHUD();
   // Render host's enemy bullets as small spheres
   const bulletState = (() => { try { return hp.getState('ebullets'); } catch { return null; } })() || [];
   while (ghostBulletMeshes.length < bulletState.length) {
