@@ -225,7 +225,7 @@
 </div>
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.29</div>
+<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.30</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -1112,6 +1112,20 @@ buildMap(currentMap);
 // ---------- Stick figure enemy ----------
 const stickMatDark  = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 3 });
 const stickMatLight = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 3 });
+// Cylinder-based bones render with consistent thickness on every GPU (line widths can't).
+const boneMatDark  = new THREE.MeshBasicMaterial({ color: 0x000000 });
+const boneMatLight = new THREE.MeshBasicMaterial({ color: 0xffffff });
+function enemyBoneMat() { return currentMap === 'neon' ? boneMatLight : boneMatDark; }
+function makeBone(p1, p2, mat, radius = 0.045) {
+  const a = new THREE.Vector3(...p1);
+  const b = new THREE.Vector3(...p2);
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const len = dir.length();
+  const cyl = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, len, 6), mat);
+  cyl.position.copy(a).add(b).multiplyScalar(0.5);
+  cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+  return cyl;
+}
 const headMatSkin   = new THREE.MeshLambertMaterial({ color: 0xffcc99 });
 const headMatWhite  = new THREE.MeshBasicMaterial({ color: 0xffffff });
 // Chosen per-map so enemies stay visible
@@ -1182,7 +1196,7 @@ function makeHPBar(width = 0.9, yOffset = 2.2) {
 }
 function makeStickFigure() {
   const g = new THREE.Group();
-  const lineMat = enemyStickMat();
+  const bm = enemyBoneMat();
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), enemyHeadMat());
   head.position.set(0, 1.75, 0);
   head.castShadow = true;
@@ -1195,10 +1209,7 @@ function makeStickFigure() {
     [0,0.9,0],[ 0.25,0.0,0],
   ];
   for (let i = 0; i < pts.length; i += 2) {
-    const geo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(...pts[i]), new THREE.Vector3(...pts[i+1])
-    ]);
-    g.add(new THREE.Line(geo, lineMat));
+    g.add(makeBone(pts[i], pts[i+1], bm));
   }
   // Gun held in right hand
   const gun = new THREE.Mesh(
@@ -1233,10 +1244,13 @@ const bossHeadMatDark   = new THREE.MeshLambertMaterial({ color: 0x661111 });
 const bossStickMatLight = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 4 });
 const bossHeadMatLight  = new THREE.MeshBasicMaterial({ color: 0xffffff });
 function bossStickMat() { return currentMap === 'neon' ? bossStickMatLight : bossStickMatDark; }
+const bossBoneMatDark  = new THREE.MeshBasicMaterial({ color: 0xaa0000 });
+const bossBoneMatLight = new THREE.MeshBasicMaterial({ color: 0xffffff });
+function bossBoneMat() { return currentMap === 'neon' ? bossBoneMatLight : bossBoneMatDark; }
 function bossHeadMat()  { return currentMap === 'neon' ? bossHeadMatLight  : bossHeadMatDark; }
 function makeBoss() {
   const g = new THREE.Group();
-  const lineMat = bossStickMat();
+  const bm = bossBoneMat();
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 12), bossHeadMat());
   head.position.set(0, 2.0, 0);
   head.castShadow = true;
@@ -1249,10 +1263,7 @@ function makeBoss() {
     [0,0.9,0],[ 0.35,0.0,0],
   ];
   for (let i = 0; i < pts.length; i += 2) {
-    const geo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(...pts[i]), new THREE.Vector3(...pts[i+1])
-    ]);
-    g.add(new THREE.Line(geo, lineMat));
+    g.add(makeBone(pts[i], pts[i+1], bm, 0.065));
   }
   const gun = new THREE.Mesh(
     new THREE.BoxGeometry(0.14, 0.14, 0.8),
@@ -3575,7 +3586,7 @@ let mpPoseTimer = null;
 
 function makeRemotePlayerMesh() {
   const g = new THREE.Group();
-  const blueLine = new THREE.LineBasicMaterial({ color: 0x4aa3ff, linewidth: 3 });
+  const blueBone = new THREE.MeshBasicMaterial({ color: 0x4aa3ff });
   const blueHead = new THREE.MeshLambertMaterial({ color: 0x4aa3ff, emissive: 0x224466, emissiveIntensity: 0.4 });
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), blueHead);
   head.position.set(0, 1.75, 0);
@@ -3588,10 +3599,7 @@ function makeRemotePlayerMesh() {
     [0,0.9,0],[ 0.25,0.0,0],
   ];
   for (let i = 0; i < pts.length; i += 2) {
-    const geo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(...pts[i]), new THREE.Vector3(...pts[i+1])
-    ]);
-    g.add(new THREE.Line(geo, blueLine));
+    g.add(makeBone(pts[i], pts[i+1], blueBone));
   }
   const gun = new THREE.Mesh(
     new THREE.BoxGeometry(0.08, 0.08, 0.45),
