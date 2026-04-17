@@ -1334,7 +1334,7 @@ const GUNS = {
   railgun: { name: 'Railgun',  damage: 220, fireRate: 0.9, magSize: 3,  reserve: 15,  reloadTime: 2.5, spread: 0.0, cost: 6000, auto: true, pierce: true, scopeFov: 35, hipSpread: 0.015 },
   plasma:  { name: 'Plasma',   damage: 55,  fireRate: 7,   magSize: 24, reserve: 96,  reloadTime: 1.8, spread: 0.02, cost: 7500, auto: true, plasma: true, blastRadius: 2 },
   assault: { name: 'AR-15',    damage: 28,  fireRate: 8,   magSize: 30, reserve: 120, reloadTime: 1.6, spread: 0.012, cost: 2500, auto: true, scopeFov: 55, hipSpread: 0.03, ironSights: true },
-  crossbow:{ name: 'Crossbow', damage: 90,  fireRate: 0.9, magSize: 4,  reserve: 16,  reloadTime: 2.4, spread: 0.025, cost: 5500, auto: true, pellets: 3, grenadeArrow: true, blastRadius: 2.2 },
+  crossbow:{ name: 'Grenade Crossbow', damage: 90, fireRate: 0.9, magSize: 4, reserve: 16, reloadTime: 2.4, spread: 0.025, cost: 5500, auto: true, pellets: 3, grenadeArrow: true, blastRadius: 2.2 },
   fingers: { name: 'Finger Guns', damage: 10, fireRate: 25, magSize: 300, reserve: 900, reloadTime: 3.2, spread: 0.025, cost: 10000, auto: true, dualWield: true },
 };
 const owned = { knife: true, pistol: true };
@@ -2595,7 +2595,10 @@ function syncWeaponState() {
   if (!GUNS[currentGun].melee) weaponState[currentGun] = { mag, reserve };
 }
 function equipGun(key) {
-  if (!owned[key]) return;
+  if (!GUNS[key]) return;
+  // Defensive: if we're being asked to equip a gun, mark it owned. This catches
+  // any state-sync bug where a purchase didn't persist.
+  owned[key] = true;
   syncWeaponState();
   currentGun = key;
   const g = GUNS[key];
@@ -2739,14 +2742,20 @@ function startRound() {
   // HP resets every round
   player.hp = 100;
   player.alive = true;
+  // Defensive: if somehow currentGun isn't marked owned, fall back to pistol
+  if (!owned[currentGun]) currentGun = 'pistol';
   // reset ammo for every owned gun at round start
   for (const key of Object.keys(owned)) {
     const g = GUNS[key];
-    if (g.melee) continue;
+    if (!g || g.melee) continue;
     weaponState[key] = { mag: g.magSize, reserve: g.reserve };
   }
+  // Also ensure currentGun has weaponState in case of any race
   const cur = GUNS[currentGun];
   if (!cur.melee) {
+    if (!weaponState[currentGun]) {
+      weaponState[currentGun] = { mag: cur.magSize, reserve: cur.reserve };
+    }
     mag = weaponState[currentGun].mag;
     reserve = weaponState[currentGun].reserve;
   }
