@@ -225,7 +225,7 @@
 </div>
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.25</div>
+<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.26</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -2866,6 +2866,8 @@ function startRound() {
   overlay.classList.add('hidden');
   roundActive = true;
   bossSpawned = false;
+  // Reset our ready state for the next between-round prompt
+  if (mpActive()) { try { Playroom.myPlayer().setState('ready', false, true); } catch {} }
   // Reset pickups from the previous round — ammo + HP boxes shouldn't persist
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
@@ -3043,9 +3045,42 @@ function restartGame() {
 }
 
 startBtn.addEventListener('click', () => {
-  if (startBtn.dataset.mode === 'restart') restartGame();
-  else startRound();
+  if (startBtn.dataset.mode === 'restart') { restartGame(); return; }
+  if (mpActive()) {
+    // In multiplayer, the button toggles your "ready" state instead of starting immediately.
+    const me = Playroom.myPlayer();
+    const isReady = !!me.getState('ready');
+    const next = !isReady;
+    me.setState('ready', next, true);
+    updateReadyUI();
+    return;
+  }
+  startRound();
 });
+
+function updateReadyUI() {
+  if (!mpActive()) return;
+  const me = Playroom.myPlayer();
+  const myReady = !!me.getState('ready');
+  const allReady = Array.from(mpAllPlayers.values()).every(p => p.getState('ready') === true);
+  const otherCount = Math.max(0, mpAllPlayers.size - 1);
+  let label;
+  if (myReady) {
+    const readyCount = Array.from(mpAllPlayers.values()).filter(p => p.getState('ready') === true).length;
+    label = `Ready ✓  (${readyCount}/${mpAllPlayers.size})`;
+    startBtn.style.background = '#2864c2';
+  } else {
+    label = `Click when ready`;
+    startBtn.style.background = '';
+  }
+  startBtn.textContent = label;
+  // If I'm the host and both are ready, actually start the round
+  if (mpIsHost() && allReady && !roundActive && !gameOver && mpAllPlayers.size >= 1) {
+    // clear everyone's ready before starting
+    me.setState('ready', false, true);
+    startRound();
+  }
+}
 
 function showWinScreen() {
   document.getElementById('winScreen').style.display = 'flex';
@@ -3118,6 +3153,8 @@ function loop() {
   // so round transitions (start AND end) propagate correctly.
   if (mpIsClient()) safeCall(mpClientSync, dt);
   if (mpIsHost())   safeCall(mpBroadcastWorld, dt);
+  // Keep the ready-up button label in sync between rounds in multiplayer
+  if (mpActive() && !roundActive) updateReadyUI();
   if (roundActive && !paused) {
     safeCall(updatePlayer, dt);
     if (!mpActive() || mpIsHost()) {
@@ -3596,6 +3633,8 @@ function mpIsClient() { return mpRole === 'client'; }
 
 // Ghost enemies on the client — created per enemy ID received from the host
 const ghostEnemies = new Map();
+const ghostBulletMeshes = []; // pool of meshes used to render the host's enemy bullets on the client
+let mpLastBossSpawned = false;
 const mpAllPlayers = new Map(); // all connected players keyed by id
 let mpHostPlayer = null;        // reference to the player object that is the host
 let mpBroadcastAccum = 0;
@@ -3668,6 +3707,16 @@ function mpClientSync(dt) {
     }
     round = newRound;
     roundActive = newActive;
+    // Mirror the BOSS INCOMING banner when the host spawns bosses
+    const bossNow = !!roundState.bossSpawned;
+    if (bossNow && !mpLastBossSpawned) {
+      document.getElementById('bossBanner').style.display = 'block';
+      clearTimeout(window._bossTimer);
+      window._bossTimer = setTimeout(() => {
+        document.getElementById('bossBanner').style.display = 'none';
+      }, 2500);
+    }
+    mpLastBossSpawned = bossNow;
   }
   const enemyState = (() => { try { return hp.getState('enemies'); } catch { return null; } })() || [];
   const seen = new Set();
@@ -3694,6 +3743,23 @@ function mpClientSync(dt) {
     if (!seen.has(id)) {
       scene.remove(ghost);
       ghostEnemies.delete(id);
+    }
+  }
+  // Render host's enemy bullets as small spheres
+  const bulletState = (() => { try { return hp.getState('ebullets'); } catch { return null; } })() || [];
+  while (ghostBulletMeshes.length < bulletState.length) {
+    const m = new THREE.Mesh(bulletGeom, bulletMat);
+    scene.add(m);
+    ghostBulletMeshes.push(m);
+  }
+  for (let i = 0; i < ghostBulletMeshes.length; i++) {
+    const m = ghostBulletMeshes[i];
+    if (i < bulletState.length) {
+      const b = bulletState[i];
+      m.position.set(b.x, b.y, b.z);
+      m.visible = true;
+    } else {
+      m.visible = false;
     }
   }
 }
@@ -3789,6 +3855,8 @@ function leaveLobby() {
   if (remotePlayer) { scene.remove(remotePlayer.mesh); remotePlayer = null; }
   for (const [id, ghost] of ghostEnemies) scene.remove(ghost);
   ghostEnemies.clear();
+  for (const m of ghostBulletMeshes) scene.remove(m);
+  ghostBulletMeshes.length = 0;
   mpRole = 'none';
   document.getElementById('mpLeaveBtn').style.display = 'none';
   document.getElementById('mpStartBtn').disabled = false;
