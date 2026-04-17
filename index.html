@@ -224,6 +224,7 @@
   <p style="opacity:0.7;font-size:12px;margin-top:8px">Press P to toggle • Esc also resumes</p>
 </div>
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
+<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.22</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -3540,9 +3541,13 @@ function mpClientSync(dt) {
   }
   if (roundState) {
     round = roundState.n || 1;
-    roundActive = !!roundState.active;
-    // Close the home overlay on the client when the host's round starts
-    if (roundActive) overlay.classList.add('hidden');
+    const newActive = !!roundState.active;
+    // Detect the host starting a new round — mirror it locally on the client
+    if (newActive && !roundActive) {
+      try { startRound(); } catch (e) { console.warn('[mp] client startRound failed', e); }
+    }
+    roundActive = newActive;
+    if (!roundActive) overlay.classList.remove('hidden');
   }
   const enemyState = (() => { try { return hp.getState('enemies'); } catch { return null; } })() || [];
   const seen = new Set();
