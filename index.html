@@ -1664,6 +1664,7 @@ addEventListener('wheel', e => {
   e.preventDefault();
 }, { passive: false });
 let mouseDown = false;
+let wasShooting = false;
 addEventListener('mousedown', e => {
   if (e.button === 0 && pointerLocked) mouseDown = true;
   if (e.button === 2) {
@@ -1751,10 +1752,9 @@ function tryShoot(now) {
   if (cheats.rate) rateMul *= 3;
   const interval = 1 / (g.fireRate * rateMul);
   if (now - lastShot < interval) return;
-  // Clamp so post-lag doesn't queue up a massive burst
-  if (now - lastShot > interval * 12) lastShot = now - interval * 12;
-  // Advance by exactly one interval (not to `now`) so the main loop can fire
-  // multiple shots within a single frame when interval < frame time.
+  // Small safety clamp — allows at most ~3 intervals of catch-up for fast guns
+  // but prevents stale `lastShot` from unleashing a huge burst.
+  if (now - lastShot > interval * 3) lastShot = now - interval * 3;
   lastShot += interval;
 
   // Melee
@@ -2885,8 +2885,15 @@ function loop() {
     safeCall(updateAmmoBoxes, dt);
     safeCall(updateRockets, dt);
     if (mouseDown) {
-      // Allow multiple shots per frame when fire rate > framerate (e.g. extreme-rate cheat + rampage).
-      for (let s = 0; s < 10; s++) {
+      const g = GUNS[currentGun];
+      const mul = (boostActive ? 2 : 1) * (cheats.rate ? 3 : 1);
+      const interval = 1 / (g.fireRate * mul);
+      // Rising-edge: start cadence fresh so a stale `lastShot` can't burst
+      if (!wasShooting) lastShot = now / 1000 - interval;
+      // Per-frame shot cap = number of shots physically possible this frame.
+      // For slow guns this is always 1 so single clicks never double-fire.
+      const maxShots = Math.max(1, Math.min(10, Math.ceil(dt / interval)));
+      for (let s = 0; s < maxShots; s++) {
         const prev = lastShot;
         try { tryShoot(now / 1000); } catch (e) { console.error('tryShoot error:', e); }
         if (lastShot === prev) break;
@@ -2897,6 +2904,8 @@ function loop() {
       else endRound();
     }
   }
+  // Track edge of fire press regardless of round state
+  wasShooting = mouseDown;
 
   // knife swing animation
   if (playerSwingT > 0 && GUNS[currentGun].melee) {
