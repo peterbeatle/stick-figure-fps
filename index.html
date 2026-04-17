@@ -3479,8 +3479,11 @@ async function startMultiplayer() {
   mpStatus('Opening Playroom lobby…', '#ffd166');
   const wasOverlayVisible = !overlay.classList.contains('hidden');
   if (wasOverlayVisible) overlay.classList.add('hidden');
+  // Hide the 3D canvas and HUD entirely so nothing can possibly intercept clicks on Playroom's lobby
+  canvas.style.visibility = 'hidden';
   try {
     await Playroom.insertCoin({ skipLobby: false, maxPlayersPerRoom: 2 });
+    canvas.style.visibility = 'visible';
     if (wasOverlayVisible) overlay.classList.remove('hidden');
     mpRole = Playroom.isHost() ? 'host' : 'client';
     mpStatus(`Connected ✓  (you are the ${mpRole})`, '#7fff8d');
@@ -3516,6 +3519,7 @@ async function startMultiplayer() {
     }, 50);
   } catch (e) {
     console.error('[mp] insertCoin failed', e);
+    canvas.style.visibility = 'visible';
     if (wasOverlayVisible) overlay.classList.remove('hidden');
     mpStatus('Multiplayer failed to start: ' + (e && e.message || e), '#ff8080');
     document.getElementById('mpStartBtn').disabled = false;
