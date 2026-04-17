@@ -226,7 +226,7 @@
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.33</div>
+<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.35</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -2377,7 +2377,9 @@ function killEnemy(e, shooterId = null) {
   // Reward (2x in multiplayer per the design) credited to the actual shooter
   const baseReward = e.userData.isBoss ? 1000 + round * 200 : 250;
   const reward = mpActive() ? baseReward * 2 : baseReward;
-  const myId = window.Playroom ? Playroom.myPlayer().id : null;
+  // In single-player, Playroom.myPlayer() returns null and .id throws.
+  let myId = null;
+  try { myId = mpActive() && window.Playroom ? Playroom.myPlayer()?.id : null; } catch {}
   const creditTo = shooterId || myId;
   if (!mpActive() || creditTo === myId) {
     player.money += reward;
@@ -3677,12 +3679,16 @@ function makeRemotePlayerMesh() {
   for (let i = 0; i < pts.length; i += 2) {
     g.add(makeBone(pts[i], pts[i+1], blueBone));
   }
-  const gun = new THREE.Mesh(
+  // Real weapon mesh is attached dynamically once we know what the remote player has equipped.
+  // We keep a small placeholder box until the first 'gun' state arrives.
+  const gunPlaceholder = new THREE.Mesh(
     new THREE.BoxGeometry(0.08, 0.08, 0.45),
     new THREE.MeshLambertMaterial({ color: 0x2a2a2a })
   );
-  gun.position.set(0.5, 1.0, -0.25);
-  g.add(gun);
+  gunPlaceholder.position.set(0.5, 1.0, -0.25);
+  gunPlaceholder.userData.isPlaceholderGun = true;
+  g.add(gunPlaceholder);
+  g.userData.gunPlaceholder = gunPlaceholder;
   // floating name/label
   const canvas = document.createElement('canvas');
   canvas.width = 256; canvas.height = 64;
@@ -4071,6 +4077,7 @@ async function startMultiplayer() {
       });
       me.setState('hp', player.hp, false);
       me.setState('alive', !!player.alive, true);
+      me.setState('gun', currentGun, true);
     }, 50);
   } catch (e) {
     console.error('[mp] insertCoin failed', e);
@@ -4095,6 +4102,24 @@ function leaveLobby() {
 }
 
 // Update the remote player's visual mesh using the pose state we read from Playroom each frame
+// Clone a weapon model for display on a remote player's body (no camera attach, no outlines visible)
+function makeRemoteGunMesh(gunKey) {
+  if (!weaponModels[gunKey]) return null;
+  const src = weaponModels[gunKey];
+  const clone = src.clone(true);
+  clone.visible = true;
+  clone.traverse(obj => { if (obj.userData.isOutline) obj.visible = false; });
+  // Position on the remote player's right-hand / shoulder area. Local coords are relative to the stick figure.
+  // Fingers gun has a different baseline — center it there; others offset to right hand.
+  if (gunKey === 'fingers') {
+    clone.position.set(0.25, 1.05, -0.1);
+  } else {
+    clone.position.set(0.45, 1.0, -0.1);
+  }
+  clone.scale.setScalar(1);
+  return clone;
+}
+
 function updateRemotePlayer() {
   if (!remotePlayer || !remotePlayer.playroomPlayer) return;
   const p = remotePlayer.playroomPlayer;
@@ -4102,7 +4127,6 @@ function updateRemotePlayer() {
   if (!pose) return;
   remotePlayer.mesh.position.set(pose.x, pose.y - 1.7, pose.z);
   remotePlayer.mesh.rotation.y = pose.yaw + Math.PI;
-  // Green HP bar scale from 0..1
   const hp = p.getState('hp');
   const fg = remotePlayer.mesh.userData.hpBarFg;
   if (fg && typeof hp === 'number') {
@@ -4110,7 +4134,24 @@ function updateRemotePlayer() {
     fg.scale.x = ratio || 0.001;
     fg.position.x = -1.0 * (1 - ratio) / 2;
   }
-  remotePlayer.pose = pose; // used by spectate camera
+  // Swap in the remote's actual weapon when it changes
+  const remoteGun = p.getState('gun');
+  if (remoteGun && remoteGun !== remotePlayer.mesh.userData.currentRemoteGun) {
+    // remove placeholder and any previous real gun mesh
+    const ph = remotePlayer.mesh.userData.gunPlaceholder;
+    if (ph && ph.parent === remotePlayer.mesh) remotePlayer.mesh.remove(ph);
+    if (remotePlayer.mesh.userData.activeGunMesh) {
+      remotePlayer.mesh.remove(remotePlayer.mesh.userData.activeGunMesh);
+      remotePlayer.mesh.userData.activeGunMesh = null;
+    }
+    const m = makeRemoteGunMesh(remoteGun);
+    if (m) {
+      remotePlayer.mesh.add(m);
+      remotePlayer.mesh.userData.activeGunMesh = m;
+    }
+    remotePlayer.mesh.userData.currentRemoteGun = remoteGun;
+  }
+  remotePlayer.pose = pose;
 }
 
 document.getElementById('mpStartBtn').addEventListener('click', startMultiplayer);
