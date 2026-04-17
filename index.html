@@ -3026,10 +3026,16 @@ function loop() {
 
   if (roundActive && !paused) {
     safeCall(updatePlayer, dt);
-    safeCall(updateEnemies, dt);
-    safeCall(updateBullets, dt);
-    safeCall(updateAmmoBoxes, dt);
-    safeCall(updateRockets, dt);
+    // In multiplayer, only the host simulates the shared world.
+    if (!mpActive() || mpIsHost()) {
+      safeCall(updateEnemies, dt);
+      safeCall(updateBullets, dt);
+      safeCall(updateAmmoBoxes, dt);
+      safeCall(updateRockets, dt);
+    } else {
+      // Client: replay world state from host
+      safeCall(mpClientSync, dt);
+    }
     if (mouseDown) {
       const g = GUNS[currentGun];
       const mul = (boostActive ? 2 : 1) * (cheats.rate ? 3 : 1);
@@ -3045,7 +3051,7 @@ function loop() {
         if (lastShot === prev) break;
       }
     }
-    if (enemies.length === 0 && roundActive && !gameOver) {
+    if ((!mpActive() || mpIsHost()) && enemies.length === 0 && roundActive && !gameOver) {
       if (!bossSpawned) {
         bossSpawned = true;
         const count = bossCountForRound(round);
@@ -3053,6 +3059,8 @@ function loop() {
       }
       else endRound();
     }
+    // Host broadcasts shared world state each frame (throttled internally)
+    if (mpIsHost()) safeCall(mpBroadcastWorld, dt);
   }
   // Track edge of fire press regardless of round state
   wasShooting = mouseDown;
@@ -3468,6 +3476,101 @@ function ensurePeerLib() {
   return true;
 }
 
+// Multiplayer role helpers — safe to call even when MP isn't active
+function mpActive() { return mpRole === 'host' || mpRole === 'client'; }
+function mpIsHost()   { return mpRole === 'host'; }
+function mpIsClient() { return mpRole === 'client'; }
+
+// Ghost enemies on the client — we create a simple mesh per enemy ID received from the host
+const ghostEnemies = new Map(); // id → THREE.Group
+let mpBroadcastAccum = 0;
+const MP_BROADCAST_HZ = 15;
+const MP_BROADCAST_INTERVAL = 1 / MP_BROADCAST_HZ;
+
+function mpBroadcastWorld(dt) {
+  if (!mpIsHost() || !window.Playroom) return;
+  mpBroadcastAccum += dt;
+  if (mpBroadcastAccum < MP_BROADCAST_INTERVAL) return;
+  mpBroadcastAccum = 0;
+  // Encode enemies
+  const enemySnap = enemies.map((e, i) => ({
+    id: e.userData._netId || (e.userData._netId = 'e' + i + '_' + Math.random().toString(36).slice(2, 8)),
+    x: +e.position.x.toFixed(2),
+    y: +e.position.y.toFixed(2),
+    z: +e.position.z.toFixed(2),
+    r: +e.rotation.y.toFixed(2),
+    hp: e.userData.hp,
+    mh: e.userData.maxHp,
+    b: e.userData.isBoss ? 1 : 0,
+    s: e.scale.x,
+  }));
+  // Encode enemy bullets (simpler — position only)
+  const bulletSnap = enemyBullets.slice(0, 40).map((b, i) => ({
+    x: +b.pos.x.toFixed(2),
+    y: +b.pos.y.toFixed(2),
+    z: +b.pos.z.toFixed(2),
+  }));
+  // Encode pickups
+  const pickupSnap = ammoBoxes.map((b, i) => ({
+    id: b.mesh.uuid,
+    x: +b.mesh.position.x.toFixed(2),
+    z: +b.mesh.position.z.toFixed(2),
+    y: +b.mesh.position.y.toFixed(2),
+    t: b.type,
+  }));
+  // Encode round state + map
+  try {
+    Playroom.setState('enemies', enemySnap, false);
+    Playroom.setState('ebullets', bulletSnap, false);
+    Playroom.setState('pickups', pickupSnap, false);
+    Playroom.setState('round', { n: round, active: roundActive, map: currentMap, bossSpawned }, true);
+  } catch (e) { /* playroom may not be fully ready */ }
+}
+
+// On the client, mirror the host's state each frame
+function mpClientSync(dt) {
+  if (!mpIsClient() || !window.Playroom) return;
+  const roundState = Playroom.getState('round');
+  if (roundState && roundState.map && roundState.map !== currentMap) {
+    currentMap = roundState.map;
+    buildMap(currentMap);
+  }
+  if (roundState) {
+    round = roundState.n || 1;
+    roundActive = !!roundState.active;
+  }
+  // Sync enemies — create/update ghosts
+  const enemyState = Playroom.getState('enemies') || [];
+  const seen = new Set();
+  for (const es of enemyState) {
+    seen.add(es.id);
+    let ghost = ghostEnemies.get(es.id);
+    if (!ghost) {
+      ghost = es.b ? makeBoss() : makeStickFigure();
+      ghost.scale.setScalar(es.s || 1);
+      scene.add(ghost);
+      ghostEnemies.set(es.id, ghost);
+    }
+    // Smoothly interpolate toward the target position (we update ~15Hz)
+    ghost.position.x += (es.x - ghost.position.x) * 0.35;
+    ghost.position.y += (es.y - ghost.position.y) * 0.35;
+    ghost.position.z += (es.z - ghost.position.z) * 0.35;
+    ghost.rotation.y = es.r;
+    if (ghost.userData.hpBar && ghost.userData.hp !== es.hp) {
+      ghost.userData.hp = es.hp;
+      ghost.userData.maxHp = es.mh;
+      ghost.userData.hpBar.update(es.hp, es.mh);
+    }
+  }
+  // Remove ghosts whose IDs disappeared
+  for (const [id, ghost] of ghostEnemies) {
+    if (!seen.has(id)) {
+      scene.remove(ghost);
+      ghostEnemies.delete(id);
+    }
+  }
+}
+
 // ---------- Playroom Kit replaces the PeerJS lobby (dev mode, no signup needed) ----------
 // Playroom exposes its API on window.Playroom via the UMD bundle.
 async function startMultiplayer() {
@@ -3529,11 +3632,12 @@ async function startMultiplayer() {
 function leaveLobby() {
   if (mpPoseTimer) { clearInterval(mpPoseTimer); mpPoseTimer = null; }
   if (remotePlayer) { scene.remove(remotePlayer.mesh); remotePlayer = null; }
+  for (const [id, ghost] of ghostEnemies) scene.remove(ghost);
+  ghostEnemies.clear();
   mpRole = 'none';
   document.getElementById('mpLeaveBtn').style.display = 'none';
   document.getElementById('mpStartBtn').disabled = false;
   mpStatus('Left lobby. Refresh the page to open a new one.');
-  // Playroom doesn't expose a clean "leave" — reload is simplest
 }
 
 // Update the remote player's visual mesh using the pose state we read from Playroom each frame
