@@ -98,7 +98,7 @@
   }
   #boostLabel.on { opacity: 1; }
   #streak {
-    position: fixed; top: 46px; right: 12px; z-index: 5;
+    position: fixed; top: 96px; right: 12px; z-index: 5;
     background: rgba(0,0,0,0.55); padding: 6px 10px; border-radius: 6px;
     font-size: 13px; display: none;
   }
@@ -150,7 +150,7 @@
 <div id="hitmarker"></div>
 <div id="boost"></div>
 <div id="boostLabel">RAMPAGE</div>
-<div id="streak">Kill streak: <span id="streakN">0</span></div>
+<div id="streak">Flawless Streak: <span id="streakN">0</span></div>
 <div id="settingsModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:20;display:none;align-items:center;justify-content:center;flex-direction:column;padding:20px;color:#eee;font-family:monospace;">
   <div style="background:#1a1a1a;border:1px solid #444;border-radius:8px;padding:20px;max-width:520px;width:100%;max-height:86vh;overflow:auto">
     <h2 style="margin:0 0 12px">Settings</h2>
@@ -201,7 +201,7 @@
 
 <div id="pauseMenu" style="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:11;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:#eee;font-family:monospace;">
   <h1 style="margin:0 0 8px">Paused</h1>
-  <div style="display:flex;gap:8px;align-items:center">
+  <div id="pauseSkipRow" style="display:none;gap:8px;align-items:center">
     <label>Skip to round:</label>
     <input id="skipRoundInput" type="number" min="1" value="1" style="width:70px;background:#222;color:#eee;border:1px solid #555;border-radius:3px;padding:5px">
     <button id="skipRoundBtn" style="background:#e0a020;color:#000;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Go</button>
@@ -213,6 +213,7 @@
 </div>
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
+<div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
 <div id="bossHud" style="position:fixed;top:100px;left:50%;transform:translateX(-50%);width:380px;z-index:6;display:none;">
   <div style="text-align:center;color:#ff6666;font-weight:bold;letter-spacing:2px;margin-bottom:3px;text-shadow:0 0 4px #000">BOSS</div>
@@ -247,11 +248,13 @@
       <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatMag"> Unlimited magazine (no reload)</label>
       <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatRate"> Extreme fire rate</label>
       <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatInvuln"> Invincibility</label>
+      <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatSkip"> Round skip (pause menu)</label>
     </div>
   </div>
+  <div id="shopMoney" style="margin-top:12px;font-size:16px">Money: <span style="color:#4caf50;font-weight:bold">$<span id="shopMoneyAmt">0</span></span></div>
   <div class="shop" id="shop"></div>
   <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-    <button class="primary" id="retryBtn" style="background:#e0a020;display:none">Retry Round</button>
+    <button class="primary" id="retryBtn" style="display:none"></button>
     <button class="primary" id="startBtn">Start Round</button>
   </div>
   <div style="display:flex;gap:10px;justify-content:center;margin-top:8px">
@@ -1315,7 +1318,7 @@ const GUNS = {
   fingers: { name: 'Finger Guns', damage: 10, fireRate: 25, magSize: 300, reserve: 900, reloadTime: 3.2, spread: 0.025, cost: 10000, auto: true, dualWield: true },
 };
 const owned = { knife: true, pistol: true };
-const SLOT_ORDER = ['knife', 'pistol', 'smg', 'assault', 'shotgun', 'rifle', 'sniper', 'lmg', 'bazooka', 'railgun', 'plasma', 'crossbow', 'fingers'];
+const SLOT_ORDER = ['knife', 'pistol', 'smg', 'shotgun', 'assault', 'rifle', 'sniper', 'lmg', 'bazooka', 'railgun', 'plasma', 'crossbow', 'fingers'];
 let currentGun = 'pistol';
 let mag = GUNS.pistol.magSize;
 let reserve = GUNS.pistol.reserve;
@@ -1604,7 +1607,7 @@ camera.add(flash);
 flash.position.set(0.25, -0.15, -0.8);
 
 // Cheats
-const cheats = { money: false, mag: false, rate: false, invuln: false };
+const cheats = { money: false, mag: false, rate: false, invuln: false, skip: false };
 const CHEAT_CODE = '1211999';
 let cheatsUnlocked = false;
 // Sniper aim-down-sights state
@@ -2226,7 +2229,7 @@ function killEnemy(e) {
   scene.remove(e);
   const i = enemies.indexOf(e);
   if (i >= 0) enemies.splice(i, 1);
-  player.money += e.userData.isBoss ? 500 + round * 100 : 100;
+  player.money += e.userData.isBoss ? 1000 + round * 200 : 250;
   SFX.kill();
   // kill-streak boost
   killStreak++;
@@ -2353,7 +2356,8 @@ function updateEnemies(dt) {
     if (e.userData.shootCd <= 0 && dist < 35 && e.userData.hasLOS) {
       e.userData.shootCd = e.userData.isBoss ? 0.45 + Math.random() * 0.3 : 0.9 + Math.random() * 0.6;
       const accuracyBoost = Math.min(0.08, round * 0.008);
-      const spread = Math.max(0.03, (e.userData.isBoss ? 0.08 : 0.12) - accuracyBoost) + Math.min(0.06, dist * 0.0025);
+      // Baseline spreads tightened ~10% (0.12→0.108 for grunts, 0.08→0.072 for bosses)
+      const spread = Math.max(0.025, (e.userData.isBoss ? 0.072 : 0.108) - accuracyBoost) + Math.min(0.06, dist * 0.0025);
       const gunWorld = new THREE.Vector3();
       e.userData.gunMesh.getWorldPosition(gunWorld);
       // per-shot LOS safety check from the gun's actual position (catches cases the throttled check missed — e.g., boss bursts)
@@ -2612,13 +2616,15 @@ function buildShop() {
     else if (isOwned) el.classList.add('owned');
     else if (!canAfford) el.classList.add('locked');
     const magLabel = g.magSize === Infinity ? '∞' : g.magSize;
+    const canBuy = !isOwned && canAfford;
     const status = isEquipped ? 'EQUIPPED'
                  : isOwned    ? 'Click to equip'
                  : canAfford  ? `Buy $${g.cost}`
                  :              `$${g.cost} (need more)`;
+    const statusStyle = canBuy ? 'color:#4caf50' : '';
     el.innerHTML = `<h3>${g.name}</h3>
       <small>DMG ${g.damage} • RPS ${g.fireRate} • Mag ${magLabel}</small>
-      <small><b>${status}</b></small>`;
+      <small style="${statusStyle}"><b>${status}</b></small>`;
     el.addEventListener('click', () => {
       if (owned[key]) {
         equipGun(key);
@@ -2667,6 +2673,9 @@ function openShop(title, subtitle) {
 }
 
 let bossSpawned = false;
+// Reward math: with 250/kill and 1000+200×round per boss, cumulative earnings
+// after clearing round 9 = ~$50k, enough to buy every gun ($46.5k total) and
+// head into the neon map (round 10) with Finger Guns ready.
 function mapForRound(r) {
   // Cycle all four maps, 3 rounds each: 1-3 arena, 4-6 hills, 7-9 city, 10-12 neon, then repeat
   const phase = Math.floor((r - 1) / 3) % 4;
@@ -2735,10 +2744,10 @@ function endRound() {
 function endGame() {
   gameOver = true;
   roundActive = false;
-  openShop('You died', `You reached round ${round}. Retry this round (keep gear + money) or restart entirely.`);
+  openShop('You died', `You reached round ${round}. Restart the game or head back home.`);
   startBtn.textContent = 'Restart Game';
   startBtn.dataset.mode = 'restart';
-  document.getElementById('retryBtn').style.display = 'inline-block';
+  document.getElementById('retryBtn').style.display = 'none';
 }
 
 function retryRound() {
@@ -2853,7 +2862,12 @@ const HUD = {
 function updateHUD() {
   HUD.hp.textContent = player.hp;
   HUD.hpFill.style.width = Math.max(0, Math.min(100, player.hp)) + '%';
-  HUD.money.textContent = cheats.money ? '∞' : player.money;
+  const moneyStr = cheats.money ? '∞' : player.money;
+  HUD.money.textContent = moneyStr;
+  const shopMoneyAmt = document.getElementById('shopMoneyAmt');
+  if (shopMoneyAmt) shopMoneyAmt.textContent = moneyStr;
+  const cornerMoneyAmt = document.getElementById('cornerMoneyAmt');
+  if (cornerMoneyAmt) cornerMoneyAmt.textContent = moneyStr;
   HUD.gunName.textContent = GUNS[currentGun].name + (reloading ? ' (reloading)' : '');
   HUD.ammo.textContent = (cheats.mag || mag === Infinity) ? '∞' : mag;
   HUD.reserve.textContent = (cheats.mag || reserve === Infinity) ? '∞' : reserve;
@@ -3009,6 +3023,9 @@ const pauseMenu = document.getElementById('pauseMenu');
 function setPaused(p) {
   paused = p;
   pauseMenu.style.display = p ? 'flex' : 'none';
+  // Round-skip row is only available when the cheat is enabled
+  const skipRow = document.getElementById('pauseSkipRow');
+  if (skipRow) skipRow.style.display = (p && cheats.skip) ? 'flex' : 'none';
   if (p) { document.exitPointerLock?.(); mouseDown = false; }
   else if (roundActive && !gameOver) canvas.requestPointerLock();
 }
@@ -3135,6 +3152,7 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   bind('cheatMag',    'mag');
   bind('cheatRate',   'rate');
   bind('cheatInvuln', 'invuln');
+  bind('cheatSkip',   'skip');
 })();
 
 // sensitivity sliders
