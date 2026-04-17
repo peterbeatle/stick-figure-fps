@@ -225,7 +225,7 @@
 </div>
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.24</div>
+<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.25</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -3114,9 +3114,10 @@ function loop() {
   const dt = Math.min((now - prev) / 1000, 0.05);
   prev = now;
 
-  // Always sync multiplayer state regardless of local round status so the
-  // client auto-enters the round the moment the host starts.
+  // Always sync multiplayer state, even when a round isn't active locally,
+  // so round transitions (start AND end) propagate correctly.
   if (mpIsClient()) safeCall(mpClientSync, dt);
+  if (mpIsHost())   safeCall(mpBroadcastWorld, dt);
   if (roundActive && !paused) {
     safeCall(updatePlayer, dt);
     if (!mpActive() || mpIsHost()) {
@@ -3148,8 +3149,6 @@ function loop() {
       }
       else endRound();
     }
-    // Host broadcasts shared world state each frame (throttled internally)
-    if (mpIsHost()) safeCall(mpBroadcastWorld, dt);
   }
   // Track edge of fire press regardless of round state
   wasShooting = mouseDown;
@@ -3650,14 +3649,25 @@ function mpClientSync(dt) {
     buildMap(currentMap);
   }
   if (roundState) {
-    round = roundState.n || 1;
+    const newRound = roundState.n || 1;
     const newActive = !!roundState.active;
-    // Detect the host starting a new round — mirror it locally on the client
+    // Detect host starting a new round — auto-start locally
     if (newActive && !roundActive) {
+      round = newRound;
       try { startRound(); } catch (e) { console.warn('[mp] client startRound failed', e); }
     }
+    // Detect host ending a round — show the shop/round-cleared overlay
+    if (!newActive && roundActive) {
+      const cleared = newRound - 1;
+      round = newRound;
+      try {
+        openShop(`Round ${cleared} cleared!`, `Next: Round ${round}. Spend your money wisely.`);
+        startBtn.textContent = `Start Round ${round}`;
+        startBtn.dataset.mode = 'start';
+      } catch (e) { console.warn('[mp] client openShop failed', e); }
+    }
+    round = newRound;
     roundActive = newActive;
-    if (!roundActive) overlay.classList.remove('hidden');
   }
   const enemyState = (() => { try { return hp.getState('enemies'); } catch { return null; } })() || [];
   const seen = new Set();
