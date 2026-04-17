@@ -255,6 +255,19 @@
     <b style="color:#ffcc33">Esc</b><span>Resume from pause</span>
   </div>
   <p>Kill stick figures to earn money. Buy better guns between rounds.</p>
+  <div id="mpPanel" style="margin:14px auto;max-width:520px;background:#122038;border:1px solid #2a4070;border-radius:8px;padding:12px 16px;text-align:left;font-size:13px">
+    <div style="font-weight:bold;color:#7fc8ff;margin-bottom:6px">Multiplayer (Phase 1 — see each other)</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button type="button" id="mpCreateBtn" style="background:#2864c2;color:white;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Create Lobby</button>
+      <span style="opacity:0.7">code:</span>
+      <span id="mpCode" style="font-family:monospace;color:#ffd166;font-weight:bold;letter-spacing:2px">----</span>
+      <span style="opacity:0.6">|</span>
+      <input id="mpJoinInput" placeholder="enter code" maxlength="4" style="width:70px;background:#0a1220;color:#eee;border:1px solid #2a4070;border-radius:3px;padding:5px;font-family:monospace;letter-spacing:2px">
+      <button type="button" id="mpJoinBtn" style="background:#4caf50;color:white;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Join</button>
+      <button type="button" id="mpLeaveBtn" style="background:#666;color:white;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace;display:none">Leave</button>
+    </div>
+    <div id="mpStatus" style="margin-top:6px;opacity:0.85">Not connected. Create a lobby or enter a friend's code.</div>
+  </div>
   <div id="cheatsBlock" style="margin-top:10px">
     <button type="button" id="cheatsBtn" style="background:#444;color:#ccc;border:1px solid #666;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Cheats</button>
     <div id="cheatsPass" style="display:none;margin-top:8px">
@@ -283,6 +296,7 @@
   </div>
 </div>
 
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script type="importmap">
 { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
 </script>
@@ -1277,6 +1291,13 @@ function spawnBoss() {
     (Math.hypot(x - camera.position.x, z - camera.position.z) < 20 || typeof insideSolidWall === 'function' && insideSolidWall(x, z))
   );
   b.position.set(x, terrainHeight(x, z), z);
+  // Boss uses the round's weapon too, with higher stats
+  const gunKey = enemyGunForRound(round);
+  b.userData.gunKey = gunKey;
+  b.userData.gunProfile = ENEMY_GUN_PROFILES[gunKey];
+  b.userData.magSize = b.userData.gunProfile.magSize;
+  b.userData.reloadTime = b.userData.gunProfile.reloadTime;
+  b.userData.magShots = 0;
   scene.add(b);
   enemies.push(b);
   document.getElementById('bossBanner').style.display = 'block';
@@ -1307,6 +1328,14 @@ function spawnEnemy() {
     (Math.hypot(x - camera.position.x, z - camera.position.z) < 15 || insideSolidWall(x, z))
   );
   e.position.set(x, terrainHeight(x, z), z);
+  // Assign this enemy the round-based weapon (random for rounds 13+)
+  const gunKey = enemyGunForRound(round);
+  e.userData.gunKey = gunKey;
+  e.userData.gunProfile = ENEMY_GUN_PROFILES[gunKey];
+  // Override magSize/reloadTime from profile
+  e.userData.magSize = e.userData.gunProfile.magSize;
+  e.userData.reloadTime = e.userData.gunProfile.reloadTime;
+  e.userData.magShots = 0;
   scene.add(e);
   enemies.push(e);
 }
@@ -2044,27 +2073,27 @@ const rocketMat = new THREE.MeshLambertMaterial({ color: 0x555555, emissive: 0x9
 const plasmaGeom = new THREE.SphereGeometry(0.15, 10, 8);
 const plasmaMat = new THREE.MeshBasicMaterial({ color: 0x66ffaa });
 const explosions = []; // {mesh, life, maxLife, color}
-function spawnRocket(pos, dir, radius, damage) {
+function spawnRocket(pos, dir, radius, damage, fromEnemy = false) {
   const m = new THREE.Mesh(rocketGeom, rocketMat);
   m.position.copy(pos);
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   scene.add(m);
-  rockets.push({ mesh: m, vel: dir.clone().multiplyScalar(30), radius, damage, life: 3, kind: 'rocket' });
+  rockets.push({ mesh: m, vel: dir.clone().multiplyScalar(30), radius, damage, life: 3, kind: 'rocket', fromEnemy });
 }
-function spawnPlasma(pos, dir, radius, damage) {
+function spawnPlasma(pos, dir, radius, damage, fromEnemy = false) {
   const m = new THREE.Mesh(plasmaGeom, plasmaMat);
   m.position.copy(pos);
   scene.add(m);
-  rockets.push({ mesh: m, vel: dir.clone().multiplyScalar(55), radius, damage, life: 2, kind: 'plasma' });
+  rockets.push({ mesh: m, vel: dir.clone().multiplyScalar(55), radius, damage, life: 2, kind: 'plasma', fromEnemy });
 }
 const arrowGeom = new THREE.CylinderGeometry(0.03, 0.03, 0.45, 6);
 const arrowMat = new THREE.MeshLambertMaterial({ color: 0x8a8a8a, emissive: 0x225522, emissiveIntensity: 0.35 });
-function spawnArrow(pos, dir, radius, damage) {
+function spawnArrow(pos, dir, radius, damage, fromEnemy = false) {
   const m = new THREE.Mesh(arrowGeom, arrowMat);
   m.position.copy(pos);
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   scene.add(m);
-  rockets.push({ mesh: m, vel: dir.clone().multiplyScalar(60), radius, damage, life: 2.5, kind: 'arrow' });
+  rockets.push({ mesh: m, vel: dir.clone().multiplyScalar(60), radius, damage, life: 2.5, kind: 'arrow', fromEnemy });
 }
 function explode(pos, radius, damage, color = 0xff6600, selfDamage = true) {
   const mesh = new THREE.Mesh(
@@ -2086,7 +2115,7 @@ function explode(pos, radius, damage, color = 0xff6600, selfDamage = true) {
   }
   if (selfDamage) {
     const dp = camera.position.distanceTo(pos);
-    if (dp < radius) damagePlayer(Math.floor((1 - dp / radius) * 40));
+    if (dp < radius) damagePlayer(Math.max(1, Math.floor((1 - dp / radius) * Math.min(40, damage))));
   }
   SFX.damage();
 }
@@ -2116,7 +2145,9 @@ function updateRockets(dt) {
       const isPlasma = r.kind === 'plasma';
       const isArrow  = r.kind === 'arrow';
       const color = isPlasma ? 0x66ffaa : isArrow ? 0x66ff33 : 0xff6600;
-      explode(pos, r.radius, r.damage, color, !(isPlasma || isArrow));
+      // Enemy-fired projectiles always damage the player; player-fired plasma/arrow don't self-damage.
+      const selfDamage = r.fromEnemy ? true : !(isPlasma || isArrow);
+      explode(pos, r.radius, r.damage, color, selfDamage);
       scene.remove(r.mesh);
       rockets.splice(i, 1);
     }
@@ -2277,6 +2308,27 @@ function spawnEnemyMuzzle(pos) {
   muzzleFlashes.push({ mesh: m, life: 0.08 });
 }
 
+// Per-round enemy weapon loadout. Rounds 1-12 follow the shop order; Survivor (13+) picks random per enemy.
+const ENEMY_GUN_PROFILES = {
+  pistol:   { cdMin: 0.9,  cdMax: 1.4,  shots: 1, spread: 0.12,  dmg: 6,  vel: 35,  kind: 'bullet', magSize: 6,  reloadTime: 1.5 },
+  smg:      { cdMin: 0.22, cdMax: 0.38, shots: 1, spread: 0.16,  dmg: 4,  vel: 40,  kind: 'bullet', magSize: 20, reloadTime: 1.8 },
+  shotgun:  { cdMin: 1.6,  cdMax: 2.3,  shots: 5, spread: 0.18,  dmg: 4,  vel: 35,  kind: 'bullet', magSize: 4,  reloadTime: 2.0 },
+  assault:  { cdMin: 0.32, cdMax: 0.55, shots: 1, spread: 0.1,   dmg: 5,  vel: 40,  kind: 'bullet', magSize: 15, reloadTime: 1.8 },
+  rifle:    { cdMin: 0.75, cdMax: 1.1,  shots: 1, spread: 0.05,  dmg: 10, vel: 55,  kind: 'bullet', magSize: 8,  reloadTime: 1.8 },
+  sniper:   { cdMin: 2.2,  cdMax: 3.0,  shots: 1, spread: 0.02,  dmg: 22, vel: 95,  kind: 'bullet', magSize: 4,  reloadTime: 2.1 },
+  lmg:      { cdMin: 0.16, cdMax: 0.28, shots: 1, spread: 0.2,   dmg: 4,  vel: 40,  kind: 'bullet', magSize: 30, reloadTime: 2.4 },
+  bazooka:  { cdMin: 3.2,  cdMax: 4.5,  shots: 1, spread: 0.03,  dmg: 22, vel: 22,  kind: 'rocket', blast: 3.2, magSize: 1, reloadTime: 2.8 },
+  railgun:  { cdMin: 2.6,  cdMax: 3.6,  shots: 1, spread: 0.015, dmg: 26, vel: 120, kind: 'bullet', magSize: 3,  reloadTime: 2.4 },
+  plasma:   { cdMin: 0.55, cdMax: 0.95, shots: 1, spread: 0.08,  dmg: 8,  vel: 45,  kind: 'plasma', blast: 1.8, magSize: 10, reloadTime: 2.0 },
+  crossbow: { cdMin: 2.6,  cdMax: 3.6,  shots: 3, spread: 0.08,  dmg: 12, vel: 50,  kind: 'arrow',  blast: 1.8, magSize: 2,  reloadTime: 2.5 },
+  fingers:  { cdMin: 0.11, cdMax: 0.2,  shots: 1, spread: 0.22,  dmg: 3,  vel: 35,  kind: 'bullet', magSize: 40, reloadTime: 2.6 },
+};
+const NON_KNIFE_GUNS = SLOT_ORDER.slice(1); // 12 weapons, aligned with rounds 1-12
+function enemyGunForRound(r) {
+  if (r <= 12) return NON_KNIFE_GUNS[r - 1];
+  return NON_KNIFE_GUNS[Math.floor(Math.random() * NON_KNIFE_GUNS.length)];
+}
+
 function updateEnemies(dt) {
   for (const e of enemies) {
     // reload progress animation
@@ -2378,13 +2430,16 @@ function updateEnemies(dt) {
 
     e.userData.shootCd -= dt;
     if (e.userData.shootCd <= 0 && dist < 35 && e.userData.hasLOS) {
-      e.userData.shootCd = e.userData.isBoss ? 0.45 + Math.random() * 0.3 : 0.9 + Math.random() * 0.6;
-      const accuracyBoost = Math.min(0.08, round * 0.008);
-      // Baseline spreads tightened ~10% (0.12→0.108 for grunts, 0.08→0.072 for bosses)
-      const spread = Math.max(0.025, (e.userData.isBoss ? 0.072 : 0.108) - accuracyBoost) + Math.min(0.06, dist * 0.0025);
+      const profile = e.userData.gunProfile || ENEMY_GUN_PROFILES.pistol;
+      const cdBase = profile.cdMin + Math.random() * (profile.cdMax - profile.cdMin);
+      e.userData.shootCd = e.userData.isBoss ? cdBase * 0.55 : cdBase;
+      const accuracyBoost = Math.min(0.05, round * 0.005);
+      const spread = Math.max(0.01, profile.spread - accuracyBoost) + Math.min(0.05, dist * 0.002);
+      const dmgMul = e.userData.isBoss ? 1.8 : 1.0;
+      const dmg = Math.max(1, Math.floor(profile.dmg * dmgMul));
       const gunWorld = new THREE.Vector3();
       e.userData.gunMesh.getWorldPosition(gunWorld);
-      // per-shot LOS safety check from the gun's actual position (catches cases the throttled check missed — e.g., boss bursts)
+      // per-shot LOS safety check from the gun's actual position
       const gunToP = camera.position.clone().sub(gunWorld);
       const gunDist = gunToP.length();
       gunToP.normalize();
@@ -2392,27 +2447,38 @@ function updateEnemies(dt) {
       const gunWallHits = raycaster.intersectObjects(wallMeshes);
       if (gunWallHits.length && gunWallHits[0].distance < gunDist - 0.3) {
         e.userData.hasLOS = false;
-        continue; // wall directly in front of gun — skip this shooting event entirely
+        continue;
       }
-      const shots = e.userData.isBoss ? 3 : 1;
+      const shots = profile.shots;
       for (let s = 0; s < shots; s++) {
+        // Global bullet cap to keep perf sane at high fire rates
+        if (profile.kind === 'bullet' && enemyBullets.length > 90) break;
         const dir = camera.position.clone().sub(gunWorld).normalize();
         dir.x += (Math.random() - 0.5) * spread * 2;
         dir.y += (Math.random() - 0.5) * spread * 2;
         dir.z += (Math.random() - 0.5) * spread * 2;
         dir.normalize();
-        const mesh = new THREE.Mesh(bulletGeom, bulletMat);
-        mesh.position.copy(gunWorld);
-        if (e.userData.isBoss) mesh.scale.setScalar(1.6);
-        scene.add(mesh);
-        enemyBullets.push({
-          pos: gunWorld.clone(),
-          vel: dir.multiplyScalar(e.userData.isBoss ? 42 : 35),
-          life: 2, mesh,
-          damage: (e.userData.isBoss ? 10 : 6) + Math.floor(round * 0.8),
-        });
-        const end = gunWorld.clone().addScaledVector(dir, 40);
-        addTracer(gunWorld, end, e.userData.isBoss ? 0xff2222 : 0xff6622, 0.12);
+        // Spawn projectiles a bit in front of the gun so they don't instantly hit the shooter.
+        const start = gunWorld.clone().addScaledVector(dir, 0.8);
+        if (profile.kind === 'rocket') {
+          spawnRocket(start, dir.clone(), profile.blast, dmg, true);
+        } else if (profile.kind === 'plasma') {
+          spawnPlasma(start, dir.clone(), profile.blast, dmg, true);
+        } else if (profile.kind === 'arrow') {
+          spawnArrow(start, dir.clone(), profile.blast, dmg, true);
+        } else {
+          const mesh = new THREE.Mesh(bulletGeom, bulletMat);
+          mesh.position.copy(gunWorld);
+          if (e.userData.isBoss) mesh.scale.setScalar(1.6);
+          scene.add(mesh);
+          enemyBullets.push({
+            pos: gunWorld.clone(),
+            vel: dir.multiplyScalar(profile.vel),
+            life: 2, mesh, damage: dmg,
+          });
+          const end = gunWorld.clone().addScaledVector(dir, 40);
+          addTracer(gunWorld, end, e.userData.isBoss ? 0xff2222 : 0xff6622, 0.12);
+        }
       }
       spawnEnemyMuzzle(gunWorld);
       SFX.enemyShoot();
@@ -2992,6 +3058,9 @@ function loop() {
   // Track edge of fire press regardless of round state
   wasShooting = mouseDown;
 
+  // Multiplayer: update remote player's visual position
+  if (typeof updateRemotePlayer === 'function') updateRemotePlayer();
+
   // knife swing animation
   if (playerSwingT > 0 && GUNS[currentGun].melee) {
     playerSwingT += dt;
@@ -3317,6 +3386,185 @@ document.getElementById('pauseSettingsBtn').addEventListener('click', openSettin
 document.getElementById('shopSettingsBtn').addEventListener('click', openSettings);
 document.getElementById('settingsCloseBtn').addEventListener('click', closeSettings);
 document.getElementById('shopHomeBtn').addEventListener('click', goHome);
+
+// ---------- Multiplayer (PeerJS) — Phase 1: presence only ----------
+const MP_PREFIX = 'stickfps-v1-';
+let peer = null;
+let conn = null;
+let mpRole = 'none'; // 'host' or 'client' or 'none'
+let remotePlayer = null; // { pose: {x,y,z,yaw,pitch,gun}, mesh }
+let mpPoseTimer = null;
+
+function makeRemotePlayerMesh() {
+  const g = new THREE.Group();
+  const blueLine = new THREE.LineBasicMaterial({ color: 0x4aa3ff, linewidth: 3 });
+  const blueHead = new THREE.MeshLambertMaterial({ color: 0x4aa3ff, emissive: 0x224466, emissiveIntensity: 0.4 });
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), blueHead);
+  head.position.set(0, 1.75, 0);
+  g.add(head);
+  const pts = [
+    [0,1.5,0],[0,0.9,0],
+    [0,1.4,0],[-0.45,1.0,0],
+    [0,1.4,0],[ 0.45,1.0,0],
+    [0,0.9,0],[-0.25,0.0,0],
+    [0,0.9,0],[ 0.25,0.0,0],
+  ];
+  for (let i = 0; i < pts.length; i += 2) {
+    const geo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(...pts[i]), new THREE.Vector3(...pts[i+1])
+    ]);
+    g.add(new THREE.Line(geo, blueLine));
+  }
+  const gun = new THREE.Mesh(
+    new THREE.BoxGeometry(0.08, 0.08, 0.45),
+    new THREE.MeshLambertMaterial({ color: 0x2a2a2a })
+  );
+  gun.position.set(0.5, 1.0, -0.25);
+  g.add(gun);
+  // floating name/label
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.font = 'bold 36px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 6;
+  ctx.strokeText('P2', canvas.width/2, canvas.height/2);
+  ctx.fillStyle = '#7fc8ff';
+  ctx.fillText('P2', canvas.width/2, canvas.height/2);
+  const tex = new THREE.CanvasTexture(canvas);
+  const labelMat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+  const label = new THREE.Sprite(labelMat);
+  label.position.set(0, 2.3, 0);
+  label.scale.set(1.2, 0.3, 1);
+  g.add(label);
+  return g;
+}
+
+function mpStatus(msg, color = '#ddd') {
+  const el = document.getElementById('mpStatus');
+  el.style.color = color;
+  el.textContent = msg;
+}
+function ensurePeerLib() {
+  if (typeof Peer === 'undefined') {
+    mpStatus('PeerJS library failed to load (no internet?)', '#ff8080');
+    return false;
+  }
+  return true;
+}
+function createLobby(retry = 0) {
+  if (!ensurePeerLib()) return;
+  if (peer) { peer.destroy(); peer = null; }
+  const code = String(Math.floor(1000 + Math.random() * 9000));
+  peer = new Peer(MP_PREFIX + code);
+  mpStatus('Creating lobby…');
+  peer.on('open', () => {
+    mpRole = 'host';
+    document.getElementById('mpCode').textContent = code;
+    document.getElementById('mpLeaveBtn').style.display = 'inline-block';
+    mpStatus(`Lobby ${code} — waiting for friend to join…`, '#ffd166');
+  });
+  peer.on('connection', (c) => {
+    conn = c;
+    c.on('open', () => onPeerReady());
+    c.on('close', onPeerClosed);
+    c.on('error', onPeerError);
+    c.on('data', onPeerData);
+  });
+  peer.on('error', (err) => {
+    if (err.type === 'unavailable-id' && retry < 5) {
+      peer.destroy(); peer = null;
+      createLobby(retry + 1);
+    } else {
+      mpStatus('Lobby error: ' + err.type, '#ff8080');
+    }
+  });
+}
+function joinLobby(code) {
+  if (!ensurePeerLib()) return;
+  if (!/^\d{4}$/.test(code)) { mpStatus('Enter a 4-digit code', '#ff8080'); return; }
+  if (peer) { peer.destroy(); peer = null; }
+  peer = new Peer();
+  mpStatus('Connecting…');
+  peer.on('open', () => {
+    conn = peer.connect(MP_PREFIX + code, { reliable: true });
+    conn.on('open', () => {
+      mpRole = 'client';
+      document.getElementById('mpCode').textContent = code;
+      document.getElementById('mpLeaveBtn').style.display = 'inline-block';
+      onPeerReady();
+    });
+    conn.on('close', onPeerClosed);
+    conn.on('error', onPeerError);
+    conn.on('data', onPeerData);
+  });
+  peer.on('error', (err) => {
+    if (err.type === 'peer-unavailable') mpStatus('No lobby with that code', '#ff8080');
+    else mpStatus('Connection error: ' + err.type, '#ff8080');
+  });
+}
+function leaveLobby() {
+  if (mpPoseTimer) { clearInterval(mpPoseTimer); mpPoseTimer = null; }
+  if (conn) { try { conn.close(); } catch {} conn = null; }
+  if (peer) { try { peer.destroy(); } catch {} peer = null; }
+  mpRole = 'none';
+  if (remotePlayer) { scene.remove(remotePlayer.mesh); remotePlayer = null; }
+  document.getElementById('mpCode').textContent = '----';
+  document.getElementById('mpLeaveBtn').style.display = 'none';
+  mpStatus('Left lobby.');
+}
+function onPeerReady() {
+  mpStatus('Connected ✓  (Phase 1: you can see each other move around)', '#7fff8d');
+  remotePlayer = { pose: { x: 0, y: 1.7, z: 0, yaw: 0, pitch: 0 }, mesh: makeRemotePlayerMesh() };
+  scene.add(remotePlayer.mesh);
+  // Start periodic pose broadcast (20 Hz)
+  if (mpPoseTimer) clearInterval(mpPoseTimer);
+  mpPoseTimer = setInterval(broadcastPose, 50);
+}
+function onPeerClosed() {
+  mpStatus('Connection closed.', '#ffaa66');
+  if (remotePlayer) { scene.remove(remotePlayer.mesh); remotePlayer = null; }
+  if (mpPoseTimer) { clearInterval(mpPoseTimer); mpPoseTimer = null; }
+}
+function onPeerError(err) { console.warn('peer error', err); }
+function onPeerData(msg) {
+  if (!msg || typeof msg !== 'object') return;
+  if (msg.type === 'pose' && remotePlayer) {
+    remotePlayer.pose.x = msg.x;
+    remotePlayer.pose.y = msg.y;
+    remotePlayer.pose.z = msg.z;
+    remotePlayer.pose.yaw = msg.yaw;
+    remotePlayer.pose.pitch = msg.pitch;
+  }
+}
+function broadcastPose() {
+  if (!conn || !conn.open) return;
+  try {
+    conn.send({
+      type: 'pose',
+      x: camera.position.x,
+      y: camera.position.y,
+      z: camera.position.z,
+      yaw: player.yaw,
+      pitch: player.pitch,
+    });
+  } catch (e) { /* ignore */ }
+}
+
+// Apply remote player pose each frame (feet at pose.y - standing height)
+function updateRemotePlayer() {
+  if (!remotePlayer) return;
+  const p = remotePlayer.pose;
+  remotePlayer.mesh.position.set(p.x, p.y - 1.7, p.z);
+  remotePlayer.mesh.rotation.y = p.yaw + Math.PI; // face the direction they look
+}
+
+document.getElementById('mpCreateBtn').addEventListener('click', () => createLobby());
+document.getElementById('mpJoinBtn').addEventListener('click', () => {
+  joinLobby(document.getElementById('mpJoinInput').value.trim());
+});
+document.getElementById('mpLeaveBtn').addEventListener('click', leaveLobby);
 
 loop();
 </script>
