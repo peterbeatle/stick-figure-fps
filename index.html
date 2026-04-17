@@ -3477,10 +3477,11 @@ async function startMultiplayer() {
   }
   document.getElementById('mpStartBtn').disabled = true;
   mpStatus('Opening Playroom lobby…', '#ffd166');
+  const wasOverlayVisible = !overlay.classList.contains('hidden');
+  if (wasOverlayVisible) overlay.classList.add('hidden');
   try {
-    // insertCoin() shows Playroom's built-in room-code lobby UI. In dev mode
-    // (no gameId) it pops up over the page and returns when the room is ready.
     await Playroom.insertCoin({ skipLobby: false, maxPlayersPerRoom: 2 });
+    if (wasOverlayVisible) overlay.classList.remove('hidden');
     mpRole = Playroom.isHost() ? 'host' : 'client';
     mpStatus(`Connected ✓  (you are the ${mpRole})`, '#7fff8d');
     document.getElementById('mpLeaveBtn').style.display = 'inline-block';
@@ -3515,6 +3516,7 @@ async function startMultiplayer() {
     }, 50);
   } catch (e) {
     console.error('[mp] insertCoin failed', e);
+    if (wasOverlayVisible) overlay.classList.remove('hidden');
     mpStatus('Multiplayer failed to start: ' + (e && e.message || e), '#ff8080');
     document.getElementById('mpStartBtn').disabled = false;
   }
