@@ -294,6 +294,10 @@
   <div style="background:#1a1a1a;border:1px solid #444;border-radius:8px;padding:20px;max-width:520px;width:100%;max-height:86vh;overflow:auto">
     <h2 style="margin:0 0 12px">Settings</h2>
 
+    <h3 style="margin:16px 0 6px;color:#ffcc33">Controls</h3>
+    <div id="controlsRebind" style="display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;font-size:13px"></div>
+    <div style="margin-top:8px"><button type="button" id="controlsReset" style="background:#555;color:white;border:0;border-radius:3px;padding:5px 12px;cursor:pointer;font-family:monospace;font-size:12px">Reset to Defaults</button></div>
+
     <h3 style="margin:16px 0 6px;color:#ffcc33">Display</h3>
     <button type="button" id="fullscreenBtn" style="background:#2864c2;color:white;border:0;border-radius:4px;padding:8px 16px;cursor:pointer;font-family:monospace">Toggle Fullscreen (F)</button>
 
@@ -369,7 +373,10 @@
       <span id="pauseCheatsErr" style="color:#ff5050;margin-left:8px;display:none">Wrong passcode</span>
     </div>
     <div id="pauseCheatsList" style="display:none;margin-top:10px;background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:10px 14px;width:min(900px, 92vw);text-align:left;font-size:13px">
-      <div style="font-weight:bold;margin-bottom:6px;color:#ffcc33">Cheats unlocked</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-weight:bold;color:#ffcc33">Cheats unlocked</div>
+        <button type="button" id="pauseCheatSelectAll" style="background:#4caf50;color:#fff;border:0;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:monospace">Select All</button>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px 18px">
         <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" data-cheat="money"> Unlimited money</label>
         <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" data-cheat="mag"> Unlimited magazine (no reload)</label>
@@ -389,7 +396,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4:00 PM PST 4.18.26</div>
-  <div>v1.77</div>
+  <div>v1.79</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -482,7 +489,10 @@
       <span id="cheatsErr" style="color:#ff5050;margin-left:8px;display:none">Wrong passcode</span>
     </div>
     <div id="cheatsList" style="display:none;margin-top:10px;background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:10px 14px;width:min(900px, 92vw);margin-left:auto;margin-right:auto;text-align:left;font-size:13px">
-      <div style="font-weight:bold;margin-bottom:6px;color:#ffcc33">Cheats unlocked</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-weight:bold;color:#ffcc33">Cheats unlocked</div>
+        <button type="button" id="cheatSelectAll" style="background:#4caf50;color:#fff;border:0;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:monospace">Select All</button>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px 18px">
         <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatMoney"> Unlimited money</label>
         <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatMag"> Unlimited magazine (no reload)</label>
@@ -1097,132 +1107,124 @@ function buildHills() {
   }
 }
 
-// Map 3 — downtown: varied multi-story buildings with sprintable external ramps and spiral interior ramps.
+// Map 3 — downtown: a handful of open-top brick buildings with big doors and
+// sprintable exterior ramps up the side of each one.
 function buildCity() {
   buildPerimeter();
 
-  // Stepped sprintable ramp from (x1,z1,y1) → (x2,z2,y2) — short risers (≤0.22m)
-  // so the player and enemies walk up without jumping.
-  function rampStrip(x1, z1, y1, x2, z2, y2, width = 3.0, mat = concreteMat) {
-    const totalH = Math.max(0.001, y2 - y1);
-    const steps = Math.max(2, Math.ceil(totalH / 0.22));
+  // Floating-slab ramp — each slab is a thin wedge sitting at its own elevation, so
+  // walking across gives a smooth incline (step heights ≤0.22m, well under the step-up threshold).
+  function ramp(x1, z1, y1, x2, z2, y2, width = 3.5, mat = concreteMat) {
+    const rise = Math.max(0.01, y2 - y1);
+    const steps = Math.max(3, Math.ceil(rise / 0.22));
+    const stepH = rise / steps;
+    const dx = x2 - x1, dz = z2 - z1;
+    const len = Math.hypot(dx, dz) || 1;
+    // Orient the slab span along the ramp direction
+    const axisX = Math.abs(dx) > Math.abs(dz);
+    const slabLen = len / steps + 0.08;
+    const slabThick = stepH + 0.25; // a bit thicker than the rise for a solid look with no gap
     for (let i = 0; i < steps; i++) {
       const t = (i + 0.5) / steps;
-      const cx = x1 + (x2 - x1) * t;
-      const cz = z1 + (z2 - z1) * t;
-      const topY = y1 + ((i + 1) / steps) * totalH;
-      // Determine step span perpendicular to direction so the ramp is `width` wide
-      const dx = x2 - x1, dz = z2 - z1;
-      const len = Math.hypot(dx, dz) || 1;
-      const segLen = len / steps;
-      // Axis-aligned: pick larger of axis projections + width on the other axis
-      const sw = Math.abs(dx / len) > 0.5 ? segLen + 0.05 : width;
-      const sd = Math.abs(dz / len) > 0.5 ? segLen + 0.05 : width;
-      addWallBox(cx, topY / 2, cz, sw, topY, sd, mat, false);
+      const cx = x1 + dx * t;
+      const cz = z1 + dz * t;
+      const centerY = y1 + rise * (i + 0.5) / steps;
+      const sw = axisX ? slabLen : width;
+      const sd = axisX ? width   : slabLen;
+      addWallBox(cx, centerY, cz, sw, slabThick, sd, mat, false);
     }
   }
 
-  // Spiral ramp inside a building: short pillars rotating around (cx, cz) at radius `r`
-  function spiralRamp(cx, cz, baseY, stories, floorH, r = 2.4) {
-    const stepsPerRev = 18;
-    const total = stories * stepsPerRev;
-    const stepRise = floorH / stepsPerRev; // 4.5/18 = 0.25
-    for (let i = 0; i < total; i++) {
-      const ang = (i / stepsPerRev) * Math.PI * 2;
-      const px = cx + Math.cos(ang) * r;
-      const pz = cz + Math.sin(ang) * r;
-      const topY = baseY + (i + 1) * stepRise;
-      addWallBox(px, topY / 2, pz, 1.4, topY, 1.4, woodMat, false);
-    }
-  }
-
-  function building(cx, cz, stories, w, doorFace = '-z') {
+  // Open-top brick shell — 4 walls with a wide door cut into the chosen face, and a
+  // floor slab at each storey (no stairs inside; reached by the exterior ramp instead).
+  function shell(cx, cz, stories, w, doorFace = '-z') {
     const d = w;
-    const floorH = 4.5;  // taller floors
+    const floorH = 4.5;
     const wallT = 0.4;
-    const doorW = 2.4;
-    const railH = 1.3;
+    const doorW = 3.4;        // wide enough to read as a real entrance
+    const doorH = 3.4;
     const totalH = stories * floorH;
 
-    // Ground floor outer walls with one door gap
-    for (const face of ['+x', '-x', '+z', '-z']) {
-      const eastWest = face === '+x' || face === '-x';
-      const axisLen = eastWest ? d : w;
+    function faceWall(face) {
+      const isEW = face === '+x' || face === '-x';
+      const axisLen = isEW ? d : w;
       const posX = face === '+x' ? cx + w / 2 : face === '-x' ? cx - w / 2 : cx;
       const posZ = face === '+z' ? cz + d / 2 : face === '-z' ? cz - d / 2 : cz;
       if (face === doorFace) {
         const side = (axisLen - doorW) / 2;
-        if (eastWest) {
-          addWallBox(posX, floorH / 2, cz - (d / 2 - side / 2), wallT, floorH, side, brickMat);
-          addWallBox(posX, floorH / 2, cz + (d / 2 - side / 2), wallT, floorH, side, brickMat);
+        const lintelY = doorH + (totalH - doorH) / 2;
+        const lintelH = totalH - doorH;
+        if (isEW) {
+          // two side columns + lintel above the opening
+          addWallBox(posX, totalH / 2, cz - (d / 2 - side / 2), wallT, totalH, side, brickMat);
+          addWallBox(posX, totalH / 2, cz + (d / 2 - side / 2), wallT, totalH, side, brickMat);
+          addWallBox(posX, lintelY, cz, wallT, lintelH, doorW, brickMat);
         } else {
-          addWallBox(cx - (w / 2 - side / 2), floorH / 2, posZ, side, floorH, wallT, brickMat);
-          addWallBox(cx + (w / 2 - side / 2), floorH / 2, posZ, side, floorH, wallT, brickMat);
+          addWallBox(cx - (w / 2 - side / 2), totalH / 2, posZ, side, totalH, wallT, brickMat);
+          addWallBox(cx + (w / 2 - side / 2), totalH / 2, posZ, side, totalH, wallT, brickMat);
+          addWallBox(cx, lintelY, posZ, doorW, lintelH, wallT, brickMat);
         }
       } else {
-        if (eastWest) addWallBox(posX, floorH / 2, cz, wallT, floorH, axisLen, brickMat);
-        else          addWallBox(cx, floorH / 2, posZ, axisLen, floorH, wallT, brickMat);
+        if (isEW) addWallBox(posX, totalH / 2, cz, wallT, totalH, axisLen, brickMat);
+        else      addWallBox(cx, totalH / 2, posZ, axisLen, totalH, wallT, brickMat);
       }
     }
+    faceWall('+x'); faceWall('-x'); faceWall('+z'); faceWall('-z');
 
-    // Upper floors: full slab + short railings on all 4 sides (wide window band above)
+    // Thin walkable floor at every storey above ground (ground is already the map floor)
     for (let s = 1; s < stories; s++) {
       const y0 = s * floorH;
-      addWallBox(cx, y0 + 0.1, cz, w - wallT * 2, 0.2, d - wallT * 2, concreteMat, true);
-      for (const face of ['+x', '-x', '+z', '-z']) {
-        const eastWest = face === '+x' || face === '-x';
-        const axisLen = eastWest ? d : w;
-        const posX = face === '+x' ? cx + w / 2 : face === '-x' ? cx - w / 2 : cx;
-        const posZ = face === '+z' ? cz + d / 2 : face === '-z' ? cz - d / 2 : cz;
-        if (eastWest) addWallBox(posX, y0 + railH / 2 + 0.2, cz, wallT, railH, axisLen, brickMat);
-        else          addWallBox(cx, y0 + railH / 2 + 0.2, posZ, axisLen, railH, wallT, brickMat);
-      }
+      addWallBox(cx, y0 + 0.15, cz, w - wallT * 2, 0.3, d - wallT * 2, concreteMat, true);
     }
-
-    // Rooftop slab (with low parapet railings)
+    // Rooftop slab
     addWallBox(cx, totalH + 0.15, cz, w - wallT * 2, 0.3, d - wallT * 2, concreteMat, true);
-    for (const face of ['+x', '-x', '+z', '-z']) {
-      const eastWest = face === '+x' || face === '-x';
-      const axisLen = eastWest ? d : w;
-      const posX = face === '+x' ? cx + w / 2 : face === '-x' ? cx - w / 2 : cx;
-      const posZ = face === '+z' ? cz + d / 2 : face === '-z' ? cz - d / 2 : cz;
-      if (eastWest) addWallBox(posX, totalH + 0.7, cz, wallT, 1.0, axisLen, brickMat);
-      else          addWallBox(cx, totalH + 0.7, posZ, axisLen, 1.0, wallT, brickMat);
-    }
-
-    // Spiral interior ramp replaces stairs — center it inside the building footprint
-    spiralRamp(cx, cz, 0, stories, floorH, Math.min(2.6, (w - wallT * 2) / 3));
   }
 
-  // Asymmetric building layout — different sizes, positions, door faces
-  // [cx, cz, stories, width, doorFace]
-  const layout = [
-    [-22,  20, 6, 14, '+z'],   // tall + wide, NW
-    [ 18,  22, 3, 10, '-x'],   // short squat, NE
-    [ 24, -16, 5, 12, '-z'],   // mid, SE
-    [-18, -22, 4, 16, '+x'],   // wide low, SW
-    [  4,   8, 2,  8, '-z'],   // small kiosk near center
-  ];
+  // --- Building layout ---
+  // Each entry: [cx, cz, stories, width, doorFace, rampDir]
+  // rampDir: 'n' | 's' | 'e' | 'w' — which side the exterior ramp climbs up
   const FLOOR_H = 4.5;
-  const roofs = [];
-  for (const [cx, cz, stories, w, doorFace] of layout) {
-    building(cx, cz, stories, w, doorFace);
-    roofs.push({ cx, cz, w, top: stories * FLOOR_H });
+  const blocks = [
+    { cx: -20, cz:  18, stories: 4, w: 12, door: '+z', ramp: 'n' },
+    { cx:  22, cz:  20, stories: 2, w: 10, door: '-x', ramp: 'e' },
+    { cx:  18, cz: -18, stories: 6, w: 14, door: '-z', ramp: 's' },
+    { cx: -22, cz: -16, stories: 3, w: 10, door: '+x', ramp: 'w' },
+  ];
+  for (const b of blocks) {
+    shell(b.cx, b.cz, b.stories, b.w, b.door);
+  }
+  // Exterior ramps running UP the outside of each building from the ground to its roof
+  for (const b of blocks) {
+    const top = b.stories * FLOOR_H;
+    const rampRun = Math.max(14, top * 3); // shallow incline — ~18° or less
+    let x1, z1, x2, z2;
+    if (b.ramp === 'n') {
+      x1 = b.cx; z1 = b.cz + b.w / 2 + rampRun;
+      x2 = b.cx; z2 = b.cz + b.w / 2;
+    } else if (b.ramp === 's') {
+      x1 = b.cx; z1 = b.cz - b.w / 2 - rampRun;
+      x2 = b.cx; z2 = b.cz - b.w / 2;
+    } else if (b.ramp === 'e') {
+      x1 = b.cx + b.w / 2 + rampRun; z1 = b.cz;
+      x2 = b.cx + b.w / 2;           z2 = b.cz;
+    } else { // 'w'
+      x1 = b.cx - b.w / 2 - rampRun; z1 = b.cz;
+      x2 = b.cx - b.w / 2;           z2 = b.cz;
+    }
+    ramp(x1, z1, 0, x2, z2, top, 3.5);
   }
 
-  // External sprintable ramps from ground up to each rooftop, approaching from open sides
-  rampStrip(-22 + 14/2 + 16, 20,         0, -22 + 14/2,        20,         roofs[0].top, 3.5);
-  rampStrip( 18 - 10/2 - 14, 22,         0,  18 - 10/2,        22,         roofs[1].top, 3.0);
-  rampStrip( 24,              -16 - 6/2 - 14, 0,  24,           -16 - 6/2,  roofs[2].top, 3.0);
-  rampStrip(-18, -22 + 16/2 + 14, 0, -18,  -22 + 16/2,         0 + roofs[3].top, 3.5);
-  // Connector ramp between two rooftops (NW ↔ SE) crossing midfield
-  rampStrip(-22 + 14/2 + 4, 20, roofs[0].top, 24, -16 - 6/2 - 4, roofs[2].top, 2.8);
-
-  // A couple of street-level cover boxes off-center so the layout reads as asymmetric
-  addWall(  6,  -6, 4, 2, 1.8, concreteMat);
-  addWall(-10,  -2, 2, 5, 1.5, concreteMat);
-  addWall( -2,  18, 5, 2, 1.5, concreteMat);
-  addWall( 12,   2, 2, 4, 1.5, concreteMat);
+  // Street-level cover — a handful of low planters/blocks, none near the spawn/origin
+  const cover = [
+    [ -4,  10, 3, 2, 1.6],
+    [  6,  -6, 2, 4, 1.6],
+    [-12,   2, 4, 2, 1.8],
+    [ 10,   8, 2, 3, 1.6],
+    [  2, -12, 3, 3, 1.8],
+  ];
+  for (const [x, z, w, d, h] of cover) {
+    addWall(x, z, w, d, h, concreteMat);
+  }
 }
 
 // Map 4 — "Neon Strip" — blade runner / tron-inspired neon playground.
@@ -2157,11 +2159,29 @@ const baseFov = 75;
 
 // ---------- Input ----------
 const keys = {};
+// Rebindable keys — every input checks keyBind[...] rather than a hardcoded code.
+const keyBind = {
+  forward:    'KeyW',
+  back:       'KeyS',
+  left:       'KeyA',
+  right:      'KeyD',
+  jump:       'Space',
+  sprint:     'ShiftLeft',
+  crouch:     'ControlLeft',
+  reload:     'KeyR',
+  interact:   'KeyE',
+  pause:      'KeyP',
+  fullscreen: 'KeyF',
+};
+function keyLabel(code) {
+  if (!code) return '—';
+  return code.replace(/^Key/, '').replace(/^Digit/, '').replace(/Left$/, ' L').replace(/Right$/, ' R');
+}
 addEventListener('keydown', e => {
   keys[e.code] = true;
-  if (e.code === 'KeyR') tryReload();
-  if (e.code === 'KeyE' && pointerLocked) tryNukeInteract();
-  if (e.code === 'Space' && pointerLocked) { tryJump(); e.preventDefault(); }
+  if (e.code === keyBind.reload) tryReload();
+  if (e.code === keyBind.interact && pointerLocked) tryNukeInteract();
+  if (e.code === keyBind.jump && pointerLocked) { tryJump(); e.preventDefault(); }
   // Top row of the keyboard: ` 1 2 3 4 5 6 7 8 9 0 - = → 13 weapon slots
   const idx = SLOT_HOTKEYS.indexOf(e.code);
   if (idx >= 0 && idx < SLOT_ORDER.length) {
@@ -4128,14 +4148,14 @@ function updatePlayer(dt) {
   const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
   const right   = new THREE.Vector3( Math.cos(player.yaw), 0, -Math.sin(player.yaw));
   let move = new THREE.Vector3();
-  if (keys['KeyW']) move.add(forward);
-  if (keys['KeyS']) move.sub(forward);
-  if (keys['KeyD']) move.add(right);
-  if (keys['KeyA']) move.sub(right);
+  if (keys[keyBind.forward]) move.add(forward);
+  if (keys[keyBind.back])    move.sub(forward);
+  if (keys[keyBind.right])   move.add(right);
+  if (keys[keyBind.left])    move.sub(right);
   if (move.lengthSq() > 0) move.normalize();
 
-  const crouching = keys['ControlLeft'] || keys['ControlRight'];
-  const sprinting = (keys['ShiftLeft'] || keys['ShiftRight']) && !crouching;
+  const crouching = keys[keyBind.crouch] || keys['ControlRight'];
+  const sprinting = (keys[keyBind.sprint] || keys['ShiftRight']) && !crouching;
   const speedMul = speedBoostT > 0 ? 1.85 : 1;
   const speed = (crouching ? 2.5 : sprinting ? 8 : 5) * speedMul;
   const eyeH = crouching ? CROUCH_Y : STANDING_Y;
@@ -4182,7 +4202,7 @@ function updatePlayer(dt) {
 
   // ---------- Vertical physics (gravity + landing support) ----------
   // Jetpack: hold Space to thrust upward; partial gravity compensation while held
-  if (jetpackBoostT > 0 && (keys['Space'] || keys['ShiftLeft'] && false)) {
+  if (jetpackBoostT > 0 && keys[keyBind.jump]) {
     player.vy += 34 * dt;               // strong upward thrust
     if (player.vy > 10) player.vy = 10; // cap ascent speed
     player.onGround = false;
@@ -4917,7 +4937,7 @@ function setPaused(p) {
   }
 }
 addEventListener('keydown', e => {
-  if (e.code === 'KeyP' && roundActive && !gameOver) {
+  if (e.code === keyBind.pause && roundActive && !gameOver) {
     setPaused(!paused);
     e.preventDefault();
   }
@@ -5064,6 +5084,23 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   bind('cheatSkip',   'skip');
   bind('cheatHeavy',  'heavy');
   bind('cheatAimbot', 'aimbot');
+
+  function selectAllCheats() {
+    const homeMap = { money:'cheatMoney', mag:'cheatMag', rate:'cheatRate', invuln:'cheatInvuln', skip:'cheatSkip', heavy:'cheatHeavy', aimbot:'cheatAimbot', wand:'cheatWand' };
+    for (const key of Object.keys(homeMap)) {
+      cheats[key] = true;
+      const cb = document.getElementById(homeMap[key]);
+      if (cb) cb.checked = true;
+    }
+    // Mirror into pause checkboxes too
+    document.querySelectorAll('#pauseCheatsList input[data-cheat]').forEach(cb => { cb.checked = true; });
+    // Wand cheat side-effects
+    owned.wand = true;
+    updateHUD();
+    updateHotbar();
+    buildShop();
+  }
+  document.getElementById('cheatSelectAll').addEventListener('click', selectAllCheats);
   // Booster Wand — flipping the cheat also toggles ownership of the wand tool
   document.getElementById('cheatWand').addEventListener('change', (e) => {
     cheats.wand = e.target.checked;
@@ -5130,6 +5167,7 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
       buildShop();
     });
   });
+  document.getElementById('pauseCheatSelectAll').addEventListener('click', selectAllCheats);
 })();
 
 // sensitivity sliders
@@ -5230,8 +5268,63 @@ function toggleFullscreen() {
   }
 }
 document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+
+// ---- Controls rebind UI ----
+const CONTROL_LABELS = [
+  ['forward', 'Move Forward'],
+  ['back',    'Move Back'],
+  ['left',    'Strafe Left'],
+  ['right',   'Strafe Right'],
+  ['jump',    'Jump'],
+  ['sprint',  'Sprint'],
+  ['crouch',  'Crouch'],
+  ['reload',  'Reload'],
+  ['interact','Interact (nuke button)'],
+  ['pause',   'Pause'],
+  ['fullscreen','Fullscreen'],
+];
+const DEFAULT_BINDS = Object.assign({}, keyBind);
+let _rebindingAction = null;
+function renderRebindUI() {
+  const wrap = document.getElementById('controlsRebind');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  for (const [action, label] of CONTROL_LABELS) {
+    const lbl = document.createElement('div');
+    lbl.textContent = label;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.style.cssText = 'background:#222;color:#ffcc33;border:1px solid #555;border-radius:3px;padding:4px 10px;min-width:110px;cursor:pointer;font-family:monospace;font-size:12px';
+    btn.textContent = _rebindingAction === action ? 'press a key…' : keyLabel(keyBind[action]);
+    btn.addEventListener('click', () => {
+      _rebindingAction = action;
+      renderRebindUI();
+    });
+    wrap.appendChild(lbl);
+    wrap.appendChild(btn);
+  }
+}
+// Listen globally for the next key while a rebind is active
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyF' && !e.repeat && document.activeElement?.tagName !== 'INPUT') toggleFullscreen();
+  if (!_rebindingAction) return;
+  if (e.code === 'Escape') { _rebindingAction = null; renderRebindUI(); return; }
+  // Clear any duplicate binding so no two actions share the same key
+  for (const a of Object.keys(keyBind)) {
+    if (keyBind[a] === e.code && a !== _rebindingAction) keyBind[a] = '';
+  }
+  keyBind[_rebindingAction] = e.code;
+  _rebindingAction = null;
+  renderRebindUI();
+  e.preventDefault();
+}, true);
+document.getElementById('controlsReset').addEventListener('click', () => {
+  Object.assign(keyBind, DEFAULT_BINDS);
+  _rebindingAction = null;
+  renderRebindUI();
+});
+renderRebindUI();
+window.addEventListener('keydown', (e) => {
+  if (e.code === keyBind.fullscreen && !e.repeat && document.activeElement?.tagName !== 'INPUT') toggleFullscreen();
 });
 document.getElementById('shopHomeBtn').addEventListener('click', goHome);
 
