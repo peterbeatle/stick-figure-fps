@@ -173,7 +173,7 @@
   /* Mode toggles: home vs round-end */
   #overlay[data-mode="home"] #shopHomeBtn { display: none !important; }
   #overlay[data-mode="roundend"] #mpPanel { display: none !important; }
-  #overlay[data-mode="roundend"] #cheatsBlock { display: none !important; }
+  /* Cheats stay visible on the round-end shop screen too */
   /* Boss HUD layout: multiple bars in a row */
   #bossHud { width: auto; max-width: 80vw; display: none; }
   #bossHud.active { display: flex; gap: 8px; justify-content: center; }
@@ -358,12 +358,32 @@
   <button id="pauseSettingsBtn" style="background:#666;color:white;border:0;border-radius:4px;padding:8px 22px;cursor:pointer;font-family:monospace">Settings</button>
   <button id="resumeBtn" style="background:#4caf50;color:white;border:0;border-radius:4px;padding:8px 22px;cursor:pointer;font-family:monospace;margin-top:6px">Resume (P)</button>
   <button id="homeBtn" style="background:#666;color:white;border:0;border-radius:4px;padding:8px 22px;cursor:pointer;font-family:monospace">Back to Home Screen</button>
+  <div id="pauseCheatsBlock" style="margin-top:10px">
+    <button type="button" id="pauseCheatsBtn" style="background:#444;color:#ccc;border:1px solid #666;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Cheats</button>
+    <div id="pauseCheatsPass" style="display:none;margin-top:8px">
+      <input type="password" id="pauseCheatsCode" placeholder="passcode" style="background:#222;color:#eee;border:1px solid #555;border-radius:3px;padding:6px;font-family:monospace">
+      <button type="button" id="pauseCheatsSubmit" style="background:#4caf50;color:white;border:0;border-radius:3px;padding:6px 12px;cursor:pointer;font-family:monospace">Unlock</button>
+      <span id="pauseCheatsErr" style="color:#ff5050;margin-left:8px;display:none">Wrong passcode</span>
+    </div>
+    <div id="pauseCheatsList" style="display:none;margin-top:10px;background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:10px 14px;width:min(900px, 92vw);text-align:left;font-size:13px">
+      <div style="font-weight:bold;margin-bottom:6px;color:#ffcc33">Cheats unlocked</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px 18px">
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" data-cheat="money"> Unlimited money</label>
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" data-cheat="mag"> Unlimited magazine (no reload)</label>
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" data-cheat="rate"> Extreme fire rate</label>
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" data-cheat="invuln"> Invincibility</label>
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" data-cheat="skip"> Round skip (pause menu)</label>
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" data-cheat="heavy"> Heavy Damage (5× weapon damage)</label>
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" data-cheat="aimbot"> Aimbot (head-lock while ADS)</label>
+      </div>
+    </div>
+  </div>
   <p style="opacity:0.7;font-size:12px;margin-top:8px">Press P to toggle • Esc also resumes</p>
 </div>
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.51</div>
+<div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.52</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -3765,6 +3785,59 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   bind('cheatSkip',   'skip');
   bind('cheatHeavy',  'heavy');
   bind('cheatAimbot', 'aimbot');
+
+  // Mirror cheats UI inside the pause menu (same passcode + same shared `cheats` object)
+  const pBtn = document.getElementById('pauseCheatsBtn');
+  const pPass = document.getElementById('pauseCheatsPass');
+  const pCode = document.getElementById('pauseCheatsCode');
+  const pErr = document.getElementById('pauseCheatsErr');
+  const pList = document.getElementById('pauseCheatsList');
+  const pSubmit = document.getElementById('pauseCheatsSubmit');
+  const pCheckboxes = pList.querySelectorAll('input[data-cheat]');
+  function syncPauseCheckboxes() {
+    pCheckboxes.forEach(cb => { cb.checked = !!cheats[cb.dataset.cheat]; });
+  }
+  pBtn.addEventListener('click', () => {
+    if (cheatsUnlocked) {
+      pList.style.display = pList.style.display === 'none' ? 'block' : 'none';
+      if (pList.style.display === 'block') syncPauseCheckboxes();
+      return;
+    }
+    pPass.style.display = pPass.style.display === 'none' ? 'block' : 'none';
+    pErr.style.display = 'none';
+    if (pPass.style.display === 'block') pCode.focus();
+  });
+  function pTryUnlock() {
+    if (pCode.value === CHEAT_CODE) {
+      cheatsUnlocked = true;
+      pPass.style.display = 'none';
+      pList.style.display = 'block';
+      pBtn.textContent = 'Cheats (unlocked)';
+      pErr.style.display = 'none';
+      // Also flip the home cheats UI into unlocked state for consistency
+      const homeBtn = document.getElementById('cheatsBtn');
+      const homeList = document.getElementById('cheatsList');
+      if (homeBtn) homeBtn.textContent = 'Cheats (unlocked)';
+      if (homeList) homeList.style.display = 'block';
+      syncPauseCheckboxes();
+    } else {
+      pErr.style.display = 'inline';
+    }
+  }
+  pSubmit.addEventListener('click', pTryUnlock);
+  pCode.addEventListener('keydown', e => { if (e.code === 'Enter') pTryUnlock(); });
+  pCheckboxes.forEach(cb => {
+    cb.addEventListener('change', e => {
+      cheats[cb.dataset.cheat] = e.target.checked;
+      // Keep the home checkbox in sync so they don't drift
+      const homeMap = { money:'cheatMoney', mag:'cheatMag', rate:'cheatRate', invuln:'cheatInvuln', skip:'cheatSkip', heavy:'cheatHeavy', aimbot:'cheatAimbot' };
+      const homeId = homeMap[cb.dataset.cheat];
+      const homeCb = homeId && document.getElementById(homeId);
+      if (homeCb) homeCb.checked = e.target.checked;
+      updateHUD();
+      buildShop();
+    });
+  });
 })();
 
 // sensitivity sliders
