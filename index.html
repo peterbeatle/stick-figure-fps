@@ -386,7 +386,7 @@
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.55</div>
+<div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.56</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -401,14 +401,22 @@
   Ammo: <span id="ammo">12</span> / <span id="reserve">48</span>
 </div>
 <div id="hpBottom"><div class="hpRow"><div class="hpLbl">HP <span id="hpBottomNum">100</span>/100</div><div class="hpTrack"><div id="hpBottomFill"></div></div></div></div>
-<div id="boosterHud" style="position:fixed;left:12px;bottom:60px;z-index:6;background:rgba(0,0,0,0.55);padding:6px 10px;border-radius:6px;font-family:monospace;font-size:12px;color:#eee;display:none;min-width:180px">
+<div id="boosterHud" style="position:fixed;top:160px;right:12px;z-index:6;background:rgba(0,0,0,0.6);padding:6px 10px;border-radius:6px;font-family:monospace;font-size:12px;color:#eee;display:none;min-width:170px">
   <div id="boosterSpeedRow" style="display:none;align-items:center;gap:8px;margin:2px 0">
-    <span style="color:#ffee33;font-weight:bold;min-width:48px">SPEED</span>
+    <span style="color:#ffee33;font-weight:bold;min-width:60px">SPEED</span>
     <div style="flex:1;height:10px;background:#2a2200;border:1px solid #000;border-radius:3px;overflow:hidden"><div id="boosterSpeedFill" style="height:100%;background:#ffee33;width:100%;transition:width 0.1s"></div></div>
   </div>
   <div id="boosterShieldRow" style="display:none;align-items:center;gap:8px;margin:2px 0">
-    <span style="color:#66bbff;font-weight:bold;min-width:48px">SHIELD</span>
+    <span style="color:#66bbff;font-weight:bold;min-width:60px">SHIELD</span>
     <div style="flex:1;height:10px;background:#001a33;border:1px solid #000;border-radius:3px;overflow:hidden"><div id="boosterShieldFill" style="height:100%;background:#66bbff;width:100%;transition:width 0.1s"></div></div>
+  </div>
+  <div id="boosterBerserkRow" style="display:none;align-items:center;gap:8px;margin:2px 0">
+    <span style="color:#ff5533;font-weight:bold;min-width:60px">BERSERK</span>
+    <div style="flex:1;height:10px;background:#330000;border:1px solid #000;border-radius:3px;overflow:hidden"><div id="boosterBerserkFill" style="height:100%;background:#ff5533;width:100%;transition:width 0.1s"></div></div>
+  </div>
+  <div id="boosterHealRow" style="display:none;align-items:center;gap:8px;margin:2px 0">
+    <span style="color:#ff77bb;font-weight:bold;min-width:60px">REGEN</span>
+    <div style="flex:1;height:10px;background:#2a0a1a;border:1px solid #000;border-radius:3px;overflow:hidden"><div id="boosterHealFill" style="height:100%;background:#ff77bb;width:100%;transition:width 0.1s"></div></div>
   </div>
 </div>
 <div id="hotbar"></div>
@@ -2144,7 +2152,7 @@ function tryShoot(now) {
   if (spectating) return;
   if (reloading && !cheats.mag || !player.alive) return;
   const g = GUNS[currentGun];
-  const dmgMul = (boostActive ? 2 : 1) * (cheats.heavy ? 5 : 1);
+  const dmgMul = (boostActive ? 2 : 1) * (cheats.heavy ? 5 : 1) * (berserkBoostT > 0 ? 3 : 1);
   const adsAccuracy = (adsActive && g.scopeFov) ? 0.5 : 1;
   let rateMul = 1;
   if (boostActive) rateMul *= 2;
@@ -2593,17 +2601,27 @@ const bulletBodyGeom = new THREE.CylinderGeometry(0.12, 0.12, 0.32, 14);
 const bulletBodyMat  = new THREE.MeshLambertMaterial({ color: 0xd4a020, emissive: 0x553300, emissiveIntensity: 0.55 });
 const bulletTipGeom  = new THREE.ConeGeometry(0.12, 0.18, 14);
 const bulletTipMat   = new THREE.MeshLambertMaterial({ color: 0xc8c8c8, emissive: 0x555555, emissiveIntensity: 0.4 });
-function makeAmmoPickupMesh() {
-  const g = new THREE.Group();
+function makeSingleBulletMesh() {
+  const b = new THREE.Group();
   const body = new THREE.Mesh(bulletBodyGeom, bulletBodyMat);
   body.castShadow = true;
-  g.add(body);
+  b.add(body);
   const tip = new THREE.Mesh(bulletTipGeom, bulletTipMat);
   tip.position.y = 0.25;
   tip.castShadow = true;
-  g.add(tip);
-  // Lay it on its side so the bullet is horizontal
-  g.rotation.z = Math.PI / 2;
+  b.add(tip);
+  return b;
+}
+function makeAmmoPickupMesh() {
+  // Cluster of 3 bullets laid on their sides, side-by-side
+  const g = new THREE.Group();
+  const spacing = 0.14;
+  for (let i = 0; i < 3; i++) {
+    const b = makeSingleBulletMesh();
+    b.rotation.z = Math.PI / 2;
+    b.position.set((i - 1) * spacing, 0, 0);
+    g.add(b);
+  }
   return g;
 }
 function spawnAmmoBox(pos, amount = 15) {
@@ -2636,6 +2654,8 @@ const boosters = []; // host-side: {mesh, type:'speed'|'shield', bobT, baseY}
 const BOOST_DUR = 10;
 let speedBoostT = 0;
 let shieldBoostT = 0;
+let berserkBoostT = 0; // 3× weapon damage
+let healBoostT = 0;    // regen over time
 function makeSpeedBooster() {
   const shape = new THREE.Shape();
   shape.moveTo(0.0, 0.55);
@@ -2661,6 +2681,32 @@ function makeShieldBooster() {
   m.castShadow = true;
   return m;
 }
+// Berserk booster: red flaming skull (cone-stacked tetrahedrons / simple: red icosahedron)
+function makeBerserkBooster() {
+  const g = new THREE.Group();
+  const core = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.4, 0),
+    new THREE.MeshLambertMaterial({ color: 0xff3322, emissive: 0xaa1100, emissiveIntensity: 1.0 })
+  );
+  g.add(core);
+  // Flame tongue on top
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.22, 0.5, 10),
+    new THREE.MeshBasicMaterial({ color: 0xffaa22, transparent: true, opacity: 0.9 })
+  );
+  flame.position.y = 0.45;
+  g.add(flame);
+  return g;
+}
+// Regen booster: pink cross (plus sign) floating
+function makeHealBooster() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshLambertMaterial({ color: 0xff77bb, emissive: 0x882244, emissiveIntensity: 0.9 });
+  const vert = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.6, 0.18), mat);
+  const horiz = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.18, 0.18), mat);
+  g.add(vert); g.add(horiz);
+  return g;
+}
 function spawnBooster(type) {
   let x, z, tries = 0;
   do {
@@ -2668,35 +2714,51 @@ function spawnBooster(type) {
     z = (Math.random() - 0.5) * (MAP_SIZE - 8);
     tries++;
   } while (tries < 25 && (typeof insideSolidWall === 'function' && insideSolidWall(x, z)));
-  const mesh = type === 'speed' ? makeSpeedBooster() : makeShieldBooster();
+  const mesh = type === 'speed'   ? makeSpeedBooster()
+             : type === 'shield'  ? makeShieldBooster()
+             : type === 'berserk' ? makeBerserkBooster()
+             : /* heal */           makeHealBooster();
   const baseY = terrainHeight(x, z) + 0.8;
   mesh.position.set(x, baseY, z);
   scene.add(mesh);
   boosters.push({ mesh, type, bobT: Math.random() * Math.PI * 2, baseY });
 }
 function activateBooster(type) {
-  if (type === 'speed') speedBoostT = BOOST_DUR;
-  else if (type === 'shield') shieldBoostT = BOOST_DUR;
+  if (type === 'speed')   speedBoostT   = BOOST_DUR;
+  else if (type === 'shield')  shieldBoostT  = BOOST_DUR;
+  else if (type === 'berserk') berserkBoostT = BOOST_DUR;
+  else if (type === 'heal')    healBoostT    = BOOST_DUR;
   try { SFX.buy(); } catch {}
   updateBoosterHUD();
 }
 function updateBoosterTimers(dt) {
-  if (speedBoostT > 0)  speedBoostT  = Math.max(0, speedBoostT - dt);
-  if (shieldBoostT > 0) shieldBoostT = Math.max(0, shieldBoostT - dt);
+  if (speedBoostT > 0)   speedBoostT   = Math.max(0, speedBoostT - dt);
+  if (shieldBoostT > 0)  shieldBoostT  = Math.max(0, shieldBoostT - dt);
+  if (berserkBoostT > 0) berserkBoostT = Math.max(0, berserkBoostT - dt);
+  if (healBoostT > 0) {
+    healBoostT = Math.max(0, healBoostT - dt);
+    if (player.alive) { player.hp = Math.min(100, player.hp + 10 * dt); updateHUD(); }
+  }
   updateBoosterHUD();
 }
 function updateBoosterHUD() {
   const wrap = document.getElementById('boosterHud');
   if (!wrap) return;
-  const sFill = document.getElementById('boosterSpeedFill');
-  const shFill = document.getElementById('boosterShieldFill');
-  const sRow = document.getElementById('boosterSpeedRow');
-  const shRow = document.getElementById('boosterShieldRow');
-  sRow.style.display = speedBoostT > 0 ? 'flex' : 'none';
-  shRow.style.display = shieldBoostT > 0 ? 'flex' : 'none';
-  wrap.style.display = (speedBoostT > 0 || shieldBoostT > 0) ? 'block' : 'none';
-  if (speedBoostT > 0)  sFill.style.width  = (speedBoostT  / BOOST_DUR * 100) + '%';
-  if (shieldBoostT > 0) shFill.style.width = (shieldBoostT / BOOST_DUR * 100) + '%';
+  const rows = [
+    ['boosterSpeedRow',   'boosterSpeedFill',   speedBoostT],
+    ['boosterShieldRow',  'boosterShieldFill',  shieldBoostT],
+    ['boosterBerserkRow', 'boosterBerserkFill', berserkBoostT],
+    ['boosterHealRow',    'boosterHealFill',    healBoostT],
+  ];
+  let anyActive = false;
+  for (const [rowId, fillId, t] of rows) {
+    const row = document.getElementById(rowId);
+    const fill = document.getElementById(fillId);
+    if (!row || !fill) continue;
+    if (t > 0) { row.style.display = 'flex'; fill.style.width = (t / BOOST_DUR * 100) + '%'; anyActive = true; }
+    else row.style.display = 'none';
+  }
+  wrap.style.display = anyActive ? 'block' : 'none';
 }
 const _pendingBoosterClaims = new Set();
 function updateBoostersHost(dt) {
@@ -3446,7 +3508,7 @@ function startRound() {
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
   clearBoosters();
-  speedBoostT = 0; shieldBoostT = 0; updateBoosterHUD();
+  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0; updateBoosterHUD();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -3500,6 +3562,8 @@ function startRound() {
     clearBoosters();
     if (Math.random() < 0.55) spawnBooster('speed');
     if (Math.random() < 0.55) spawnBooster('shield');
+    if (Math.random() < 0.45) spawnBooster('berserk');
+    if (Math.random() < 0.45) spawnBooster('heal');
   }
   updateHUD();
   updateHotbar();
@@ -3551,7 +3615,7 @@ function retryRound() {
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
   clearBoosters();
-  speedBoostT = 0; shieldBoostT = 0; updateBoosterHUD();
+  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0; updateBoosterHUD();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -3591,7 +3655,7 @@ function restartGame() {
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
   clearBoosters();
-  speedBoostT = 0; shieldBoostT = 0; updateBoosterHUD();
+  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0; updateBoosterHUD();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -4008,7 +4072,7 @@ function goHome() {
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
   clearBoosters();
-  speedBoostT = 0; shieldBoostT = 0; updateBoosterHUD();
+  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0; updateBoosterHUD();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -4056,7 +4120,7 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
   clearBoosters();
-  speedBoostT = 0; shieldBoostT = 0; updateBoosterHUD();
+  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0; updateBoosterHUD();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -4743,7 +4807,10 @@ function mpClientSync(dt) {
     bSeen.add(b.id);
     let gh = ghostBoosters.get(b.id);
     if (!gh) {
-      const m = b.t === 'speed' ? makeSpeedBooster() : makeShieldBooster();
+      const m = b.t === 'speed'   ? makeSpeedBooster()
+              : b.t === 'shield'  ? makeShieldBooster()
+              : b.t === 'berserk' ? makeBerserkBooster()
+              :                     makeHealBooster();
       scene.add(m);
       gh = { mesh: m, type: b.t, bobT: Math.random() * Math.PI * 2, baseY: b.y };
       ghostBoosters.set(b.id, gh);
