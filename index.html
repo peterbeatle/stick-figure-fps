@@ -397,7 +397,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v1.91</div>
+  <div>v1.92</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -414,6 +414,7 @@
 </div>
 <div id="hpBottom"><div class="hpRow"><div class="hpLbl">HP <span id="hpBottomNum">100</span>/100</div><div class="hpTrack"><div id="hpBottomFill"></div></div></div></div>
 <div id="nukePodiumHint" style="position:fixed;top:60%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.75);color:#ffcc33;font-family:monospace;font-weight:bold;font-size:22px;padding:10px 18px;border-radius:6px;letter-spacing:2px;z-index:9;display:none;pointer-events:none;text-shadow:0 2px 6px #000">Press E to ARM NUKE</div>
+<div id="nukeToast" style="position:fixed;top:18%;left:50%;transform:translate(-50%,-50%);background:rgba(80,0,0,0.88);color:#ffcc22;font-family:monospace;font-weight:bold;font-size:22px;padding:12px 24px;border-radius:8px;letter-spacing:2px;z-index:16;display:none;pointer-events:none;text-align:center;text-shadow:0 2px 6px #000;border:2px solid #ff4040;box-shadow:0 0 30px rgba(255,40,40,0.55)">☢ BOMB READY ☢<br><span style="font-size:14px;color:#fff;letter-spacing:1px">Follow the red beacon to the big red button</span></div>
 <div id="lookUpBanner" style="position:fixed;top:35%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;font-size:110px;color:#ff2222;letter-spacing:10px;z-index:15;display:none;pointer-events:none;text-shadow:0 4px 18px #000,0 0 30px #ff0000">LOOK UP!</div>
 <canvas id="minimap" width="200" height="200" style="position:fixed;left:12px;top:12px;z-index:7;border-radius:50%;background:rgba(0,0,0,0.55);box-shadow:0 0 8px rgba(0,0,0,0.6);pointer-events:none"></canvas>
 <div id="boosterHud" style="position:fixed;top:160px;right:12px;z-index:6;background:rgba(0,0,0,0.6);padding:6px 10px;border-radius:6px;font-family:monospace;font-size:12px;color:#eee;display:none;min-width:170px">
@@ -3308,6 +3309,19 @@ function updateMinimap() {
     ctx.arc(ex, ey, isKing ? 5 : isBoss ? 4 : 2.5, 0, Math.PI * 2);
     ctx.fill();
   }
+  // Nuke podium — big flashing red ring so you can tell where the button is from anywhere
+  if (_nukePodium && !_nukeInProgress) {
+    const pulse = 0.6 + Math.sin(performance.now() * 0.008) * 0.4;
+    ctx.strokeStyle = '#ff2222';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(cx + _nukePodium.position.x * scale, cy + _nukePodium.position.z * scale, 7 * pulse, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#ff2222';
+    ctx.beginPath();
+    ctx.arc(cx + _nukePodium.position.x * scale, cy + _nukePodium.position.z * scale, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
   // Remote player (blue arrow)
   if (remotePlayer && remotePlayer.pose) {
     const p = remotePlayer.pose;
@@ -3339,8 +3353,9 @@ function updateTornadoVisual() {
 // Any player presses E near it → "LOOK UP!" flash → giant missile falls from very high →
 // massive explosion + huge mushroom cloud → every enemy wiped + round advances.
 let _nukeInProgress = false;
-let _nukePodium = null;       // { group, position: Vector3 }
+let _nukePodium = null;       // { group, beam, position: Vector3 }
 let _nukeAlarmIv = null;
+let _nukeToastTimer = null;
 function stopNukeAlarm() {
   if (_nukeAlarmIv) { clearInterval(_nukeAlarmIv); _nukeAlarmIv = null; }
 }
@@ -3348,10 +3363,13 @@ function clearNukePodium() {
   stopNukeAlarm();
   if (_nukePodium) {
     scene.remove(_nukePodium.group);
+    if (_nukePodium.beam) scene.remove(_nukePodium.beam);
     _nukePodium = null;
   }
   const hint = document.getElementById('nukePodiumHint');
   if (hint) hint.style.display = 'none';
+  const toast = document.getElementById('nukeToast');
+  if (toast) toast.style.display = 'none';
 }
 function activateNukePodium() {
   if (_nukePodium || _nukeInProgress) return;
@@ -3381,7 +3399,20 @@ function activateNukePodium() {
   // Rise animation
   g.position.set(px, baseY - 2, pz);
   scene.add(g);
-  _nukePodium = { group: g, position: new THREE.Vector3(px, baseY, pz), targetY: baseY };
+  // Tall red beacon beam shooting up from the podium — visible through walls, easy to spot from anywhere on the map
+  const beamMat = new THREE.MeshBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.55, depthWrite: false });
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 150, 16, 1, true), beamMat);
+  beam.position.set(px, baseY + 75, pz);
+  beam.renderOrder = 2;
+  scene.add(beam);
+  _nukePodium = { group: g, beam, position: new THREE.Vector3(px, baseY, pz), targetY: baseY };
+  // Toast banner so the user gets a crystal-clear heads-up the moment the booster is picked up
+  const toast = document.getElementById('nukeToast');
+  if (toast) {
+    toast.style.display = 'block';
+    clearTimeout(_nukeToastTimer);
+    _nukeToastTimer = setTimeout(() => { toast.style.display = 'none'; }, 4500);
+  }
   const riseStart = performance.now();
   const riseIv = setInterval(() => {
     const t = (performance.now() - riseStart) / 1000;
@@ -3405,6 +3436,10 @@ function updateNukePodiumHint() {
   if (!_nukePodium || _nukeInProgress || !player.alive || spectating) {
     hint.style.display = 'none';
     return;
+  }
+  // Pulse the beacon beam to draw attention
+  if (_nukePodium.beam) {
+    _nukePodium.beam.material.opacity = 0.4 + Math.sin(performance.now() * 0.006) * 0.25;
   }
   const dx = _nukePodium.position.x - camera.position.x;
   const dz = _nukePodium.position.z - camera.position.z;
