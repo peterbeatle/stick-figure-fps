@@ -378,6 +378,7 @@
         <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" data-cheat="skip"> Round skip (pause menu)</label>
         <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" data-cheat="heavy"> Heavy Damage (5× weapon damage)</label>
         <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" data-cheat="aimbot"> Aimbot (head-lock while ADS)</label>
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" data-cheat="wand"> Booster Wand (click to spawn boosters)</label>
       </div>
     </div>
   </div>
@@ -388,7 +389,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4:00 PM PST 4.18.26</div>
-  <div>v1.60</div>
+  <div>v1.62</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -483,6 +484,7 @@
         <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatSkip"> Round skip (pause menu)</label>
         <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatHeavy"> Heavy Damage (5× weapon damage)</label>
         <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatAimbot"> Aimbot (head-lock while ADS)</label>
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatWand"> Booster Wand (click to spawn boosters)</label>
       </div>
     </div>
   </div>
@@ -1693,9 +1695,11 @@ const GUNS = {
   assault: { name: 'AR-15',    damage: 28,  fireRate: 8,   magSize: 30, reserve: 120, reloadTime: 1.6, spread: 0.02,  cost: 2500, auto: true, scopeFov: 55, hipSpread: 0.04, ironSights: true },
   crossbow:{ name: 'Grenade Crossbow', damage: 90, fireRate: 0.9, magSize: 4, reserve: 16, reloadTime: 2.4, spread: 0.04, cost: 5500, auto: true, pellets: 3, grenadeArrow: true, blastRadius: 2.2, scopeFov: 55, hipSpread: 0.06, ironSights: true },
   fingers: { name: 'Finger Guns', damage: 20, fireRate: 25, magSize: 300, reserve: 900, reloadTime: 3.2, spread: 0.035, cost: 10000, auto: true, dualWield: true, scopeFov: 62, hipSpread: 0.06, ironSights: true },
+  wand:    { name: 'Booster Wand', damage: 0, fireRate: 2, magSize: 1, reserve: 0, reloadTime: 0, spread: 0, cost: 0, auto: false, wand: true },
 };
 const owned = { knife: true, pistol: true };
 const SLOT_ORDER = ['knife', 'pistol', 'smg', 'shotgun', 'assault', 'rifle', 'sniper', 'lmg', 'bazooka', 'railgun', 'plasma', 'crossbow', 'fingers'];
+function getSlotOrder() { return cheats.wand ? [...SLOT_ORDER, 'wand'] : SLOT_ORDER; }
 // Keyboard codes and display labels for the 13 weapon slots (top row: ` 1 2 3 4 5 6 7 8 9 0 - =)
 const SLOT_HOTKEYS = ['Backquote', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus', 'Equal'];
 const SLOT_KEY_LABELS = ['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
@@ -1919,6 +1923,19 @@ function buildWeaponModel(key) {
       g.add(stock, rail, arms, string, grip);
       break;
     }
+    case 'wand': {
+      // Booster Wand — dark wooden staff with a glowing purple crystal on the tip
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.45, 10), weaponMat(0x4a2a0a, 0x220c00));
+      shaft.rotation.x = Math.PI / 2;
+      shaft.position.set(0, 0, -0.1);
+      const tip = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.06, 0),
+        new THREE.MeshLambertMaterial({ color: 0xcc66ff, emissive: 0x8822cc, emissiveIntensity: 1.2, transparent: true, opacity: 0.95 })
+      );
+      tip.position.set(0, 0.02, -0.34);
+      g.add(shaft, tip);
+      break;
+    }
     case 'fingers': {
       // Akimbo finger guns — mirrored left/right hands, thumb up, pointer forward
       const blk = weaponMat(0x000000);
@@ -1987,7 +2004,7 @@ camera.add(flash);
 flash.position.set(0.25, -0.15, -0.8);
 
 // Cheats
-const cheats = { money: false, mag: false, rate: false, invuln: false, skip: false, heavy: false, aimbot: false };
+const cheats = { money: false, mag: false, rate: false, invuln: false, skip: false, heavy: false, aimbot: false, wand: false };
 const CHEAT_CODE = '1211999';
 let cheatsUnlocked = false;
 // Sniper aim-down-sights state
@@ -2038,7 +2055,7 @@ document.addEventListener('mousemove', e => {
 // ---------- Scroll wheel weapon switch ----------
 addEventListener('wheel', e => {
   if (!pointerLocked) return;
-  const ownedList = SLOT_ORDER.filter(k => owned[k]);
+  const ownedList = getSlotOrder().filter(k => owned[k]);
   if (ownedList.length < 2) return;
   const idx = ownedList.indexOf(currentGun);
   const next = e.deltaY > 0
@@ -2174,6 +2191,39 @@ function tryShoot(now) {
   // but prevents stale `lastShot` from unleashing a huge burst.
   if (now - lastShot > interval * 3) lastShot = now - interval * 3;
   lastShot += interval;
+
+  // Booster Wand: spawn the next booster directly in front of the camera, cycling types
+  if (g.wand) {
+    const types = ['speed', 'shield', 'berserk', 'heal', 'freeze', 'tornado'];
+    const idx = (tryShoot._wandIdx || 0) % types.length;
+    tryShoot._wandIdx = idx + 1;
+    const type = types[idx];
+    // Find a spot ~3m in front at ground level so it's visible and reachable
+    const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+    const px = camera.position.x + dir.x * 3;
+    const pz = camera.position.z + dir.z * 3;
+    const mesh = type === 'speed'   ? makeSpeedBooster()
+               : type === 'shield'  ? makeShieldBooster()
+               : type === 'berserk' ? makeBerserkBooster()
+               : type === 'freeze'  ? makeFreezeBooster()
+               : type === 'tornado' ? makeTornadoBooster()
+               :                      makeHealBooster();
+    const baseY = terrainHeight(px, pz) + 0.8;
+    if (mpIsClient()) {
+      // Client → ask host to spawn, so the booster actually exists in world state
+      try { Playroom.RPC.call('wandSpawn', { type, x: px, y: baseY, z: pz }, Playroom.RPC.Mode.HOST); } catch {}
+    } else {
+      mesh.position.set(px, baseY, pz);
+      scene.add(mesh);
+      boosters.push({ mesh, type, bobT: Math.random() * Math.PI * 2, baseY });
+    }
+    try { SFX.buy(); } catch {}
+    // Wand tip flash — brief pointlight at the muzzle
+    flash.intensity = 2;
+    flash._off = performance.now() + 80;
+    playerSwingT = 0.001; // reuse swing anim
+    return;
+  }
 
   // Melee
   if (g.melee) {
@@ -2615,11 +2665,14 @@ const ammoTex = (() => {
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#ffcc22';
   ctx.fillRect(0, 0, 128, 128);
-  ctx.fillStyle = '#000';
-  ctx.font = 'bold 30px monospace';
+  ctx.font = '900 44px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('AMMO', 64, 64);
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = '#000';
+  ctx.strokeText('AMMO', 64, 66);
+  ctx.fillStyle = '#000';
+  ctx.fillText('AMMO', 64, 66);
   const t = new THREE.CanvasTexture(c);
   t.minFilter = THREE.LinearFilter;
   return t;
@@ -3535,7 +3588,7 @@ function buildShop() {
 function updateHotbar() {
   const bar = document.getElementById('hotbar');
   bar.innerHTML = '';
-  SLOT_ORDER.forEach((key, idx) => {
+  getSlotOrder().forEach((key, idx) => {
     if (!owned[key]) return;
     const g = GUNS[key];
     const el = document.createElement('div');
@@ -4289,6 +4342,13 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   bind('cheatSkip',   'skip');
   bind('cheatHeavy',  'heavy');
   bind('cheatAimbot', 'aimbot');
+  // Booster Wand — flipping the cheat also toggles ownership of the wand tool
+  document.getElementById('cheatWand').addEventListener('change', (e) => {
+    cheats.wand = e.target.checked;
+    if (cheats.wand) owned.wand = true; else delete owned.wand;
+    if (!cheats.wand && currentGun === 'wand') equipGun('pistol');
+    updateHotbar();
+  });
 
   // Mirror cheats UI inside the pause menu (same passcode + same shared `cheats` object)
   const pBtn = document.getElementById('pauseCheatsBtn');
@@ -4332,13 +4392,19 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   pCode.addEventListener('keydown', e => { if (e.code === 'Enter') pTryUnlock(); });
   pCheckboxes.forEach(cb => {
     cb.addEventListener('change', e => {
-      cheats[cb.dataset.cheat] = e.target.checked;
+      const key = cb.dataset.cheat;
+      cheats[key] = e.target.checked;
       // Keep the home checkbox in sync so they don't drift
-      const homeMap = { money:'cheatMoney', mag:'cheatMag', rate:'cheatRate', invuln:'cheatInvuln', skip:'cheatSkip', heavy:'cheatHeavy', aimbot:'cheatAimbot' };
-      const homeId = homeMap[cb.dataset.cheat];
+      const homeMap = { money:'cheatMoney', mag:'cheatMag', rate:'cheatRate', invuln:'cheatInvuln', skip:'cheatSkip', heavy:'cheatHeavy', aimbot:'cheatAimbot', wand:'cheatWand' };
+      const homeId = homeMap[key];
       const homeCb = homeId && document.getElementById(homeId);
       if (homeCb) homeCb.checked = e.target.checked;
+      if (key === 'wand') {
+        if (cheats.wand) owned.wand = true; else delete owned.wand;
+        if (!cheats.wand && currentGun === 'wand') equipGun('pistol');
+      }
       updateHUD();
+      updateHotbar();
       buildShop();
     });
   });
@@ -5005,6 +5071,18 @@ async function startMultiplayer() {
         else reserve += data.amount;
         SFX.buy();
         updateHUD();
+      });
+      Playroom.RPC.register('wandSpawn', (data) => {
+        if (!mpIsHost()) return;
+        const mesh = data.type === 'speed'   ? makeSpeedBooster()
+                   : data.type === 'shield'  ? makeShieldBooster()
+                   : data.type === 'berserk' ? makeBerserkBooster()
+                   : data.type === 'freeze'  ? makeFreezeBooster()
+                   : data.type === 'tornado' ? makeTornadoBooster()
+                   :                           makeHealBooster();
+        mesh.position.set(data.x, data.y, data.z);
+        scene.add(mesh);
+        boosters.push({ mesh, type: data.type, bobT: Math.random() * Math.PI * 2, baseY: data.y });
       });
       Playroom.RPC.register('claimBooster', (data, sender) => {
         if (!mpIsHost()) return;
