@@ -389,7 +389,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4:00 PM PST 4.18.26</div>
-  <div>v1.67</div>
+  <div>v1.68</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -405,6 +405,7 @@
   Ammo: <span id="ammo">12</span> / <span id="reserve">48</span>
 </div>
 <div id="hpBottom"><div class="hpRow"><div class="hpLbl">HP <span id="hpBottomNum">100</span>/100</div><div class="hpTrack"><div id="hpBottomFill"></div></div></div></div>
+<canvas id="minimap" width="200" height="200" style="position:fixed;left:12px;bottom:12px;z-index:7;border-radius:50%;background:rgba(0,0,0,0.55);box-shadow:0 0 8px rgba(0,0,0,0.6);pointer-events:none"></canvas>
 <div id="boosterHud" style="position:fixed;top:160px;right:12px;z-index:6;background:rgba(0,0,0,0.6);padding:6px 10px;border-radius:6px;font-family:monospace;font-size:12px;color:#eee;display:none;min-width:170px">
   <div id="boosterSpeedRow" style="display:none;align-items:center;gap:8px;margin:2px 0">
     <span style="color:#ffee33;font-weight:bold;min-width:60px">SPEED</span>
@@ -1065,12 +1066,45 @@ function buildHills() {
   }
 }
 
-// Map 3 — downtown: proper multi-story buildings with entrances, floors, stairs, windows.
+// Map 3 — downtown: varied multi-story buildings with sprintable external ramps and spiral interior ramps.
 function buildCity() {
   buildPerimeter();
 
-  // One building. You enter through a ground-floor door, climb interior stairs through a
-  // stairwell-hole in each floor, and upper floors have wide window openings facing outward.
+  // Stepped sprintable ramp from (x1,z1,y1) → (x2,z2,y2) — short risers (≤0.22m)
+  // so the player and enemies walk up without jumping.
+  function rampStrip(x1, z1, y1, x2, z2, y2, width = 3.0, mat = concreteMat) {
+    const totalH = Math.max(0.001, y2 - y1);
+    const steps = Math.max(2, Math.ceil(totalH / 0.22));
+    for (let i = 0; i < steps; i++) {
+      const t = (i + 0.5) / steps;
+      const cx = x1 + (x2 - x1) * t;
+      const cz = z1 + (z2 - z1) * t;
+      const topY = y1 + ((i + 1) / steps) * totalH;
+      // Determine step span perpendicular to direction so the ramp is `width` wide
+      const dx = x2 - x1, dz = z2 - z1;
+      const len = Math.hypot(dx, dz) || 1;
+      const segLen = len / steps;
+      // Axis-aligned: pick larger of axis projections + width on the other axis
+      const sw = Math.abs(dx / len) > 0.5 ? segLen + 0.05 : width;
+      const sd = Math.abs(dz / len) > 0.5 ? segLen + 0.05 : width;
+      addWallBox(cx, topY / 2, cz, sw, topY, sd, mat, false);
+    }
+  }
+
+  // Spiral ramp inside a building: short pillars rotating around (cx, cz) at radius `r`
+  function spiralRamp(cx, cz, baseY, stories, floorH, r = 2.4) {
+    const stepsPerRev = 18;
+    const total = stories * stepsPerRev;
+    const stepRise = floorH / stepsPerRev; // 4.5/18 = 0.25
+    for (let i = 0; i < total; i++) {
+      const ang = (i / stepsPerRev) * Math.PI * 2;
+      const px = cx + Math.cos(ang) * r;
+      const pz = cz + Math.sin(ang) * r;
+      const topY = baseY + (i + 1) * stepRise;
+      addWallBox(px, topY / 2, pz, 1.4, topY, 1.4, woodMat, false);
+    }
+  }
+
   function building(cx, cz, stories, w, doorFace = '-z') {
     const d = w;
     const floorH = 4.5;  // taller floors
@@ -1125,55 +1159,39 @@ function buildCity() {
       else          addWallBox(cx, totalH + 0.7, posZ, axisLen, 1.0, wallT, brickMat);
     }
 
-    // Interior stairs: more steps per story because floors are taller
-    const stepsPerStory = 7;
-    const totalSteps = stories * stepsPerStory;
-    const rise = floorH / stepsPerStory; // 0.64 — below enemy step height
-    const runSpan = w - wallT * 2 - 1.0;
-    const run = runSpan / totalSteps;
-    for (let i = 0; i < totalSteps; i++) {
-      const sy = (i + 1) * rise;
-      const sx = cx - w / 2 + wallT + 0.5 + (i + 0.5) * run;
-      const sz = cz - d / 2 + wallT + 1.5;
-      addWallBox(sx, sy / 2, sz, run, sy, 2.4, woodMat, false);
-    }
+    // Spiral interior ramp replaces stairs — center it inside the building footprint
+    spiralRamp(cx, cz, 0, stories, floorH, Math.min(2.6, (w - wallT * 2) / 3));
   }
 
-  // 4 city blocks, all 4 stories so rooftops align and bridges work
-  const B_STORIES = 4;
-  const B_FLOOR = 4.5;
-  const B_W = 12;
-  const roofTop = B_STORIES * B_FLOOR + 0.3; // walkable rooftop Y
-  building( 20,  20, B_STORIES, B_W, '-z');
-  building(-20,  20, B_STORIES, B_W, '+x');
-  building( 20, -20, B_STORIES, B_W, '+z');
-  building(-20, -20, B_STORIES, B_W, '-x');
-
-  // Rooftop sky-bridges connecting neighbors. Slab (walkable) + low parapets.
-  function bridge(x1, z1, x2, z2) {
-    const cx = (x1 + x2) / 2, cz = (z1 + z2) / 2;
-    const dx = Math.abs(x2 - x1), dz = Math.abs(z2 - z1);
-    const bridgeW = 3.0;
-    const w = dx > dz ? dx : bridgeW;
-    const d = dz > dx ? dz : bridgeW;
-    // open deck only — no railings so you can spot enemies below freely
-    addWallBox(cx, roofTop + 0.1, cz, w, 0.2, d, concreteMat, true);
+  // Asymmetric building layout — different sizes, positions, door faces
+  // [cx, cz, stories, width, doorFace]
+  const layout = [
+    [-22,  20, 6, 14, '+z'],   // tall + wide, NW
+    [ 18,  22, 3, 10, '-x'],   // short squat, NE
+    [ 24, -16, 5, 12, '-z'],   // mid, SE
+    [-18, -22, 4, 16, '+x'],   // wide low, SW
+    [  4,   8, 2,  8, '-z'],   // small kiosk near center
+  ];
+  const FLOOR_H = 4.5;
+  const roofs = [];
+  for (const [cx, cz, stories, w, doorFace] of layout) {
+    building(cx, cz, stories, w, doorFace);
+    roofs.push({ cx, cz, w, top: stories * FLOOR_H });
   }
-  // N edge: ( -20, 20 ) ↔ ( 20, 20 ) — bridge spans across the road between them
-  bridge(-20 + B_W / 2,  20,  20 - B_W / 2,  20);
-  // S edge
-  bridge(-20 + B_W / 2, -20,  20 - B_W / 2, -20);
-  // W edge
-  bridge(-20,  20 - B_W / 2, -20, -20 + B_W / 2);
-  // E edge
-  bridge( 20,  20 - B_W / 2,  20, -20 + B_W / 2);
 
-  // street cover between buildings
-  addWall(  0,   0, 3, 3, 1.8, concreteMat);
-  addWall(  0,  12, 5, 2, 1.5, concreteMat);
-  addWall(  0, -12, 5, 2, 1.5, concreteMat);
-  addWall( 12,   0, 2, 5, 1.5, concreteMat);
-  addWall(-12,   0, 2, 5, 1.5, concreteMat);
+  // External sprintable ramps from ground up to each rooftop, approaching from open sides
+  rampStrip(-22 + 14/2 + 16, 20,         0, -22 + 14/2,        20,         roofs[0].top, 3.5);
+  rampStrip( 18 - 10/2 - 14, 22,         0,  18 - 10/2,        22,         roofs[1].top, 3.0);
+  rampStrip( 24,              -16 - 6/2 - 14, 0,  24,           -16 - 6/2,  roofs[2].top, 3.0);
+  rampStrip(-18, -22 + 16/2 + 14, 0, -18,  -22 + 16/2,         0 + roofs[3].top, 3.5);
+  // Connector ramp between two rooftops (NW ↔ SE) crossing midfield
+  rampStrip(-22 + 14/2 + 4, 20, roofs[0].top, 24, -16 - 6/2 - 4, roofs[2].top, 2.8);
+
+  // A couple of street-level cover boxes off-center so the layout reads as asymmetric
+  addWall(  6,  -6, 4, 2, 1.8, concreteMat);
+  addWall(-10,  -2, 2, 5, 1.5, concreteMat);
+  addWall( -2,  18, 5, 2, 1.5, concreteMat);
+  addWall( 12,   2, 2, 4, 1.5, concreteMat);
 }
 
 // Map 4 — "Neon Strip" — blade runner / tron-inspired neon playground.
@@ -3044,6 +3062,119 @@ function ensureTornadoMesh() {
   tornadoMesh = g;
   return g;
 }
+// ---------- Minimap ----------
+const MINIMAP_BG = {
+  arena: '#3b8a3b',
+  hills: '#c9a378',
+  city:  '#8e8e8c',
+  neon:  '#0a0a20',
+};
+const MINIMAP_WALL = {
+  arena: 'rgba(40,30,20,0.85)',
+  hills: 'rgba(80,60,40,0.85)',
+  city:  'rgba(60,50,55,0.85)',
+  neon:  'rgba(0,255,255,0.6)',
+};
+function drawMinimapArrow(ctx, x, y, yaw, color, size = 6) {
+  const dirX = -Math.sin(yaw);
+  const dirZ = -Math.cos(yaw);
+  const angle = Math.atan2(dirZ, dirX);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(size + 1, 0);
+  ctx.lineTo(-size + 1, -size + 1);
+  ctx.lineTo(-size + 1,  size - 1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#000';
+  ctx.stroke();
+  ctx.restore();
+}
+function updateMinimap() {
+  const cv = document.getElementById('minimap');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const cx = W / 2, cy = H / 2;
+  const r = Math.min(W, H) / 2 - 2;
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+  const bg = MINIMAP_BG[currentMap] || '#222';
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  // Optional: faint grid for neon to match the map vibe
+  if (currentMap === 'neon') {
+    ctx.strokeStyle = 'rgba(0,255,255,0.18)';
+    ctx.lineWidth = 1;
+    for (let i = -40; i <= 40; i += 8) {
+      const sp = (i + 40) / 80 * (r * 2) + (cx - r);
+      ctx.beginPath(); ctx.moveTo(sp, cy - r); ctx.lineTo(sp, cy + r); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx - r, sp); ctx.lineTo(cx + r, sp); ctx.stroke();
+    }
+  }
+  const scale = (r * 2) / MAP_SIZE * 0.95;
+  // Walls (top-down rectangles)
+  ctx.fillStyle = MINIMAP_WALL[currentMap] || 'rgba(0,0,0,0.7)';
+  for (const w of walls) {
+    if (w.isFloor) continue;
+    if (w.max.y - w.min.y < 1.0) continue;
+    const wx = (w.min.x + w.max.x) / 2;
+    const wz = (w.min.z + w.max.z) / 2;
+    const ww = (w.max.x - w.min.x);
+    const wd = (w.max.z - w.min.z);
+    if (ww * scale < 1 || wd * scale < 1) continue;
+    ctx.fillRect(cx + wx * scale - ww * scale / 2, cy + wz * scale - wd * scale / 2, ww * scale, wd * scale);
+  }
+  // Pickups (ammo/HP) — small specks
+  ctx.fillStyle = '#ffd84a';
+  const pickupSrc = mpIsClient() ? Array.from(ghostPickups.values()).map(g => ({ mesh: g.mesh, type: g.type })) : ammoBoxes;
+  for (const p of pickupSrc) {
+    const px = p.mesh.position.x, pz = p.mesh.position.z;
+    ctx.fillStyle = p.type === 'hp' ? '#33dd55' : '#ffcc22';
+    ctx.fillRect(cx + px * scale - 1.5, cy + pz * scale - 1.5, 3, 3);
+  }
+  // Boosters — colored dots
+  const boosterSrc = mpIsClient() ? Array.from(ghostBoosters.values()) : boosters;
+  for (const b of boosterSrc) {
+    const c = WAND_TIP_COLORS[b.type] || WAND_TIP_COLORS.speed;
+    const hex = '#' + c.c.toString(16).padStart(6, '0');
+    ctx.fillStyle = hex;
+    ctx.beginPath();
+    ctx.arc(cx + b.mesh.position.x * scale, cy + b.mesh.position.z * scale, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Enemies (red — bigger for bosses, purple for stick king)
+  const enemyList = mpIsClient() ? Array.from(ghostEnemies.values()) : enemies;
+  for (const e of enemyList) {
+    const ex = cx + e.position.x * scale, ey = cy + e.position.z * scale;
+    const isKing = !!e.userData?.isStickKing;
+    const isBoss = !!e.userData?.isBoss;
+    ctx.fillStyle = isKing ? '#aa44ff' : isBoss ? '#ff8800' : '#ff3030';
+    ctx.beginPath();
+    ctx.arc(ex, ey, isKing ? 5 : isBoss ? 4 : 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Remote player (blue arrow)
+  if (remotePlayer && remotePlayer.pose) {
+    const p = remotePlayer.pose;
+    drawMinimapArrow(ctx, cx + p.x * scale, cy + p.z * scale, p.yaw, '#44aaff', 5);
+  }
+  // Local player (yellow arrow)
+  drawMinimapArrow(ctx, cx + camera.position.x * scale, cy + camera.position.z * scale, player.yaw, '#ffd84a', 6);
+  ctx.restore();
+  // Border ring + cardinal North dot
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.lineWidth = 2; ctx.strokeStyle = '#000'; ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 11px monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('N', cx, 4);
+}
+
 function updateTornadoVisual() {
   if (tornadoBoostT > 0) {
     const m = ensureTornadoMesh();
@@ -3818,6 +3949,7 @@ function equipGun(key) {
 // (weaponState and syncWeaponState declared above)
 
 function buildShop() {
+  shopEl.style.display = 'grid';
   shopEl.innerHTML = '';
   for (const key of SLOT_ORDER) {
     const g = GUNS[key];
@@ -4306,6 +4438,7 @@ function loop() {
       safeCall(updateBoostersHost, dt);
     }
     safeCall(updateBoosterTimers, dt);
+    safeCall(updateMinimap, dt);
     // Rockets/plasma/arrows run on both sides: host's do real damage; client's are visual-only
     // because the client's enemies array is empty, so collision finds nothing to hurt.
     safeCall(updateRockets, dt);
