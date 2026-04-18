@@ -153,6 +153,23 @@
 
   #mpPanel.expanded { width: 520px; }
   #mpPanel .mpUrl { display: block; margin-top: 6px; font-family: monospace; word-break: break-all; overflow-wrap: anywhere; }
+  /* "You Lost" animation — same motion as round-clear, red text */
+  #lostAnim {
+    position: fixed; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(20,0,0,0.78);
+    z-index: 19; pointer-events: none;
+    font-family: monospace;
+  }
+  #lostAnim.on { display: flex; }
+  #lostAnim .lostText {
+    font-size: 84px; font-weight: 900; letter-spacing: 8px;
+    color: #ff5555;
+    font-family: monospace;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.85);
+    animation: rcTextIn 3s cubic-bezier(.3,1.5,.5,1) forwards;
+    transform: scale(0); opacity: 0;
+  }
   /* Mode toggles: home vs round-end */
   #overlay[data-mode="home"] #shopHomeBtn { display: none !important; }
   #overlay[data-mode="roundend"] #mpPanel { display: none !important; }
@@ -336,12 +353,13 @@
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.48</div>
+<div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.49</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
 <div id="bossHud" style="position:fixed;top:100px;left:50%;transform:translateX(-50%);z-index:6;"></div>
 <div id="roundClearAnim"><div class="rcBg"></div><div class="rcText">Round 1 Cleared!</div><div class="rcSub">next wave incoming…</div></div>
+<div id="lostAnim"><div class="lostText">YOU LOST</div></div>
 <div id="hud">
   HP: <span id="hp">100</span> / 100
   <div id="hpbar"><div></div></div>
@@ -3131,12 +3149,16 @@ function endRound() {
 }
 
 function endGame() {
+  if (gameOver) return;
   gameOver = true;
   roundActive = false;
-  openShop('You died', `You reached round ${round}. Restart the game or head back home.`);
-  startBtn.textContent = 'Restart Game';
-  startBtn.dataset.mode = 'restart';
-  document.getElementById('retryBtn').style.display = 'none';
+  document.exitPointerLock?.();
+  showLostAnim(() => {
+    openShop('You Lost', `You reached round ${round}. Restart the game or head back home.`);
+    startBtn.textContent = 'Restart Game';
+    startBtn.dataset.mode = 'restart';
+    document.getElementById('retryBtn').style.display = 'none';
+  });
 }
 
 function retryRound() {
@@ -3894,6 +3916,17 @@ function showRoundClearAnim(n, cb) {
   setTimeout(() => { el.classList.remove('on'); if (cb) cb(); }, 3000);
 }
 
+function showLostAnim(cb) {
+  const el = document.getElementById('lostAnim');
+  const txt = el.querySelector('.lostText');
+  el.classList.remove('on');
+  requestAnimationFrame(() => {
+    el.classList.add('on');
+    txt.style.animation = 'none'; void txt.offsetWidth; txt.style.animation = '';
+  });
+  setTimeout(() => { el.classList.remove('on'); if (cb) cb(); }, 3000);
+}
+
 const pixelParticles = []; // { mesh, vel, life, maxLife }
 const _pixelGeom = new THREE.BoxGeometry(0.12, 0.12, 0.12);
 function spawnPixelBurst(pos, color = 0xaa0000, count = 60) {
@@ -4004,6 +4037,8 @@ function pickEnemyTarget(enemy) {
 const ghostEnemies = new Map();
 const ghostBulletMeshes = []; // pool of meshes used to render the host's enemy bullets on the client
 const ghostRockets = new Map(); // rocket/plasma/arrow ghosts from host → id → mesh
+const ghostPickups = new Map(); // ammo/hp pickup ghosts from host → id → {mesh, type, bobT, baseY}
+const _pendingClaims = new Set(); // pickup ids the client has already RPC'd to claim
 let mpLastBossSpawned = false;
 let mpRocketNetIdCounter = 1;
 const mpAllPlayers = new Map(); // all connected players keyed by id
@@ -4047,7 +4082,7 @@ function mpBroadcastWorld(dt) {
     me.setState('ebullets', bulletSnap, false);
     me.setState('pickups', pickupSnap, false);
     me.setState('rockets', rocketSnap, false);
-    me.setState('round', { n: round, active: roundActive, map: currentMap, bossSpawned, won: (round >= 13 && !survivorMode) }, true);
+    me.setState('round', { n: round, active: roundActive, map: currentMap, bossSpawned, won: (round >= 13 && !survivorMode), lost: !!gameOver }, true);
   } catch (e) { console.warn('[mp] broadcast failed', e); }
 }
 
@@ -4069,6 +4104,19 @@ function mpClientSync(dt) {
   if (roundState) {
     const newRound = roundState.n || 1;
     const newActive = !!roundState.active;
+    // Host signaled game-over (all players dead). Mirror locally with the You Lost flow.
+    if (roundState.lost && !gameOver) {
+      gameOver = true; roundActive = false;
+      document.exitPointerLock?.();
+      showLostAnim(() => {
+        openShop('You Lost', `You reached round ${newRound}. Restart the game or head back home.`);
+        overlay.setAttribute('data-mode', 'roundend');
+        startBtn.textContent = 'Restart Game';
+        startBtn.dataset.mode = 'restart';
+        document.getElementById('retryBtn').style.display = 'none';
+      });
+      return;
+    }
     // Detect host starting a new round — auto-start locally
     if (newActive && !roundActive) {
       round = newRound;
@@ -4178,6 +4226,39 @@ function mpClientSync(dt) {
   for (const [id, m] of ghostRockets) {
     if (!rocketSeen.has(id)) { scene.remove(m); ghostRockets.delete(id); }
   }
+  // Render host's ammo/HP pickups so the client can see and walk over them
+  const pickupState = (() => { try { return hp.getState('pickups'); } catch { return null; } })() || [];
+  const pickupSeen = new Set();
+  const now = performance.now() * 0.001;
+  for (const p of pickupState) {
+    pickupSeen.add(p.id);
+    let g = ghostPickups.get(p.id);
+    if (!g) {
+      const m = new THREE.Mesh(ammoBoxGeom, p.t === 'hp' ? hpBoxMat : ammoBoxMat);
+      scene.add(m);
+      g = { mesh: m, type: p.t, bobT: Math.random() * Math.PI * 2, baseY: p.y };
+      ghostPickups.set(p.id, g);
+    }
+    g.baseY = p.y;
+    g.mesh.position.x = p.x;
+    g.mesh.position.z = p.z;
+    g.mesh.position.y = p.y + Math.sin(now * 3 + g.bobT) * 0.1;
+    g.mesh.rotation.y = now * 1.5 + g.bobT;
+    // Proximity claim — RPC to host once per pickup
+    const dx = g.mesh.position.x - camera.position.x;
+    const dz = g.mesh.position.z - camera.position.z;
+    if (player.alive && !spectating && dx*dx + dz*dz < 1.6 * 1.6 && !_pendingClaims.has(p.id)) {
+      if (g.type === 'hp' && player.hp >= 100) {
+        // skip — full health
+      } else {
+        _pendingClaims.add(p.id);
+        try { Playroom.RPC.call('claimPickup', { id: p.id }, Playroom.RPC.Mode.HOST); } catch {}
+      }
+    }
+  }
+  for (const [id, g] of ghostPickups) {
+    if (!pickupSeen.has(id)) { scene.remove(g.mesh); ghostPickups.delete(id); _pendingClaims.delete(id); }
+  }
 }
 
 // ---------- Playroom Kit replaces the PeerJS lobby (dev mode, no signup needed) ----------
@@ -4226,6 +4307,24 @@ async function startMultiplayer() {
         killStreak++;
         if (!boostActive && killStreak >= BOOST_THRESHOLD) activateBoost();
         updateStreakUI();
+        updateHUD();
+      });
+      Playroom.RPC.register('claimPickup', (data, sender) => {
+        if (!mpIsHost()) return;
+        const idx = ammoBoxes.findIndex(b => b.mesh.uuid === data.id);
+        if (idx < 0) return;
+        const b = ammoBoxes[idx];
+        scene.remove(b.mesh);
+        ammoBoxes.splice(idx, 1);
+        try { Playroom.RPC.call('awardPickup', { playerId: sender && sender.id, type: b.type, amount: b.amount }, Playroom.RPC.Mode.ALL); } catch {}
+      });
+      Playroom.RPC.register('awardPickup', (data) => {
+        if (!window.Playroom) return;
+        const me = Playroom.myPlayer();
+        if (!me || data.playerId !== me.id) return;
+        if (data.type === 'hp') player.hp = Math.min(100, player.hp + data.amount);
+        else reserve += data.amount;
+        SFX.buy();
         updateHUD();
       });
       Playroom.RPC.register('takeDamage', (data) => {
@@ -4304,6 +4403,9 @@ function leaveLobby() {
   ghostBulletMeshes.length = 0;
   for (const [id, m] of ghostRockets) scene.remove(m);
   ghostRockets.clear();
+  for (const [id, g] of ghostPickups) scene.remove(g.mesh);
+  ghostPickups.clear();
+  _pendingClaims.clear();
   mpRole = 'none';
   document.getElementById('mpLeaveBtn').style.display = 'none';
   document.getElementById('mpStartBtn').disabled = false;
