@@ -117,26 +117,17 @@
   #roundClearAnim {
     position: fixed; inset: 0; display: none;
     align-items: center; justify-content: center;
-    background: radial-gradient(circle at center, rgba(20,0,40,0.55) 0%, rgba(0,0,0,0.8) 100%);
+    background: rgba(0,0,0,0.75);
     z-index: 18; pointer-events: none;
-    font-family: 'Arial Black', 'Impact', monospace;
+    font-family: monospace;
   }
   #roundClearAnim.on { display: flex; }
-  #roundClearAnim .rcBg {
-    position: absolute; inset: 0;
-    background:
-      repeating-linear-gradient(0deg, rgba(255,0,255,0.04) 0px, rgba(255,0,255,0.04) 2px, transparent 2px, transparent 4px),
-      repeating-linear-gradient(90deg, rgba(0,255,255,0.04) 0px, rgba(0,255,255,0.04) 2px, transparent 2px, transparent 4px);
-    animation: rcScan 0.5s linear infinite;
-  }
-  @keyframes rcScan { 0% { transform: translateY(0); } 100% { transform: translateY(4px); } }
+  #roundClearAnim .rcBg { display: none; }
   #roundClearAnim .rcText {
     font-size: 84px; font-weight: 900; letter-spacing: 8px;
     color: #fff;
-    text-shadow:
-      -2px 0 #ff00ff, 2px 0 #00ffff,
-      0 0 24px #ff00ff, 0 0 48px #ff00ff,
-      0 0 80px #00ffff;
+    font-family: monospace;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
     animation: rcTextIn 3s cubic-bezier(.3,1.5,.5,1) forwards;
     transform: scale(0);
     opacity: 0;
@@ -150,7 +141,7 @@
   }
   #roundClearAnim .rcSub {
     position: absolute; top: 62%; left: 50%; transform: translateX(-50%);
-    color: #ff4bd3; font-size: 18px; font-family: monospace; letter-spacing: 4px;
+    color: #fff; font-size: 18px; font-family: monospace; letter-spacing: 4px;
     animation: rcSubIn 3s ease-out forwards; opacity: 0;
   }
   @keyframes rcSubIn {
@@ -192,9 +183,8 @@
   #streak {
     position: fixed; top: 96px; right: 12px; z-index: 5;
     background: rgba(0,0,0,0.6); padding: 6px 10px; border-radius: 6px;
-    font-size: 12px; display: none; color: #ffcc33;
+    font-size: 12px; display: block; color: #ffcc33;
   }
-  #streak.on { display: block; }
   #streak .streakLabel { font-weight: bold; letter-spacing: 1px; margin-bottom: 4px; }
   #streak .streakBar { display: flex; gap: 3px; }
   #streak .seg {
@@ -332,7 +322,7 @@
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.40</div>
+<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.41</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
