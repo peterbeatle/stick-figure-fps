@@ -294,6 +294,9 @@
   <div style="background:#1a1a1a;border:1px solid #444;border-radius:8px;padding:20px;max-width:520px;width:100%;max-height:86vh;overflow:auto">
     <h2 style="margin:0 0 12px">Settings</h2>
 
+    <h3 style="margin:16px 0 6px;color:#ffcc33">Display</h3>
+    <button type="button" id="fullscreenBtn" style="background:#2864c2;color:white;border:0;border-radius:4px;padding:8px 16px;cursor:pointer;font-family:monospace">Toggle Fullscreen (F)</button>
+
     <h3 style="margin:16px 0 6px;color:#ffcc33">Sensitivity</h3>
     <label style="display:flex;align-items:center;gap:8px;margin:6px 0">
       Look <input type="range" id="sensLook" min="0.1" max="3" step="0.05" style="flex:1"> <span id="sensLookVal"></span>
@@ -383,7 +386,7 @@
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.53</div>
+<div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.55</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -398,6 +401,16 @@
   Ammo: <span id="ammo">12</span> / <span id="reserve">48</span>
 </div>
 <div id="hpBottom"><div class="hpRow"><div class="hpLbl">HP <span id="hpBottomNum">100</span>/100</div><div class="hpTrack"><div id="hpBottomFill"></div></div></div></div>
+<div id="boosterHud" style="position:fixed;left:12px;bottom:60px;z-index:6;background:rgba(0,0,0,0.55);padding:6px 10px;border-radius:6px;font-family:monospace;font-size:12px;color:#eee;display:none;min-width:180px">
+  <div id="boosterSpeedRow" style="display:none;align-items:center;gap:8px;margin:2px 0">
+    <span style="color:#ffee33;font-weight:bold;min-width:48px">SPEED</span>
+    <div style="flex:1;height:10px;background:#2a2200;border:1px solid #000;border-radius:3px;overflow:hidden"><div id="boosterSpeedFill" style="height:100%;background:#ffee33;width:100%;transition:width 0.1s"></div></div>
+  </div>
+  <div id="boosterShieldRow" style="display:none;align-items:center;gap:8px;margin:2px 0">
+    <span style="color:#66bbff;font-weight:bold;min-width:48px">SHIELD</span>
+    <div style="flex:1;height:10px;background:#001a33;border:1px solid #000;border-radius:3px;overflow:hidden"><div id="boosterShieldFill" style="height:100%;background:#66bbff;width:100%;transition:width 0.1s"></div></div>
+  </div>
+</div>
 <div id="hotbar"></div>
 <div id="scope"></div>
 <div id="scopeLines"></div>
@@ -1356,12 +1369,42 @@ function makeHPBar(width = 0.9, yOffset = 2.2) {
     },
   };
 }
+// Evil smile texture used on every enemy head, scaled per-character so the ratio matches.
+const evilFaceTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 110px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('>:)', c.width / 2, c.height / 2 + 6);
+  const t = new THREE.CanvasTexture(c);
+  t.minFilter = THREE.LinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  return t;
+})();
+function makeEvilFace(headRadius) {
+  const w = headRadius * 1.7;
+  const h = headRadius * 0.85;
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshBasicMaterial({ map: evilFaceTex, transparent: true, depthWrite: false })
+  );
+  // Sit on the front of the head (local -Z is "forward" for stick figures)
+  m.position.set(0, 0, -headRadius - 0.005);
+  return m;
+}
+
 function makeStickFigure() {
   const g = new THREE.Group();
   const bm = enemyBoneMat();
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), enemyHeadMat());
+  const HEAD_R = 0.25;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(HEAD_R, 16, 12), enemyHeadMat());
   head.position.set(0, 1.75, 0);
   head.castShadow = true;
+  head.add(makeEvilFace(HEAD_R));
   g.add(head);
   const pts = [
     [0,1.5,0],[0,0.9,0],
@@ -1413,9 +1456,11 @@ function bossHeadMat()  { return currentMap === 'neon' ? bossHeadMatLight  : bos
 function makeBoss() {
   const g = new THREE.Group();
   const bm = bossBoneMat();
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 12), bossHeadMat());
+  const HEAD_R = 0.4;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(HEAD_R, 16, 12), bossHeadMat());
   head.position.set(0, 2.0, 0);
   head.castShadow = true;
+  head.add(makeEvilFace(HEAD_R));
   g.add(head);
   const pts = [
     [0,1.7,0],[0,0.9,0],
@@ -1485,9 +1530,11 @@ function makeStickKing() {
   const g = new THREE.Group();
   const bm = new THREE.MeshLambertMaterial({ color: 0x4a1c8a, emissive: 0x2a0a4a, emissiveIntensity: 0.6 });
   const headMat = new THREE.MeshLambertMaterial({ color: 0x6a2cba, emissive: 0x3a1080, emissiveIntensity: 0.7 });
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 18, 14), headMat);
+  const HEAD_R = 0.45;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(HEAD_R, 18, 14), headMat);
   head.position.set(0, 2.0, 0);
   head.castShadow = true;
+  head.add(makeEvilFace(HEAD_R));
   g.add(head);
   // Crown — gold cone with a few spikes around the head
   const crownMat = new THREE.MeshLambertMaterial({ color: 0xffcc22, emissive: 0x885500, emissiveIntensity: 0.7 });
@@ -1519,14 +1566,14 @@ function makeStickKing() {
   const gunR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.55), gunMat);
   gunR.position.set( 0.7, 1.0, -0.3);
   g.add(gunR);
-  g.scale.setScalar(4.2); // 3x the regular boss (boss is 1.4)
+  g.scale.setScalar(3.5); // sized down a touch from 4.2
   g.userData.isBoss = true;
   g.userData.isStickKing = true;
   g.userData.gunMesh = gunR; // shoot from the right hand
-  g.userData.hp = 1500 + round * 200;
+  g.userData.hp = 3000 + round * 400; // doubled again
   g.userData.maxHp = g.userData.hp;
-  g.userData.radius = 1.6;
-  g.userData.speed = 3.2;
+  g.userData.radius = 1.4;
+  g.userData.speed = 9.6;
   g.userData.shootCd = 1.0;
   g.userData.magShots = 0;
   g.userData.magSize = 40;
@@ -2517,22 +2564,59 @@ let playerSwingT = 0;
 
 // ---------- Pickups: ammo + health ----------
 const ammoBoxes = []; // {mesh, amount, type:'ammo'|'hp', bobT}
+// Legacy box geom kept for any old references; new pickups use shaped meshes.
 const ammoBoxGeom = new THREE.BoxGeometry(0.35, 0.35, 0.35);
 const ammoBoxMat = new THREE.MeshLambertMaterial({ color: 0xffcc22, emissive: 0x553300, emissiveIntensity: 0.5 });
 const hpBoxMat   = new THREE.MeshLambertMaterial({ color: 0x22cc44, emissive: 0x005522, emissiveIntensity: 0.6 });
+// HP pickup texture: green square with a white plus (used on every face of the cube)
+const hpPlusTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#22cc44';
+  ctx.fillRect(0, 0, 128, 128);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(56, 24, 16, 80);
+  ctx.fillRect(24, 56, 80, 16);
+  const t = new THREE.CanvasTexture(c);
+  t.minFilter = THREE.LinearFilter;
+  return t;
+})();
+const hpPlusMat = new THREE.MeshLambertMaterial({ map: hpPlusTex, emissive: 0x115522, emissiveIntensity: 0.55 });
+function makeHPPickupMesh() {
+  const m = new THREE.Mesh(ammoBoxGeom, hpPlusMat);
+  m.castShadow = true;
+  return m;
+}
+// Bullet-shaped ammo pickup: brass cylinder body + silver cone tip
+const bulletBodyGeom = new THREE.CylinderGeometry(0.12, 0.12, 0.32, 14);
+const bulletBodyMat  = new THREE.MeshLambertMaterial({ color: 0xd4a020, emissive: 0x553300, emissiveIntensity: 0.55 });
+const bulletTipGeom  = new THREE.ConeGeometry(0.12, 0.18, 14);
+const bulletTipMat   = new THREE.MeshLambertMaterial({ color: 0xc8c8c8, emissive: 0x555555, emissiveIntensity: 0.4 });
+function makeAmmoPickupMesh() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(bulletBodyGeom, bulletBodyMat);
+  body.castShadow = true;
+  g.add(body);
+  const tip = new THREE.Mesh(bulletTipGeom, bulletTipMat);
+  tip.position.y = 0.25;
+  tip.castShadow = true;
+  g.add(tip);
+  // Lay it on its side so the bullet is horizontal
+  g.rotation.z = Math.PI / 2;
+  return g;
+}
 function spawnAmmoBox(pos, amount = 15) {
-  const m = new THREE.Mesh(ammoBoxGeom, ammoBoxMat);
+  const m = makeAmmoPickupMesh();
   const baseY = terrainHeight(pos.x, pos.z) + 0.3;
   m.position.set(pos.x, baseY, pos.z);
-  m.castShadow = true;
   scene.add(m);
   ammoBoxes.push({ mesh: m, amount, type: 'ammo', bobT: Math.random() * Math.PI * 2, baseY });
 }
 function spawnHPBox(pos, amount = 25) {
-  const m = new THREE.Mesh(ammoBoxGeom, hpBoxMat);
+  const m = makeHPPickupMesh();
   const baseY = terrainHeight(pos.x, pos.z) + 0.3;
   m.position.set(pos.x, baseY, pos.z);
-  m.castShadow = true;
   scene.add(m);
   ammoBoxes.push({ mesh: m, amount, type: 'hp', bobT: Math.random() * Math.PI * 2, baseY });
 }
@@ -2547,6 +2631,95 @@ function scatterAmmoBoxes(n) {
     spawnAmmoBox({ x, z }, 12);
   }
 }
+// ---------- Boosters: speed (lightning) + shield ----------
+const boosters = []; // host-side: {mesh, type:'speed'|'shield', bobT, baseY}
+const BOOST_DUR = 10;
+let speedBoostT = 0;
+let shieldBoostT = 0;
+function makeSpeedBooster() {
+  const shape = new THREE.Shape();
+  shape.moveTo(0.0, 0.55);
+  shape.lineTo(-0.22, 0.05);
+  shape.lineTo(-0.05, 0.05);
+  shape.lineTo(-0.18, -0.55);
+  shape.lineTo(0.22, -0.05);
+  shape.lineTo(0.05, -0.05);
+  shape.lineTo(0.18, 0.55);
+  shape.closePath();
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.08, bevelEnabled: false });
+  geo.center();
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffee33, emissive: 0xaa8800, emissiveIntensity: 0.95 });
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = true;
+  return m;
+}
+function makeShieldBooster() {
+  const m = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.5, 0),
+    new THREE.MeshLambertMaterial({ color: 0x44aaff, emissive: 0x1166cc, emissiveIntensity: 0.95, transparent: true, opacity: 0.92 })
+  );
+  m.castShadow = true;
+  return m;
+}
+function spawnBooster(type) {
+  let x, z, tries = 0;
+  do {
+    x = (Math.random() - 0.5) * (MAP_SIZE - 8);
+    z = (Math.random() - 0.5) * (MAP_SIZE - 8);
+    tries++;
+  } while (tries < 25 && (typeof insideSolidWall === 'function' && insideSolidWall(x, z)));
+  const mesh = type === 'speed' ? makeSpeedBooster() : makeShieldBooster();
+  const baseY = terrainHeight(x, z) + 0.8;
+  mesh.position.set(x, baseY, z);
+  scene.add(mesh);
+  boosters.push({ mesh, type, bobT: Math.random() * Math.PI * 2, baseY });
+}
+function activateBooster(type) {
+  if (type === 'speed') speedBoostT = BOOST_DUR;
+  else if (type === 'shield') shieldBoostT = BOOST_DUR;
+  try { SFX.buy(); } catch {}
+  updateBoosterHUD();
+}
+function updateBoosterTimers(dt) {
+  if (speedBoostT > 0)  speedBoostT  = Math.max(0, speedBoostT - dt);
+  if (shieldBoostT > 0) shieldBoostT = Math.max(0, shieldBoostT - dt);
+  updateBoosterHUD();
+}
+function updateBoosterHUD() {
+  const wrap = document.getElementById('boosterHud');
+  if (!wrap) return;
+  const sFill = document.getElementById('boosterSpeedFill');
+  const shFill = document.getElementById('boosterShieldFill');
+  const sRow = document.getElementById('boosterSpeedRow');
+  const shRow = document.getElementById('boosterShieldRow');
+  sRow.style.display = speedBoostT > 0 ? 'flex' : 'none';
+  shRow.style.display = shieldBoostT > 0 ? 'flex' : 'none';
+  wrap.style.display = (speedBoostT > 0 || shieldBoostT > 0) ? 'block' : 'none';
+  if (speedBoostT > 0)  sFill.style.width  = (speedBoostT  / BOOST_DUR * 100) + '%';
+  if (shieldBoostT > 0) shFill.style.width = (shieldBoostT / BOOST_DUR * 100) + '%';
+}
+const _pendingBoosterClaims = new Set();
+function updateBoostersHost(dt) {
+  // Bob/spin every booster, and (on host or solo) handle local pickup
+  for (let i = boosters.length - 1; i >= 0; i--) {
+    const b = boosters[i];
+    b.bobT += dt * 2.5;
+    b.mesh.position.y = b.baseY + Math.sin(b.bobT) * 0.18;
+    b.mesh.rotation.y += dt * 1.8;
+    const dx = b.mesh.position.x - camera.position.x;
+    const dz = b.mesh.position.z - camera.position.z;
+    if (player.alive && !spectating && dx*dx + dz*dz < 1.7 * 1.7) {
+      activateBooster(b.type);
+      scene.remove(b.mesh);
+      boosters.splice(i, 1);
+    }
+  }
+}
+function clearBoosters() {
+  for (const b of boosters) scene.remove(b.mesh);
+  boosters.length = 0;
+}
+
 function updateAmmoBoxes(dt) {
   for (let i = ammoBoxes.length - 1; i >= 0; i--) {
     const b = ammoBoxes[i];
@@ -2698,18 +2871,40 @@ function enemyGunForRound(r) {
 
 function updateEnemies(dt) {
   for (const e of enemies) {
-    // Stick King: bounding-jump movement layered on top of normal pathfinding.
+    // Stick King: leap toward the nearest player, layered on normal pathfinding.
     if (e.userData.isStickKing) {
       const ud = e.userData;
       ud._jumpCd = (ud._jumpCd || 0) - dt;
       ud._jumpOffsetY = ud._jumpOffsetY || 0;
       ud._jumpVy = ud._jumpVy || 0;
+      ud._leapVx = ud._leapVx || 0;
+      ud._leapVz = ud._leapVz || 0;
       if (ud._jumpOffsetY <= 0.001 && ud._jumpCd <= 0) {
-        ud._jumpVy = 11;
-        ud._jumpCd = 1.0 + Math.random() * 1.4;
+        ud._jumpVy = 13;
+        ud._jumpCd = 0.45 + Math.random() * 0.55; // jump much more often
+        // Aim the leap toward the closest alive player so he hunts them down
+        const tInfo = (typeof pickEnemyTarget === 'function') ? pickEnemyTarget(e) : null;
+        if (tInfo) {
+          const dx = tInfo.pos.x - e.position.x;
+          const dz = tInfo.pos.z - e.position.z;
+          const len = Math.hypot(dx, dz) || 1;
+          const leapSpeed = 14;
+          ud._leapVx = (dx / len) * leapSpeed;
+          ud._leapVz = (dz / len) * leapSpeed;
+        }
       }
-      ud._jumpVy -= 22 * dt;
+      ud._jumpVy -= 24 * dt;
       ud._jumpOffsetY = Math.max(0, ud._jumpOffsetY + ud._jumpVy * dt);
+      // While airborne, drift horizontally with the leap velocity
+      if (ud._jumpOffsetY > 0.001) {
+        e.position.x += ud._leapVx * dt;
+        e.position.z += ud._leapVz * dt;
+        // clamp to map bounds
+        e.position.x = Math.max(-half + 1, Math.min(half - 1, e.position.x));
+        e.position.z = Math.max(-half + 1, Math.min(half - 1, e.position.z));
+      } else {
+        ud._leapVx = 0; ud._leapVz = 0;
+      }
     }
     // reload progress animation
     if (e.userData.reloading) {
@@ -2820,7 +3015,7 @@ function updateEnemies(dt) {
       e.userData.shootCd = e.userData.isBoss ? cdBase * 0.55 : cdBase;
       const accuracyBoost = Math.min(0.05, round * 0.005);
       let spread = Math.max(0.01, profile.spread - accuracyBoost) + Math.min(0.05, dist * 0.002);
-      if (e.userData.isStickKing) spread *= 0.5; // 2x more accurate
+      if (e.userData.isStickKing) spread *= 0.18; // sharply more accurate per request
       const dmgMul = e.userData.isStickKing ? 3.6 : (e.userData.isBoss ? 1.8 : 1.0);
       const dmg = Math.max(1, Math.floor(profile.dmg * dmgMul));
       const gunWorld = new THREE.Vector3();
@@ -2932,6 +3127,7 @@ function updateBullets(dt) {
 
 function damagePlayer(amt) {
   if (cheats.invuln) return; // invincibility
+  if (shieldBoostT > 0) return; // shield booster active
   player.hp -= amt;
   SFX.damage();
   // reset streak on damage
@@ -3035,7 +3231,8 @@ function updatePlayer(dt) {
 
   const crouching = keys['ControlLeft'] || keys['ControlRight'];
   const sprinting = (keys['ShiftLeft'] || keys['ShiftRight']) && !crouching;
-  const speed = crouching ? 2.5 : sprinting ? 8 : 5;
+  const speedMul = speedBoostT > 0 ? 1.85 : 1;
+  const speed = (crouching ? 2.5 : sprinting ? 8 : 5) * speedMul;
   const eyeH = crouching ? CROUCH_Y : STANDING_Y;
   const feetY = camera.position.y - eyeH;
   const headY = camera.position.y + 0.1; // roughly top of head
@@ -3248,6 +3445,8 @@ function startRound() {
   // Reset pickups from the previous round — ammo + HP boxes shouldn't persist
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
+  clearBoosters();
+  speedBoostT = 0; shieldBoostT = 0; updateBoosterHUD();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -3297,6 +3496,10 @@ function startRound() {
     const count = 3 + round * 2 + Math.floor(round / 3);
     for (let i = 0; i < count; i++) spawnEnemy();
     scatterAmmoBoxes(2 + Math.floor(round / 2));
+    // Boosters: each type has a chance to spawn this round
+    clearBoosters();
+    if (Math.random() < 0.55) spawnBooster('speed');
+    if (Math.random() < 0.55) spawnBooster('shield');
   }
   updateHUD();
   updateHotbar();
@@ -3347,6 +3550,8 @@ function retryRound() {
   muzzleFlashes.length = 0;
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
+  clearBoosters();
+  speedBoostT = 0; shieldBoostT = 0; updateBoosterHUD();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -3385,6 +3590,8 @@ function restartGame() {
   muzzleFlashes.length = 0;
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
+  clearBoosters();
+  speedBoostT = 0; shieldBoostT = 0; updateBoosterHUD();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -3612,7 +3819,9 @@ function loop() {
       safeCall(updateEnemies, dt);
       safeCall(updateBullets, dt);
       safeCall(updateAmmoBoxes, dt);
+      safeCall(updateBoostersHost, dt);
     }
+    safeCall(updateBoosterTimers, dt);
     // Rockets/plasma/arrows run on both sides: host's do real damage; client's are visual-only
     // because the client's enemies array is empty, so collision finds nothing to hurt.
     safeCall(updateRockets, dt);
@@ -3798,6 +4007,8 @@ function goHome() {
   muzzleFlashes.length = 0;
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
+  clearBoosters();
+  speedBoostT = 0; shieldBoostT = 0; updateBoosterHUD();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -3844,6 +4055,8 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   muzzleFlashes.length = 0;
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
+  clearBoosters();
+  speedBoostT = 0; shieldBoostT = 0; updateBoosterHUD();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -4049,6 +4262,17 @@ document.getElementById('pauseSettingsBtn').addEventListener('click', openSettin
 document.getElementById('shopSettingsBtn').addEventListener('click', openSettings);
 document.getElementById('settingsGear').addEventListener('click', openSettings);
 document.getElementById('settingsCloseBtn').addEventListener('click', closeSettings);
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  } else {
+    document.exitFullscreen?.();
+  }
+}
+document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyF' && !e.repeat && document.activeElement?.tagName !== 'INPUT') toggleFullscreen();
+});
 document.getElementById('shopHomeBtn').addEventListener('click', goHome);
 
 // ---------- Multiplayer (PeerJS) — Phase 1: presence only ----------
@@ -4284,7 +4508,9 @@ const ghostEnemies = new Map();
 const ghostBulletMeshes = []; // pool of meshes used to render the host's enemy bullets on the client
 const ghostRockets = new Map(); // rocket/plasma/arrow ghosts from host → id → mesh
 const ghostPickups = new Map(); // ammo/hp pickup ghosts from host → id → {mesh, type, bobT, baseY}
+const ghostBoosters = new Map(); // booster ghosts from host → id → {mesh, type, bobT, baseY}
 const _pendingClaims = new Set(); // pickup ids the client has already RPC'd to claim
+const _pendingBClaims = new Set();
 let mpLastBossSpawned = false;
 let mpRocketNetIdCounter = 1;
 const mpAllPlayers = new Map(); // all connected players keyed by id
@@ -4327,6 +4553,11 @@ function mpBroadcastWorld(dt) {
     me.setState('enemies', enemySnap, false);
     me.setState('ebullets', bulletSnap, false);
     me.setState('pickups', pickupSnap, false);
+    me.setState('boosters', boosters.map(b => ({
+      id: b.mesh.uuid,
+      x: +b.mesh.position.x.toFixed(2), y: +b.baseY.toFixed(2), z: +b.mesh.position.z.toFixed(2),
+      t: b.type,
+    })), false);
     me.setState('rockets', rocketSnap, false);
     me.setState('round', { n: round, active: roundActive, map: currentMap, bossSpawned, won: (round >= 13 && !survivorMode), lost: !!gameOver }, true);
   } catch (e) { console.warn('[mp] broadcast failed', e); }
@@ -4480,7 +4711,7 @@ function mpClientSync(dt) {
     pickupSeen.add(p.id);
     let g = ghostPickups.get(p.id);
     if (!g) {
-      const m = new THREE.Mesh(ammoBoxGeom, p.t === 'hp' ? hpBoxMat : ammoBoxMat);
+      const m = p.t === 'hp' ? makeHPPickupMesh() : makeAmmoPickupMesh();
       scene.add(m);
       g = { mesh: m, type: p.t, bobT: Math.random() * Math.PI * 2, baseY: p.y };
       ghostPickups.set(p.id, g);
@@ -4504,6 +4735,33 @@ function mpClientSync(dt) {
   }
   for (const [id, g] of ghostPickups) {
     if (!pickupSeen.has(id)) { scene.remove(g.mesh); ghostPickups.delete(id); _pendingClaims.delete(id); }
+  }
+  // Boosters from host
+  const boosterState = (() => { try { return hp.getState('boosters'); } catch { return null; } })() || [];
+  const bSeen = new Set();
+  for (const b of boosterState) {
+    bSeen.add(b.id);
+    let gh = ghostBoosters.get(b.id);
+    if (!gh) {
+      const m = b.t === 'speed' ? makeSpeedBooster() : makeShieldBooster();
+      scene.add(m);
+      gh = { mesh: m, type: b.t, bobT: Math.random() * Math.PI * 2, baseY: b.y };
+      ghostBoosters.set(b.id, gh);
+    }
+    gh.baseY = b.y;
+    gh.mesh.position.x = b.x;
+    gh.mesh.position.z = b.z;
+    gh.mesh.position.y = b.y + Math.sin(now * 2.5 + gh.bobT) * 0.18;
+    gh.mesh.rotation.y = now * 1.8 + gh.bobT;
+    const dx = gh.mesh.position.x - camera.position.x;
+    const dz = gh.mesh.position.z - camera.position.z;
+    if (player.alive && !spectating && dx*dx + dz*dz < 1.7 * 1.7 && !_pendingBClaims.has(b.id)) {
+      _pendingBClaims.add(b.id);
+      try { Playroom.RPC.call('claimBooster', { id: b.id }, Playroom.RPC.Mode.HOST); } catch {}
+    }
+  }
+  for (const [id, gh] of ghostBoosters) {
+    if (!bSeen.has(id)) { scene.remove(gh.mesh); ghostBoosters.delete(id); _pendingBClaims.delete(id); }
   }
 }
 
@@ -4572,6 +4830,21 @@ async function startMultiplayer() {
         else reserve += data.amount;
         SFX.buy();
         updateHUD();
+      });
+      Playroom.RPC.register('claimBooster', (data, sender) => {
+        if (!mpIsHost()) return;
+        const idx = boosters.findIndex(b => b.mesh.uuid === data.id);
+        if (idx < 0) return;
+        const b = boosters[idx];
+        scene.remove(b.mesh);
+        boosters.splice(idx, 1);
+        try { Playroom.RPC.call('awardBooster', { playerId: sender && sender.id, type: b.type }, Playroom.RPC.Mode.ALL); } catch {}
+      });
+      Playroom.RPC.register('awardBooster', (data) => {
+        if (!window.Playroom) return;
+        const me = Playroom.myPlayer();
+        if (!me || data.playerId !== me.id) return;
+        activateBooster(data.type);
       });
       Playroom.RPC.register('takeDamage', (data) => {
         if (!window.Playroom) return;
@@ -4652,6 +4925,9 @@ function leaveLobby() {
   for (const [id, g] of ghostPickups) scene.remove(g.mesh);
   ghostPickups.clear();
   _pendingClaims.clear();
+  for (const [id, g] of ghostBoosters) scene.remove(g.mesh);
+  ghostBoosters.clear();
+  _pendingBClaims.clear();
   mpRole = 'none';
   document.getElementById('mpLeaveBtn').style.display = 'none';
   document.getElementById('mpStartBtn').disabled = false;
