@@ -389,7 +389,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4:00 PM PST 4.18.26</div>
-  <div>v1.74</div>
+  <div>v1.75</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -1489,20 +1489,26 @@ function makeHPBar(width = 0.9, yOffset = 2.2) {
 // Evil smile texture used on every enemy head, scaled per-character so the ratio matches.
 // Text is rendered vertically (">" on top, ":" in the middle, ")" on the bottom) so the
 // smile reads like a face, not like a sideways logo.
+// Evil face: ">:)" stacked top-to-bottom, each glyph rotated 90° clockwise so they form a
+// proper vertical face (> → v as the brow/eye, : → two stacked dots for eyes, ) → ⌣ as the smile).
 const evilFaceTex = (() => {
   const c = document.createElement('canvas');
   c.width = 128; c.height = 256;
   const ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
   ctx.fillStyle = '#000';
-  ctx.font = '900 78px monospace';
+  ctx.font = '900 84px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  // Draw the three characters stacked vertically
   const chars = ['>', ':', ')'];
   const rowH = c.height / (chars.length + 0.6);
   for (let i = 0; i < chars.length; i++) {
-    ctx.fillText(chars[i], c.width / 2, rowH * (i + 0.9));
+    const y = rowH * (i + 0.9);
+    ctx.save();
+    ctx.translate(c.width / 2, y);
+    ctx.rotate(Math.PI / 2); // 90° clockwise on the canvas
+    ctx.fillText(chars[i], 0, 0);
+    ctx.restore();
   }
   const t = new THREE.CanvasTexture(c);
   t.minFilter = THREE.LinearFilter;
@@ -1510,15 +1516,16 @@ const evilFaceTex = (() => {
   return t;
 })();
 function makeEvilFace(headRadius) {
-  // Taller than wide, because the glyphs are stacked vertically on the canvas
+  // Taller than wide, mirroring the canvas proportions
   const w = headRadius * 1.05;
   const h = headRadius * 1.7;
   const m = new THREE.Mesh(
     new THREE.PlaneGeometry(w, h),
     new THREE.MeshBasicMaterial({ map: evilFaceTex, transparent: true, depthWrite: false, side: THREE.DoubleSide })
   );
-  // Local -Z is forward for the stick-figure group, so sit slightly in front of the head surface.
-  m.position.set(0, 0, -headRadius - 0.01);
+  // Three.js lookAt on a non-camera group makes +Z point at the target, so the enemy's
+  // FRONT is the +Z side of its local frame. Place the face on the +Z side of the head.
+  m.position.set(0, 0, headRadius + 0.01);
   return m;
 }
 
@@ -1541,12 +1548,12 @@ function makeStickFigure() {
   for (let i = 0; i < pts.length; i += 2) {
     g.add(makeBone(pts[i], pts[i+1], bm));
   }
-  // Gun held in right hand
+  // Gun held in right hand (on the +Z front side, since lookAt aligns +Z to target)
   const gun = new THREE.Mesh(
     new THREE.BoxGeometry(0.08, 0.08, 0.45),
     new THREE.MeshLambertMaterial({ color: 0x222222 })
   );
-  gun.position.set(0.5, 1.0, -0.25);
+  gun.position.set(0.5, 1.0, 0.25);
   gun.castShadow = true;
   g.add(gun);
   g.userData.gunMesh = gun;
@@ -1601,7 +1608,7 @@ function makeBoss() {
     new THREE.BoxGeometry(0.14, 0.14, 0.8),
     new THREE.MeshLambertMaterial({ color: 0x111111 })
   );
-  gun.position.set(0.75, 1.0, -0.4);
+  gun.position.set(0.75, 1.0, 0.4);
   gun.castShadow = true;
   g.add(gun);
   g.scale.setScalar(1.4);
@@ -1687,10 +1694,10 @@ function makeStickKing() {
   // Akimbo finger guns: dark slim boxes on each hand
   const gunMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
   const gunL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.55), gunMat);
-  gunL.position.set(-0.7, 1.0, -0.3);
+  gunL.position.set(-0.7, 1.0, 0.3);
   g.add(gunL);
   const gunR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.55), gunMat);
-  gunR.position.set( 0.7, 1.0, -0.3);
+  gunR.position.set( 0.7, 1.0, 0.3);
   g.add(gunR);
   g.scale.setScalar(3.5); // sized down a touch from 4.2
   g.userData.isBoss = true;
@@ -5656,15 +5663,19 @@ function makeEnemyGunMesh(gunKey, opts = {}) {
   clone.visible = true;
   // White outlines: match the player — only show on neon map
   clone.traverse(obj => { if (obj.userData.isOutline) obj.visible = (currentMap === 'neon'); });
+  // Player weapons are built for the camera (barrel along -Z). Enemy groups have +Z as
+  // forward (see lookAt note), so rotate the cloned weapon 180° around Y so its barrel
+  // points toward the enemy's target.
+  clone.rotation.y = Math.PI;
   if (gunKey === 'fingers') {
     // Akimbo model already has both hands built in — center it in front of the body
-    clone.position.set(0, 1.05, -0.15);
+    clone.position.set(0, 1.05, 0.15);
   } else if (isKing) {
-    clone.position.set(0.45, 1.0, -0.2);
+    clone.position.set(0.45, 1.0, 0.2);
   } else if (isBoss) {
-    clone.position.set(0.75, 1.0, -0.3);
+    clone.position.set(0.75, 1.0, 0.3);
   } else {
-    clone.position.set(0.45, 1.0, -0.1);
+    clone.position.set(0.45, 1.0, 0.1);
   }
   return clone;
 }
