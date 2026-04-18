@@ -1952,6 +1952,8 @@ function tryShoot(now) {
   if (spectating) return;
   if (reloading && !cheats.mag || !player.alive) return;
   const g = GUNS[currentGun];
+  const dmgMul = boostActive ? 2 : 1;
+  const adsAccuracy = (adsActive && g.scopeFov) ? 0.5 : 1;
   let rateMul = 1;
   if (boostActive) rateMul *= 2;
   if (cheats.rate) rateMul *= 3;
@@ -1974,7 +1976,7 @@ function tryShoot(now) {
       raycaster.set(origin, dir);
       const h = raycaster.intersectObjects(wallMeshes);
       const wallT = h.length ? h[0].distance : Infinity;
-      if (hit.t < wallT) applyDamage(hit.enemy, g.damage, hit.isHead);
+      if (hit.t < wallT) applyDamage(hit.enemy, g.damage * dmgMul, hit.isHead);
     }
     return;
   }
@@ -2000,12 +2002,12 @@ function tryShoot(now) {
       try { Playroom.RPC.call('spawnProjectile', {
         kind: 'rocket', ox: muzzle.x, oy: muzzle.y, oz: muzzle.z,
         dx: dir.x, dy: dir.y, dz: dir.z,
-        radius: g.blastRadius, damage: g.damage,
+        radius: g.blastRadius, damage: g.damage * dmgMul,
       }, Playroom.RPC.Mode.HOST); } catch {}
       // Local visual-only rocket so client sees their own shot (no damage — enemies array is empty on client)
       spawnRocket(muzzle.clone(), dir.clone(), g.blastRadius, 0);
     } else {
-      spawnRocket(muzzle, dir, g.blastRadius, g.damage);
+      spawnRocket(muzzle, dir, g.blastRadius, g.damage * dmgMul);
     }
     if (!cheats.mag && mag === 0 && reserve > 0) tryReload();
     syncWeaponState();
@@ -2022,7 +2024,7 @@ function tryShoot(now) {
       try { Playroom.RPC.call('spawnProjectile', {
         kind: 'arrow', ox: muzzle.x, oy: muzzle.y, oz: muzzle.z,
         dx: dir.x, dy: dir.y, dz: dir.z,
-        radius: g.blastRadius, damage: g.damage, pellets, spread: g.spread,
+        radius: g.blastRadius, damage: g.damage * dmgMul, pellets, spread: g.spread * adsAccuracy,
       }, Playroom.RPC.Mode.HOST); } catch {}
       for (let i = 0; i < pellets; i++) {
         const d = dir.clone();
@@ -2041,7 +2043,7 @@ function tryShoot(now) {
         d.z += (Math.random() - 0.5) * g.spread * 2;
         d.normalize();
         const start = muzzle.clone().addScaledVector(d, 0.3);
-        spawnArrow(start, d, g.blastRadius, g.damage);
+        spawnArrow(start, d, g.blastRadius, g.damage * dmgMul);
       }
     }
     if (!cheats.mag && mag === 0 && reserve > 0) tryReload();
@@ -2053,9 +2055,9 @@ function tryShoot(now) {
   // Plasma (small glowing projectile with small AoE)
   if (g.plasma) {
     const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
-    dir.x += (Math.random() - 0.5) * g.spread;
-    dir.y += (Math.random() - 0.5) * g.spread;
-    dir.z += (Math.random() - 0.5) * g.spread;
+    dir.x += (Math.random() - 0.5) * g.spread * adsAccuracy;
+    dir.y += (Math.random() - 0.5) * g.spread * adsAccuracy;
+    dir.z += (Math.random() - 0.5) * g.spread * adsAccuracy;
     dir.normalize();
     const muzzle = new THREE.Vector3(); weaponModels.plasma.getWorldPosition(muzzle);
     muzzle.addScaledVector(dir, 0.4);
@@ -2063,11 +2065,11 @@ function tryShoot(now) {
       try { Playroom.RPC.call('spawnProjectile', {
         kind: 'plasma', ox: muzzle.x, oy: muzzle.y, oz: muzzle.z,
         dx: dir.x, dy: dir.y, dz: dir.z,
-        radius: g.blastRadius, damage: g.damage,
+        radius: g.blastRadius, damage: g.damage * dmgMul,
       }, Playroom.RPC.Mode.HOST); } catch {}
       spawnPlasma(muzzle.clone(), dir.clone(), g.blastRadius, 0); // visual only
     } else {
-      spawnPlasma(muzzle, dir, g.blastRadius, g.damage);
+      spawnPlasma(muzzle, dir, g.blastRadius, g.damage * dmgMul);
     }
     if (!cheats.mag && mag === 0 && reserve > 0) tryReload();
     syncWeaponState();
@@ -2077,7 +2079,7 @@ function tryShoot(now) {
 
   // Railgun (piercing slug — hits every enemy in a line)
   if (g.pierce) {
-    let spread = g.spread;
+    let spread = g.spread * adsAccuracy;
     if (g.scopeFov && !adsActive) spread = g.hipSpread;
     const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
     dir.x += (Math.random() - 0.5) * spread * 2;
@@ -2104,7 +2106,7 @@ function tryShoot(now) {
       if (t !== null && t < wallT) {
         const centerDist = origin.distanceTo(isHead ? headCenter : bodyCenter);
         if (centerDist < wallT) {
-          applyDamage(e, g.damage, isHead);
+          applyDamage(e, g.damage * dmgMul, isHead);
           if (t > furthest) furthest = t;
         }
       }
@@ -2121,7 +2123,7 @@ function tryShoot(now) {
   }
 
   const pellets = g.pellets || 1;
-  let spread = g.spread;
+  let spread = g.spread * adsAccuracy;
   if (g.scopeFov && !adsActive && g.hipSpread) spread = g.hipSpread;
   camera.getWorldPosition(_sOrigin);
   weaponModels[currentGun].getWorldPosition(_sMuzzle);
@@ -2154,11 +2156,11 @@ function tryShoot(now) {
         if (mpIsClient()) {
           // Report hit to host — host is authoritative and applies the damage
           try {
-            Playroom.RPC.call('clientHit', { netId: hit.netId, damage: g.damage, isHead: hit.isHead }, Playroom.RPC.Mode.HOST);
+            Playroom.RPC.call('clientHit', { netId: hit.netId, damage: g.damage * dmgMul, isHead: hit.isHead }, Playroom.RPC.Mode.HOST);
           } catch (e) { /* noop */ }
           showHitmarker(false, hit.isHead);
         } else {
-          applyDamage(hit.enemy, g.damage, hit.isHead);
+          applyDamage(hit.enemy, g.damage * dmgMul, hit.isHead);
         }
       }
     }
