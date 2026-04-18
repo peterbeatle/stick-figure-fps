@@ -395,8 +395,8 @@
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
-  <div style="opacity:0.75;font-size:11px">Last Updated 2:45 AM PST 4.18.26</div>
-  <div>v1.81</div>
+  <div style="opacity:0.75;font-size:11px">Last Updated 2:55 AM PST 4.18.26</div>
+  <div>v1.82</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -1193,10 +1193,18 @@ function buildCity() {
   for (const b of blocks) {
     shell(b.cx, b.cz, b.stories, b.w, b.door);
   }
-  // Exterior ramps running UP the outside of each building from the ground to its roof
+  // Exterior ramps running UP the outside of each building from the ground to its roof.
+  // Clamp the ramp run so it can never extend past the perimeter wall.
+  const mapEdge = half - 2; // 1-unit perimeter wall + 1-unit buffer
   for (const b of blocks) {
     const top = b.stories * FLOOR_H;
-    const rampRun = Math.max(14, top * 3); // shallow incline — ~18° or less
+    let maxRun;
+    if (b.ramp === 'n')      maxRun = mapEdge - (b.cz + b.w / 2);
+    else if (b.ramp === 's') maxRun = mapEdge + (b.cz - b.w / 2);
+    else if (b.ramp === 'e') maxRun = mapEdge - (b.cx + b.w / 2);
+    else /* 'w' */           maxRun = mapEdge + (b.cx - b.w / 2);
+    // Comfortable incline (~35°) unless the map corner forces something steeper
+    const rampRun = Math.max(6, Math.min(maxRun, top * 1.4));
     let x1, z1, x2, z2;
     if (b.ramp === 'n') {
       x1 = b.cx; z1 = b.cz + b.w / 2 + rampRun;
