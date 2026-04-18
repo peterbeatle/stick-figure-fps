@@ -395,8 +395,8 @@
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
-  <div style="opacity:0.75;font-size:11px">Last Updated 3:20 AM PST 4.18.26</div>
-  <div>v1.85</div>
+  <div style="opacity:0.75;font-size:11px">Last Updated 3:30 AM PST 4.18.26</div>
+  <div>v1.86</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -1116,19 +1116,21 @@ function buildCity() {
   // walking across gives a smooth incline (step heights ≤0.22m, well under the step-up threshold).
   function ramp(x1, z1, y1, x2, z2, y2, width = 3.5, mat = concreteMat) {
     const rise = Math.max(0.01, y2 - y1);
-    const steps = Math.max(3, Math.ceil(rise / 0.22));
+    // Player step-up is 0.25m — keep each riser at 0.2m for a comfortable margin.
+    const steps = Math.max(3, Math.ceil(rise / 0.2));
     const stepH = rise / steps;
     const dx = x2 - x1, dz = z2 - z1;
     const len = Math.hypot(dx, dz) || 1;
-    // Orient the slab span along the ramp direction
     const axisX = Math.abs(dx) > Math.abs(dz);
     const slabLen = len / steps + 0.08;
-    const slabThick = stepH + 0.25; // a bit thicker than the rise for a solid look with no gap
+    const slabThick = stepH + 0.4; // extra thickness hangs DOWN, so the top is exactly at the step height
     for (let i = 0; i < steps; i++) {
       const t = (i + 0.5) / steps;
       const cx = x1 + dx * t;
       const cz = z1 + dz * t;
-      const centerY = y1 + rise * (i + 0.5) / steps;
+      // Anchor the slab TOP to the step elevation so each step is exactly stepH above the previous one
+      const topY = y1 + rise * (i + 1) / steps;
+      const centerY = topY - slabThick / 2;
       const sw = axisX ? slabLen : width;
       const sd = axisX ? width   : slabLen;
       addWallBox(cx, centerY, cz, sw, slabThick, sd, mat, false);
@@ -5141,22 +5143,35 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   bind('cheatHeavy',  'heavy');
   bind('cheatAimbot', 'aimbot');
 
-  function selectAllCheats() {
+  function toggleAllCheats() {
     const homeMap = { money:'cheatMoney', mag:'cheatMag', rate:'cheatRate', invuln:'cheatInvuln', skip:'cheatSkip', heavy:'cheatHeavy', aimbot:'cheatAimbot', wand:'cheatWand' };
+    const anyOff = Object.keys(homeMap).some(k => !cheats[k]);
+    const value = anyOff; // if any is off → turn all on; otherwise turn all off
     for (const key of Object.keys(homeMap)) {
-      cheats[key] = true;
+      cheats[key] = value;
       const cb = document.getElementById(homeMap[key]);
-      if (cb) cb.checked = true;
+      if (cb) cb.checked = value;
     }
-    // Mirror into pause checkboxes too
-    document.querySelectorAll('#pauseCheatsList input[data-cheat]').forEach(cb => { cb.checked = true; });
-    // Wand cheat side-effects
-    owned.wand = true;
+    document.querySelectorAll('#pauseCheatsList input[data-cheat]').forEach(cb => { cb.checked = value; });
+    if (value) {
+      owned.wand = true;
+    } else {
+      delete owned.wand;
+      if (currentGun === 'wand') equipGun('pistol');
+    }
+    // Relabel both Select/Deselect buttons to reflect the new state
+    const label = value ? 'Deselect All' : 'Select All';
+    const a = document.getElementById('cheatSelectAll');
+    const b = document.getElementById('pauseCheatSelectAll');
+    if (a) a.textContent = label;
+    if (b) b.textContent = label;
     updateHUD();
     updateHotbar();
     buildShop();
   }
-  document.getElementById('cheatSelectAll').addEventListener('click', selectAllCheats);
+  document.getElementById('cheatSelectAll').addEventListener('click', toggleAllCheats);
+  // Keep the reference name available to the pause-side handler below.
+  var selectAllCheats = toggleAllCheats;
   // Booster Wand — flipping the cheat also toggles ownership of the wand tool
   document.getElementById('cheatWand').addEventListener('change', (e) => {
     cheats.wand = e.target.checked;
