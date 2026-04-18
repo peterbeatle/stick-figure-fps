@@ -389,7 +389,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4:00 PM PST 4.18.26</div>
-  <div>v1.76</div>
+  <div>v1.77</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -1491,44 +1491,60 @@ function makeHPBar(width = 0.9, yOffset = 2.2) {
 // Evil smile texture used on every enemy head, scaled per-character so the ratio matches.
 // Text is rendered vertically (">" on top, ":" in the middle, ")" on the bottom) so the
 // smile reads like a face, not like a sideways logo.
-// Evil face: ">:)" stacked top-to-bottom, each glyph rotated 90° clockwise so they form a
-// proper vertical face (> → v as the brow/eye, : → two stacked dots for eyes, ) → ⌣ as the smile).
-const evilFaceTex = (() => {
+// Draw a face canvas: each glyph is rotated 90° CW and placed at an explicit y ratio, so
+// stacking top-to-bottom forms a vertical face (e.g. ">" → v-brow, ":" → two-dot eyes, ")" → ⌣ smile).
+function makeFaceCanvas(charPositions, fontSize = 88) {
   const c = document.createElement('canvas');
   c.width = 128; c.height = 256;
   const ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
   ctx.fillStyle = '#000';
-  ctx.font = '900 84px monospace';
+  ctx.font = `900 ${fontSize}px monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const chars = ['>', ':', ')'];
-  const rowH = c.height / (chars.length + 0.6);
-  for (let i = 0; i < chars.length; i++) {
-    const y = rowH * (i + 0.9);
+  for (const [ch, yRatio] of charPositions) {
     ctx.save();
-    ctx.translate(c.width / 2, y);
-    ctx.rotate(Math.PI / 2); // 90° clockwise on the canvas
-    ctx.fillText(chars[i], 0, 0);
+    ctx.translate(c.width / 2, yRatio * c.height);
+    ctx.rotate(Math.PI / 2);
+    ctx.fillText(ch, 0, 0);
     ctx.restore();
   }
   const t = new THREE.CanvasTexture(c);
   t.minFilter = THREE.LinearFilter;
   t.magFilter = THREE.LinearFilter;
   return t;
-})();
-function makeEvilFace(headRadius) {
-  // Taller than wide, mirroring the canvas proportions
+}
+// Evil (enemy) face: brow sits LOW/close to the eyes for an angry look; smile well below
+const evilFaceTex = makeFaceCanvas([
+  ['>', 0.42],  // brow — close to eyes
+  [':', 0.55],  // eyes
+  [')', 0.82],  // smile
+], 88);
+// Friendly (player) face: no brow — just eyes + smile
+const friendlyFaceTex = makeFaceCanvas([
+  [':', 0.42],
+  [')', 0.75],
+], 94);
+function makeFaceMesh(tex, headRadius, { frontZ = true } = {}) {
   const w = headRadius * 1.05;
   const h = headRadius * 1.7;
   const m = new THREE.Mesh(
     new THREE.PlaneGeometry(w, h),
-    new THREE.MeshBasicMaterial({ map: evilFaceTex, transparent: true, depthWrite: false, side: THREE.DoubleSide })
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide })
   );
-  // Three.js lookAt on a non-camera group makes +Z point at the target, so the enemy's
-  // FRONT is the +Z side of its local frame. Place the face on the +Z side of the head.
-  m.position.set(0, 0, headRadius + 0.01);
+  // Enemies use +Z as their forward (because lookAt on a non-camera makes +Z aim at target).
+  // Remote players are rotated manually (rotation.y = yaw), so their forward is -Z. `frontZ`
+  // lets each caller pick the correct face side.
+  const z = frontZ ? (headRadius + 0.01) : -(headRadius + 0.01);
+  m.position.set(0, 0, z);
+  if (!frontZ) m.rotation.y = Math.PI; // so the text reads correctly from the outside
   return m;
+}
+function makeEvilFace(headRadius) {
+  return makeFaceMesh(evilFaceTex, headRadius, { frontZ: true });
+}
+function makeFriendlyFace(headRadius) {
+  return makeFaceMesh(friendlyFaceTex, headRadius, { frontZ: false });
 }
 
 function makeStickFigure() {
@@ -3319,6 +3335,106 @@ function tryNukeInteract() {
     launchNuke();
   }
 }
+// Build a single missile styled after a cartoon nuclear bomb: black teardrop body with a
+// red tail cap, a yellow radiation disc on each side, and three tall black fins on top.
+function buildMissileMesh(scale = 1) {
+  const g = new THREE.Group();
+  const black = new THREE.MeshLambertMaterial({ color: 0x181818 });
+  const red   = new THREE.MeshLambertMaterial({ color: 0xcc1122, emissive: 0x330000, emissiveIntensity: 0.4 });
+  const yellow = new THREE.MeshBasicMaterial({ color: 0xffd21a });
+  const darkY = new THREE.MeshBasicMaterial({ color: 0x111111 });
+  // Body (a tapered cylinder gives the teardrop feel)
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.5, 7.5, 20), black);
+  body.position.y = 0.5;
+  g.add(body);
+  // Rounded nose (pointing downward: this is the bottom when falling)
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(1.5, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), red);
+  nose.rotation.x = Math.PI;
+  nose.position.y = -3.3;
+  g.add(nose);
+  // Top cap (where the fins sit)
+  const topCap = new THREE.Mesh(new THREE.SphereGeometry(1.9, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), black);
+  topCap.position.y = 4.2;
+  g.add(topCap);
+  // Radiation disc + trefoil on both sides
+  for (const side of [1, -1]) {
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.95, 24), yellow);
+    disc.position.set(side * 1.91, 0.4, 0);
+    disc.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2;
+    g.add(disc);
+    // Three stubby black wedges fanning out from the disc center — reads as trefoil at a glance
+    for (let i = 0; i < 3; i++) {
+      const wedge = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.7, 0.28), darkY);
+      const a = i * (Math.PI * 2 / 3);
+      wedge.position.set(side * 1.93, 0.4 + Math.cos(a) * 0.45, Math.sin(a) * 0.45);
+      wedge.rotation.x = a;
+      g.add(wedge);
+    }
+    // Center black dot
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(0.22, 16), darkY);
+    dot.position.set(side * 1.93, 0.4, 0);
+    dot.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2;
+    g.add(dot);
+  }
+  // Three tall fins on top
+  for (let f = 0; f < 3; f++) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.2, 1.8), black);
+    const a = (f / 3) * Math.PI * 2;
+    fin.position.set(Math.cos(a) * 1.4, 5.7, Math.sin(a) * 1.4);
+    fin.rotation.y = a;
+    g.add(fin);
+  }
+  g.scale.setScalar(scale);
+  return g;
+}
+function detonateAt(pos, sizeMul = 1) {
+  try { playNoise({ dur: 2.5, vol: 0.8, filterFreq: 250 }); } catch {}
+  try { playTone({ freq: 60, type: 'sine', dur: 3, vol: 0.55, slide: -40 }); } catch {}
+  const flash = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 18, 14),
+    new THREE.MeshBasicMaterial({ color: 0xffaa22, transparent: true, opacity: 0.95 })
+  );
+  flash.position.set(pos.x, pos.y + 3, pos.z);
+  scene.add(flash);
+  const stem = new THREE.Mesh(
+    new THREE.CylinderGeometry(3, 5, 18, 20),
+    new THREE.MeshBasicMaterial({ color: 0x2a2a2a, transparent: true, opacity: 0.88 })
+  );
+  stem.position.set(pos.x, pos.y + 9, pos.z);
+  scene.add(stem);
+  const cap = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 20, 16),
+    new THREE.MeshBasicMaterial({ color: 0x5a5a5a, transparent: true, opacity: 0.85 })
+  );
+  cap.position.set(pos.x, pos.y + 22, pos.z);
+  scene.add(cap);
+  // Scatter bursts near this detonation
+  const burstCount = Math.floor(50 * sizeMul);
+  for (let i = 0; i < burstCount; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = (3 + Math.random() * 24) * sizeMul;
+    const px = pos.x + Math.cos(a) * r, pz = pos.z + Math.sin(a) * r;
+    setTimeout(() => {
+      try { spawnPixelBurst(new THREE.Vector3(px, 1 + Math.random() * 5, pz), Math.random() < 0.5 ? 0xff7722 : 0x333333, 50); } catch {}
+    }, Math.random() * 2200);
+  }
+  const boomStart = performance.now();
+  const peakFlash = 90 * sizeMul;
+  const peakCap = 18 * sizeMul;
+  const iv = setInterval(() => {
+    const t = (performance.now() - boomStart) / 1000;
+    const s = Math.min(1, t / 3.8);
+    flash.scale.setScalar(1 + s * peakFlash);
+    flash.material.opacity = 0.95 * (1 - s);
+    stem.scale.set(1 + s * 2.5 * sizeMul, 1 + s * 2.0 * sizeMul, 1 + s * 2.5 * sizeMul);
+    cap.scale.setScalar(1 + s * peakCap);
+    cap.position.y = pos.y + 22 + s * 16 * sizeMul;
+    if (s >= 1) {
+      clearInterval(iv);
+      scene.remove(flash); scene.remove(stem); scene.remove(cap);
+    }
+  }, 30);
+}
 function launchNuke() {
   if (_nukeInProgress) return;
   _nukeInProgress = true;
@@ -3329,98 +3445,59 @@ function launchNuke() {
     banner.style.display = 'block';
     setTimeout(() => { banner.style.display = 'none'; }, 1000);
   }
-  // Extra loud siren burst on launch
+  // Launch siren burst
   try {
     for (let i = 0; i < 4; i++) {
       playTone({ freq: 900, type: 'sawtooth', dur: 0.24, vol: 0.3, delay: i * 0.3 });
       playTone({ freq: 520, type: 'sawtooth', dur: 0.24, vol: 0.3, delay: i * 0.3 + 0.15 });
     }
   } catch {}
-  // Giant missile — much bigger than before, falling from much higher
-  const missileMat = new THREE.MeshLambertMaterial({ color: 0x555555, emissive: 0x440000, emissiveIntensity: 0.55 });
-  const missile = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 11, 18), missileMat);
-  missile.add(body);
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(2.2, 4, 18), missileMat);
-  nose.position.y = 7.5;
-  missile.add(nose);
-  for (let f = 0; f < 4; f++) {
-    const fin = new THREE.Mesh(
-      new THREE.BoxGeometry(0.15, 2.2, 2.0),
-      new THREE.MeshLambertMaterial({ color: 0x333333 })
-    );
-    fin.position.y = -4.5;
-    fin.rotation.y = (f / 4) * Math.PI * 2;
-    fin.position.x = Math.cos(fin.rotation.y) * 2.3;
-    fin.position.z = Math.sin(fin.rotation.y) * 2.3;
-    missile.add(fin);
+  // Three bombs: one giant at center, two smaller flanking
+  const bombs = [
+    { offset: new THREE.Vector3(  0, 0,   0), scale: 1.6, startY: 320, duration: 3.8 },
+    { offset: new THREE.Vector3(-18, 0,  10), scale: 0.85, startY: 300, duration: 3.6 },
+    { offset: new THREE.Vector3( 18, 0, -10), scale: 0.85, startY: 300, duration: 3.6 },
+  ];
+  const activeBombs = [];
+  for (const bomb of bombs) {
+    const mesh = buildMissileMesh(bomb.scale);
+    mesh.position.set(bomb.offset.x, bomb.startY, bomb.offset.z);
+    scene.add(mesh);
+    activeBombs.push({ mesh, ...bomb, startT: performance.now(), detonated: false });
   }
-  const tail = new THREE.Mesh(
-    new THREE.ConeGeometry(3.2, 4, 12),
-    new THREE.MeshBasicMaterial({ color: 0xffaa22, transparent: true, opacity: 0.9 })
-  );
-  tail.position.y = -7.5; tail.rotation.x = Math.PI;
-  missile.add(tail);
-  missile.position.set(0, 280, 0);
-  scene.add(missile);
-  const fallDuration = 3.6;
-  const fallStart = performance.now();
+  // Fall loop — explode each bomb on first ground contact (checked vs its bottom edge)
+  const maxDuration = Math.max(...bombs.map(b => b.duration));
+  const globalStart = performance.now();
   const fallIv = setInterval(() => {
-    const t = (performance.now() - fallStart) / 1000;
-    const p = Math.min(1, t / fallDuration);
-    missile.position.y = 280 - p * 280;
-    if (p >= 1) clearInterval(fallIv);
-  }, 16);
-  setTimeout(() => {
-    scene.remove(missile);
-    // Host kills every enemy
-    if (!mpActive() || mpIsHost()) {
-      for (const e of [...enemies]) { try { killEnemy(e, null); } catch {} }
-    }
-    // MASSIVE explosion + mushroom cloud
-    try { playNoise({ dur: 2.5, vol: 0.8, filterFreq: 250 }); } catch {}
-    try { playTone({ freq: 60, type: 'sine', dur: 3, vol: 0.55, slide: -40 }); } catch {}
-    const flashMat = new THREE.MeshBasicMaterial({ color: 0xffaa22, transparent: true, opacity: 0.95 });
-    const smokeMat = new THREE.MeshBasicMaterial({ color: 0x2a2a2a, transparent: true, opacity: 0.88 });
-    const capMat   = new THREE.MeshBasicMaterial({ color: 0x5a5a5a, transparent: true, opacity: 0.85 });
-    const flash = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 14), flashMat);
-    flash.position.set(0, 3, 0);
-    scene.add(flash);
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(3, 5, 18, 20), smokeMat);
-    stem.position.set(0, 9, 0);
-    scene.add(stem);
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 16), capMat);
-    cap.position.set(0, 22, 0);
-    scene.add(cap);
-    // Dozens of pixel bursts scattered across the map
-    for (let i = 0; i < 70; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = 5 + Math.random() * 36;
-      const px = Math.cos(a) * r, pz = Math.sin(a) * r;
-      setTimeout(() => {
-        try { spawnPixelBurst(new THREE.Vector3(px, 1 + Math.random() * 5, pz), Math.random() < 0.5 ? 0xff7722 : 0x333333, 60); } catch {}
-      }, Math.random() * 2800);
-    }
-    const boomStart = performance.now();
-    const boomIv = setInterval(() => {
-      const t = (performance.now() - boomStart) / 1000;
-      const s = Math.min(1, t / 3.8);
-      flash.scale.setScalar(1 + s * 90);
-      flash.material.opacity = 0.95 * (1 - s);
-      stem.scale.set(1 + s * 2.5, 1 + s * 2.0, 1 + s * 2.5);
-      cap.scale.setScalar(1 + s * 18);
-      cap.position.y = 22 + s * 16;
-      if (s >= 1) {
-        clearInterval(boomIv);
-        scene.remove(flash); scene.remove(stem); scene.remove(cap);
+    for (const b of activeBombs) {
+      if (b.detonated) continue;
+      const t = (performance.now() - b.startT) / 1000;
+      const p = Math.min(1, t / b.duration);
+      b.mesh.position.y = b.startY - p * b.startY;
+      // bomb "height" after scaling — explode when its bottom touches ground
+      const bottomOffset = 4.8 * b.scale; // approx: body 3.3 below center + nose 1.5
+      if (b.mesh.position.y - bottomOffset <= 0) {
+        b.detonated = true;
+        const pos = new THREE.Vector3(b.offset.x, 0, b.offset.z);
+        scene.remove(b.mesh);
+        detonateAt(pos, b.scale);
       }
-    }, 30);
-    if (!mpActive() || mpIsHost()) {
-      setTimeout(() => { _nukeInProgress = false; try { endRound(); } catch {} }, 4600);
-    } else {
-      setTimeout(() => { _nukeInProgress = false; }, 4600);
     }
-  }, fallDuration * 1000);
+    const done = activeBombs.every(b => b.detonated);
+    const elapsed = (performance.now() - globalStart) / 1000;
+    if (done || elapsed > maxDuration + 0.5) {
+      clearInterval(fallIv);
+      // Host kills every enemy right when the big one lands
+      if (!mpActive() || mpIsHost()) {
+        for (const e of [...enemies]) { try { killEnemy(e, null); } catch {} }
+      }
+      if (!mpActive() || mpIsHost()) {
+        setTimeout(() => { _nukeInProgress = false; try { endRound(); } catch {} }, 4200);
+      } else {
+        setTimeout(() => { _nukeInProgress = false; }, 4200);
+      }
+    }
+  }, 16);
 }
 function triggerNuke() {
   if (_nukeInProgress) return;
@@ -5187,6 +5264,7 @@ function makeRemotePlayerMesh() {
   const blueHead = new THREE.MeshLambertMaterial({ color: 0x4aa3ff, emissive: 0x224466, emissiveIntensity: 0.4 });
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), blueHead);
   head.position.set(0, 1.75, 0);
+  head.add(makeFriendlyFace(0.25));
   g.add(head);
   const pts = [
     [0,1.5,0],[0,0.9,0],
