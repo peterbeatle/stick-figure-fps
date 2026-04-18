@@ -397,7 +397,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v1.92</div>
+  <div>v1.94</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -2910,6 +2910,11 @@ const hpPlusTex = (() => {
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#22cc44';
   ctx.fillRect(0, 0, 128, 128);
+  // Red border plus (drawn slightly larger than the white plus, serves as an outline)
+  ctx.fillStyle = '#cc1818';
+  ctx.fillRect(52, 20, 24, 88);
+  ctx.fillRect(20, 52, 88, 24);
+  // White plus on top
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(56, 24, 16, 80);
   ctx.fillRect(24, 56, 80, 16);
@@ -4848,6 +4853,10 @@ function updateHUD() {
     }
   } else {
     bossHud.classList.remove('active');
+    // Clear the stale inline `display:flex` that was set when bosses were alive,
+    // and strip any leftover bar children so nothing flashes at the start of the next round.
+    bossHud.style.display = 'none';
+    while (bossHud.firstChild) bossHud.removeChild(bossHud.firstChild);
   }
 }
 
