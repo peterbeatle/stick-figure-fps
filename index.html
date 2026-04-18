@@ -389,7 +389,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4:00 PM PST 4.18.26</div>
-  <div>v1.63</div>
+  <div>v1.66</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -1587,6 +1587,7 @@ function spawnBoss() {
   b.userData.magSize = b.userData.gunProfile.magSize;
   b.userData.reloadTime = b.userData.gunProfile.reloadTime;
   b.userData.magShots = 0;
+  swapEnemyGunSkin(b, gunKey, { isBoss: true });
   scene.add(b);
   enemies.push(b);
   document.getElementById('bossBanner').style.display = 'block';
@@ -1672,6 +1673,7 @@ function spawnStickKing() {
   k.userData.gunProfile = ENEMY_GUN_PROFILES.fingers;
   k.userData.magSize = ENEMY_GUN_PROFILES.fingers.magSize;
   k.userData.reloadTime = ENEMY_GUN_PROFILES.fingers.reloadTime;
+  swapEnemyGunSkin(k, 'fingers', { isKing: true });
   scene.add(k);
   enemies.push(k);
   const banner = document.getElementById('bossBanner');
@@ -1715,8 +1717,19 @@ function spawnEnemy() {
   e.userData.magSize = e.userData.gunProfile.magSize;
   e.userData.reloadTime = e.userData.gunProfile.reloadTime;
   e.userData.magShots = 0;
+  swapEnemyGunSkin(e, gunKey, {});
   scene.add(e);
   enemies.push(e);
+}
+
+// Replace the placeholder box gun on an enemy with a clone of the real weapon skin
+function swapEnemyGunSkin(e, gunKey, opts) {
+  const newGun = makeEnemyGunMesh(gunKey, opts);
+  if (!newGun) return;
+  const oldGun = e.userData.gunMesh;
+  if (oldGun && oldGun.parent) oldGun.parent.remove(oldGun);
+  e.add(newGun);
+  e.userData.gunMesh = newGun;
 }
 
 // ---------- Player ----------
@@ -1973,15 +1986,16 @@ function buildWeaponModel(key) {
       break;
     }
     case 'wand': {
-      // Booster Wand — dark wooden staff with a glowing purple crystal on the tip
+      // Booster Wand — dark wooden staff with a glowing crystal that recolors to show the selected booster
       const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.45, 10), weaponMat(0x4a2a0a, 0x220c00));
       shaft.rotation.x = Math.PI / 2;
       shaft.position.set(0, 0, -0.1);
       const tip = new THREE.Mesh(
-        new THREE.IcosahedronGeometry(0.06, 0),
+        new THREE.IcosahedronGeometry(0.08, 0),
         new THREE.MeshLambertMaterial({ color: 0xcc66ff, emissive: 0x8822cc, emissiveIntensity: 1.2, transparent: true, opacity: 0.95 })
       );
       tip.position.set(0, 0.02, -0.34);
+      tip.userData.isWandTip = true;
       g.add(shaft, tip);
       break;
     }
@@ -2040,6 +2054,8 @@ function setWeaponOutlines(on) {
   }
 }
 for (const key of Object.keys(GUNS)) weaponModels[key] = buildWeaponModel(key);
+// Initialize wand crystal tint to the currently-selected booster
+if (typeof applyWandTipVisual === 'function') applyWandTipVisual();
 
 // Back-compat aliases (some existing code references these)
 const gunMesh = weaponModels.pistol;
@@ -2115,12 +2131,45 @@ addEventListener('wheel', e => {
 }, { passive: false });
 let mouseDown = false;
 let wasShooting = false;
+// Booster Wand — RMB cycles through this list, LMB spawns the currently-selected one
+const WAND_TYPES = ['speed', 'shield', 'berserk', 'heal', 'freeze', 'tornado', 'jetpack'];
+const WAND_TIP_COLORS = {
+  speed:   { c: 0xffee33, e: 0xaa8800 },
+  shield:  { c: 0x44aaff, e: 0x1166cc },
+  berserk: { c: 0xff3322, e: 0xaa1100 },
+  heal:    { c: 0xff77bb, e: 0x882244 },
+  freeze:  { c: 0x99eeff, e: 0x336699 },
+  tornado: { c: 0xbbbbbb, e: 0x555555 },
+  jetpack: { c: 0xff8833, e: 0x884411 },
+};
+let wandType = 'speed';
+function applyWandTipVisual() {
+  const wm = weaponModels.wand;
+  if (!wm) return;
+  wm.traverse(obj => {
+    if (obj.userData && obj.userData.isWandTip) {
+      const col = WAND_TIP_COLORS[wandType] || WAND_TIP_COLORS.speed;
+      obj.material.color.setHex(col.c);
+      obj.material.emissive.setHex(col.e);
+    }
+  });
+}
+applyWandTipVisual();
 addEventListener('mousedown', e => {
   if (e.button === 0 && pointerLocked) mouseDown = true;
   if (e.button === 2) {
+    if (!pointerLocked) return;
+    // Booster Wand: RMB cycles the selected booster instead of ADS
+    if (currentGun === 'wand') {
+      const idx = WAND_TYPES.indexOf(wandType);
+      wandType = WAND_TYPES[(idx + 1) % WAND_TYPES.length];
+      applyWandTipVisual();
+      try { SFX.buy(); } catch {}
+      return;
+    }
     // right click: ADS only for scoped weapons
     const g = GUNS[currentGun];
-    if (g.scopeFov && pointerLocked) setADS(true);
+    if (g.scopeFov) setADS(true);
   }
 });
 addEventListener('mouseup',   e => {
@@ -2241,12 +2290,9 @@ function tryShoot(now) {
   if (now - lastShot > interval * 3) lastShot = now - interval * 3;
   lastShot += interval;
 
-  // Booster Wand: spawn the next booster directly in front of the camera, cycling types
+  // Booster Wand: spawn whichever booster is currently locked in (cycled with RMB)
   if (g.wand) {
-    const types = ['speed', 'shield', 'berserk', 'heal', 'freeze', 'tornado', 'jetpack'];
-    const idx = (tryShoot._wandIdx || 0) % types.length;
-    tryShoot._wandIdx = idx + 1;
-    const type = types[idx];
+    const type = wandType;
     // Find a spot ~3m in front at ground level so it's visible and reachable
     const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
     const px = camera.position.x + dir.x * 3;
@@ -3144,6 +3190,26 @@ function updateEnemies(dt) {
         const pullSpeed = 9;
         e.position.x += (dx / len) * pullSpeed * dt;
         e.position.z += (dz / len) * pullSpeed * dt;
+      }
+      // Immediately push the enemy back out of any solid wall it was sucked into
+      // (otherwise big structures like the neon ziggurat eat the whole round)
+      const r = e.userData.radius || 0.5;
+      const feetY = e.position.y;
+      const headY = feetY + 2.0;
+      for (const w of walls) {
+        if (w.isFloor) continue;
+        if (w.max.y <= feetY + 0.8) continue;
+        if (w.min.y >= headY) continue;
+        const cx = Math.max(w.min.x, Math.min(e.position.x, w.max.x));
+        const cz = Math.max(w.min.z, Math.min(e.position.z, w.max.z));
+        const ddx = e.position.x - cx, ddz = e.position.z - cz;
+        const d2 = ddx * ddx + ddz * ddz;
+        if (d2 < r * r) {
+          const d = Math.sqrt(d2) || 0.0001;
+          const push = r - d;
+          e.position.x += (ddx / d) * push;
+          e.position.z += (ddz / d) * push;
+        }
       }
     }
     if (frozen) {
@@ -4857,6 +4923,7 @@ function mpBroadcastWorld(dt) {
     r: +e.rotation.y.toFixed(2),
     hp: e.userData.hp, mh: e.userData.maxHp,
     b: e.userData.isBoss ? 1 : 0, k: e.userData.isStickKing ? 1 : 0, s: e.scale.x,
+    gk: e.userData.gunKey || '',
   }));
   const bulletSnap = enemyBullets.slice(0, 40).map((b) => ({
     x: +b.pos.x.toFixed(2), y: +b.pos.y.toFixed(2), z: +b.pos.z.toFixed(2),
@@ -4962,8 +5029,12 @@ function mpClientSync(dt) {
     if (!ghost) {
       ghost = es.k ? makeStickKing() : (es.b ? makeBoss() : makeStickFigure());
       ghost.scale.setScalar(es.s || 1);
+      if (es.gk) swapEnemyGunSkin(ghost, es.gk, { isBoss: !!es.b, isKing: !!es.k });
       scene.add(ghost);
       ghostEnemies.set(es.id, ghost);
+    } else if (es.gk && ghost.userData.gunKey !== es.gk) {
+      ghost.userData.gunKey = es.gk;
+      swapEnemyGunSkin(ghost, es.gk, { isBoss: !!es.b, isKing: !!es.k });
     }
     ghost.position.x += (es.x - ghost.position.x) * 0.35;
     ghost.position.y += (es.y - ghost.position.y) * 0.35;
@@ -5287,6 +5358,27 @@ function leaveLobby() {
 
 // Update the remote player's visual mesh using the pose state we read from Playroom each frame
 // Clone a weapon model for display on a remote player's body (no camera attach, no outlines visible)
+// Build a weapon mesh for an enemy by cloning the player's weapon model so skins actually match the round's gun.
+function makeEnemyGunMesh(gunKey, opts = {}) {
+  const { isBoss = false, isKing = false } = opts;
+  if (!weaponModels[gunKey]) return null;
+  const clone = weaponModels[gunKey].clone(true);
+  clone.visible = true;
+  // White outlines: match the player — only show on neon map
+  clone.traverse(obj => { if (obj.userData.isOutline) obj.visible = (currentMap === 'neon'); });
+  if (gunKey === 'fingers') {
+    // Akimbo model already has both hands built in — center it in front of the body
+    clone.position.set(0, 1.05, -0.15);
+  } else if (isKing) {
+    clone.position.set(0.45, 1.0, -0.2);
+  } else if (isBoss) {
+    clone.position.set(0.75, 1.0, -0.3);
+  } else {
+    clone.position.set(0.45, 1.0, -0.1);
+  }
+  return clone;
+}
+
 function makeRemoteGunMesh(gunKey) {
   if (!weaponModels[gunKey]) return null;
   const src = weaponModels[gunKey];
