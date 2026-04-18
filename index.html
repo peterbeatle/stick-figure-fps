@@ -383,7 +383,7 @@
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.52</div>
+<div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.53</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -1481,6 +1481,94 @@ function spawnBoss() {
   }, 2500);
 }
 
+function makeStickKing() {
+  const g = new THREE.Group();
+  const bm = new THREE.MeshLambertMaterial({ color: 0x4a1c8a, emissive: 0x2a0a4a, emissiveIntensity: 0.6 });
+  const headMat = new THREE.MeshLambertMaterial({ color: 0x6a2cba, emissive: 0x3a1080, emissiveIntensity: 0.7 });
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 18, 14), headMat);
+  head.position.set(0, 2.0, 0);
+  head.castShadow = true;
+  g.add(head);
+  // Crown — gold cone with a few spikes around the head
+  const crownMat = new THREE.MeshLambertMaterial({ color: 0xffcc22, emissive: 0x885500, emissiveIntensity: 0.7 });
+  const crownBand = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.18, 16), crownMat);
+  crownBand.position.set(0, 2.45, 0);
+  g.add(crownBand);
+  for (let i = 0; i < 5; i++) {
+    const ang = (i / 5) * Math.PI * 2;
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.32, 8), crownMat);
+    spike.position.set(Math.cos(ang) * 0.42, 2.7, Math.sin(ang) * 0.42);
+    g.add(spike);
+  }
+  // Thicker body bones
+  const pts = [
+    [0,1.7,0],[0,0.9,0],
+    [0,1.6,0],[-0.7,1.0,0],
+    [0,1.6,0],[ 0.7,1.0,0],
+    [0,0.9,0],[-0.35,0.0,0],
+    [0,0.9,0],[ 0.35,0.0,0],
+  ];
+  for (let i = 0; i < pts.length; i += 2) {
+    g.add(makeBone(pts[i], pts[i+1], bm, 0.13));
+  }
+  // Akimbo finger guns: dark slim boxes on each hand
+  const gunMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+  const gunL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.55), gunMat);
+  gunL.position.set(-0.7, 1.0, -0.3);
+  g.add(gunL);
+  const gunR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.55), gunMat);
+  gunR.position.set( 0.7, 1.0, -0.3);
+  g.add(gunR);
+  g.scale.setScalar(4.2); // 3x the regular boss (boss is 1.4)
+  g.userData.isBoss = true;
+  g.userData.isStickKing = true;
+  g.userData.gunMesh = gunR; // shoot from the right hand
+  g.userData.hp = 1500 + round * 200;
+  g.userData.maxHp = g.userData.hp;
+  g.userData.radius = 1.6;
+  g.userData.speed = 3.2;
+  g.userData.shootCd = 1.0;
+  g.userData.magShots = 0;
+  g.userData.magSize = 40;
+  g.userData.reloading = false;
+  g.userData.reloadTime = 2.4;
+  g.userData.reloadTimer = 0;
+  const hpBar = makeHPBar(2.0, 2.9);
+  g.add(hpBar.group);
+  g.userData.hpBar = hpBar;
+  hpBar.update(g.userData.hp, g.userData.maxHp);
+  return g;
+}
+function spawnStickKing() {
+  const k = makeStickKing();
+  let x, z, tries = 0;
+  do {
+    x = (Math.random() - 0.5) * (MAP_SIZE - 14);
+    z = (Math.random() - 0.5) * (MAP_SIZE - 14);
+    tries++;
+  } while (
+    tries < 30 &&
+    (Math.hypot(x - camera.position.x, z - camera.position.z) < 22 || insideSolidWall(x, z))
+  );
+  k.position.set(x, terrainHeight(x, z), z);
+  k.userData.gunKey = 'fingers';
+  k.userData.gunProfile = ENEMY_GUN_PROFILES.fingers;
+  k.userData.magSize = ENEMY_GUN_PROFILES.fingers.magSize;
+  k.userData.reloadTime = ENEMY_GUN_PROFILES.fingers.reloadTime;
+  scene.add(k);
+  enemies.push(k);
+  const banner = document.getElementById('bossBanner');
+  banner.textContent = 'STICK KING APPROACHES';
+  banner.style.display = 'block';
+  banner.style.background = 'rgba(90,0,140,0.92)';
+  clearTimeout(window._bossTimer);
+  window._bossTimer = setTimeout(() => {
+    banner.style.display = 'none';
+    banner.textContent = 'BOSS INCOMING';
+    banner.style.background = 'rgba(180,0,0,0.85)';
+  }, 2800);
+}
+
 function insideSolidWall(x, z) {
   for (const w of walls) {
     if (w.isFloor) continue;
@@ -1538,7 +1626,7 @@ const GUNS = {
   plasma:  { name: 'Plasma',   damage: 55,  fireRate: 7,   magSize: 24, reserve: 96,  reloadTime: 1.8, spread: 0.03,  cost: 7500, auto: true, plasma: true, blastRadius: 2, scopeFov: 58, hipSpread: 0.05, ironSights: true },
   assault: { name: 'AR-15',    damage: 28,  fireRate: 8,   magSize: 30, reserve: 120, reloadTime: 1.6, spread: 0.02,  cost: 2500, auto: true, scopeFov: 55, hipSpread: 0.04, ironSights: true },
   crossbow:{ name: 'Grenade Crossbow', damage: 90, fireRate: 0.9, magSize: 4, reserve: 16, reloadTime: 2.4, spread: 0.04, cost: 5500, auto: true, pellets: 3, grenadeArrow: true, blastRadius: 2.2, scopeFov: 55, hipSpread: 0.06, ironSights: true },
-  fingers: { name: 'Finger Guns', damage: 10, fireRate: 25, magSize: 300, reserve: 900, reloadTime: 3.2, spread: 0.035, cost: 10000, auto: true, dualWield: true, scopeFov: 62, hipSpread: 0.06, ironSights: true },
+  fingers: { name: 'Finger Guns', damage: 20, fireRate: 25, magSize: 300, reserve: 900, reloadTime: 3.2, spread: 0.035, cost: 10000, auto: true, dualWield: true, scopeFov: 62, hipSpread: 0.06, ironSights: true },
 };
 const owned = { knife: true, pistol: true };
 const SLOT_ORDER = ['knife', 'pistol', 'smg', 'shotgun', 'assault', 'rifle', 'sniper', 'lmg', 'bazooka', 'railgun', 'plasma', 'crossbow', 'fingers'];
@@ -2610,6 +2698,19 @@ function enemyGunForRound(r) {
 
 function updateEnemies(dt) {
   for (const e of enemies) {
+    // Stick King: bounding-jump movement layered on top of normal pathfinding.
+    if (e.userData.isStickKing) {
+      const ud = e.userData;
+      ud._jumpCd = (ud._jumpCd || 0) - dt;
+      ud._jumpOffsetY = ud._jumpOffsetY || 0;
+      ud._jumpVy = ud._jumpVy || 0;
+      if (ud._jumpOffsetY <= 0.001 && ud._jumpCd <= 0) {
+        ud._jumpVy = 11;
+        ud._jumpCd = 1.0 + Math.random() * 1.4;
+      }
+      ud._jumpVy -= 22 * dt;
+      ud._jumpOffsetY = Math.max(0, ud._jumpOffsetY + ud._jumpVy * dt);
+    }
     // reload progress animation
     if (e.userData.reloading) {
       e.userData.reloadTimer -= dt;
@@ -2718,8 +2819,9 @@ function updateEnemies(dt) {
       const cdBase = profile.cdMin + Math.random() * (profile.cdMax - profile.cdMin);
       e.userData.shootCd = e.userData.isBoss ? cdBase * 0.55 : cdBase;
       const accuracyBoost = Math.min(0.05, round * 0.005);
-      const spread = Math.max(0.01, profile.spread - accuracyBoost) + Math.min(0.05, dist * 0.002);
-      const dmgMul = e.userData.isBoss ? 1.8 : 1.0;
+      let spread = Math.max(0.01, profile.spread - accuracyBoost) + Math.min(0.05, dist * 0.002);
+      if (e.userData.isStickKing) spread *= 0.5; // 2x more accurate
+      const dmgMul = e.userData.isStickKing ? 3.6 : (e.userData.isBoss ? 1.8 : 1.0);
       const dmg = Math.max(1, Math.floor(profile.dmg * dmgMul));
       const gunWorld = new THREE.Vector3();
       e.userData.gunMesh.getWorldPosition(gunWorld);
@@ -2770,6 +2872,11 @@ function updateEnemies(dt) {
         e.userData.reloading = true;
         e.userData.reloadTimer = e.userData.reloadTime;
       }
+    }
+    // Apply Stick King's vertical jump offset on top of any Y set by pathfinding above.
+    if (e.userData.isStickKing) {
+      const base = terrainHeight(e.position.x, e.position.z);
+      e.position.y = base + (e.userData._jumpOffsetY || 0);
     }
   }
 }
@@ -3115,6 +3222,7 @@ function openShop(title, subtitle) {
 }
 
 let bossSpawned = false;
+let stickKingSpawned = false;
 // Reward math: with 250/kill and 1000+200×round per boss, cumulative earnings
 // after clearing round 9 = ~$50k, enough to buy every gun ($46.5k total) and
 // head into the neon map (round 10) with Finger Guns ready.
@@ -3134,7 +3242,7 @@ function mapForRound(r) {
 function startRound() {
   overlay.classList.add('hidden');
   roundActive = true;
-  bossSpawned = false;
+  bossSpawned = false; stickKingSpawned = false;
   // Reset our ready state for the next between-round prompt
   if (mpActive()) { try { Playroom.myPlayer().setState('ready', false, true); } catch {} }
   // Reset pickups from the previous round — ammo + HP boxes shouldn't persist
@@ -3255,7 +3363,7 @@ function retryRound() {
   killCounter = 0;
   killStreak = 0;
   if (boostActive) endBoost();
-  bossSpawned = false;
+  bossSpawned = false; stickKingSpawned = false;
   gameOver = false;
   document.getElementById('bossBanner').style.display = 'none';
   document.getElementById('bossHud').style.display = 'none';
@@ -3297,7 +3405,7 @@ function restartGame() {
   reserve = GUNS.pistol.reserve;
   round = 1;
   killCounter = 0;
-  bossSpawned = false;
+  bossSpawned = false; stickKingSpawned = false;
   gameOver = false;
   survivorMode = false;
   document.getElementById('winScreen').style.display = 'none';
@@ -3452,7 +3560,7 @@ function updateHUD() {
       const unit = document.createElement('div');
       unit.className = 'bossBarUnit';
       unit.innerHTML = `<div class="bossBarLabel" style="text-align:center;font-weight:bold;letter-spacing:2px;margin-bottom:2px;text-shadow:0 0 4px #000">BOSS</div>
-        <div style="height:18px;background:#330000;border:2px solid #000;border-radius:4px;overflow:hidden">
+        <div class="bossBarTrack" style="height:18px;background:#330000;border:2px solid #000;border-radius:4px;overflow:hidden">
           <div class="bossBarFill" style="height:100%;background:#ff2222;width:100%;transition:width 0.15s"></div>
         </div>`;
       bossHud.appendChild(unit);
@@ -3462,6 +3570,13 @@ function updateHUD() {
       const b = bosses[i];
       const unit = bossHud.children[i];
       const fill = unit.querySelector('.bossBarFill');
+      const label = unit.querySelector('.bossBarLabel');
+      const track = unit.querySelector('.bossBarTrack');
+      const isKing = !!b.userData.isStickKing;
+      label.textContent = isKing ? 'STICK KING' : 'BOSS';
+      label.style.color = isKing ? '#cc88ff' : '#ff8080';
+      fill.style.background = isKing ? '#a64cff' : '#ff2222';
+      track.style.background = isKing ? '#1a0033' : '#330000';
       const pct = Math.max(0, (b.userData.hp / b.userData.maxHp) * 100);
       fill.style.width = pct + '%';
     }
@@ -3522,6 +3637,9 @@ function loop() {
         bossSpawned = true;
         const count = bossCountForRound(round);
         for (let i = 0; i < count; i++) spawnBoss();
+      } else if (round === 12 && !stickKingSpawned) {
+        stickKingSpawned = true;
+        spawnStickKing();
       }
       else endRound();
     }
@@ -3696,7 +3814,8 @@ function goHome() {
   mag = GUNS.pistol.magSize; reserve = GUNS.pistol.reserve;
   round = 1; killCounter = 0; killStreak = 0;
   if (boostActive) endBoost();
-  bossSpawned = false; gameOver = false; roundActive = false; survivorMode = false;
+  bossSpawned = false; stickKingSpawned = false;
+  gameOver = false; roundActive = false; survivorMode = false;
   document.getElementById('winScreen').style.display = 'none';
   currentMap = 'arena'; buildMap('arena');
   // show initial overlay
@@ -3733,7 +3852,7 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   killCounter = 0;
   killStreak = 0;
   if (boostActive) endBoost();
-  bossSpawned = false;
+  bossSpawned = false; stickKingSpawned = false;
   roundActive = false;
   paused = false;
   pauseMenu.style.display = 'none';
@@ -4186,7 +4305,7 @@ function mpBroadcastWorld(dt) {
     x: +e.position.x.toFixed(2), y: +e.position.y.toFixed(2), z: +e.position.z.toFixed(2),
     r: +e.rotation.y.toFixed(2),
     hp: e.userData.hp, mh: e.userData.maxHp,
-    b: e.userData.isBoss ? 1 : 0, s: e.scale.x,
+    b: e.userData.isBoss ? 1 : 0, k: e.userData.isStickKing ? 1 : 0, s: e.scale.x,
   }));
   const bulletSnap = enemyBullets.slice(0, 40).map((b) => ({
     x: +b.pos.x.toFixed(2), y: +b.pos.y.toFixed(2), z: +b.pos.z.toFixed(2),
@@ -4285,7 +4404,7 @@ function mpClientSync(dt) {
     seen.add(es.id);
     let ghost = ghostEnemies.get(es.id);
     if (!ghost) {
-      ghost = es.b ? makeBoss() : makeStickFigure();
+      ghost = es.k ? makeStickKing() : (es.b ? makeBoss() : makeStickFigure());
       ghost.scale.setScalar(es.s || 1);
       scene.add(ghost);
       ghostEnemies.set(es.id, ghost);
