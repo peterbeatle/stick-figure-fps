@@ -363,7 +363,7 @@
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.50</div>
+<div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.51</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -421,13 +421,17 @@
       <button type="button" id="cheatsSubmit" style="background:#4caf50;color:white;border:0;border-radius:3px;padding:6px 12px;cursor:pointer;font-family:monospace">Unlock</button>
       <span id="cheatsErr" style="color:#ff5050;margin-left:8px;display:none">Wrong passcode</span>
     </div>
-    <div id="cheatsList" style="display:none;margin-top:10px;background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:10px;max-width:480px;margin-left:auto;margin-right:auto;text-align:left;font-size:13px">
+    <div id="cheatsList" style="display:none;margin-top:10px;background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:10px 14px;width:min(900px, 92vw);margin-left:auto;margin-right:auto;text-align:left;font-size:13px">
       <div style="font-weight:bold;margin-bottom:6px;color:#ffcc33">Cheats unlocked</div>
-      <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatMoney"> Unlimited money</label>
-      <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatMag"> Unlimited magazine (no reload)</label>
-      <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatRate"> Extreme fire rate</label>
-      <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatInvuln"> Invincibility</label>
-      <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatSkip"> Round skip (pause menu)</label>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px 18px">
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatMoney"> Unlimited money</label>
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatMag"> Unlimited magazine (no reload)</label>
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatRate"> Extreme fire rate</label>
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatInvuln"> Invincibility</label>
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatSkip"> Round skip (pause menu)</label>
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatHeavy"> Heavy Damage (5× weapon damage)</label>
+        <label style="display:block;cursor:pointer;padding:3px 0"><input type="checkbox" id="cheatAimbot"> Aimbot (head-lock while ADS)</label>
+      </div>
     </div>
   </div>
   <div id="shopMoney" style="margin-top:12px;font-size:16px">Money: <span style="color:#4caf50;font-weight:bold">$<span id="shopMoneyAmt">0</span></span></div>
@@ -1809,7 +1813,7 @@ camera.add(flash);
 flash.position.set(0.25, -0.15, -0.8);
 
 // Cheats
-const cheats = { money: false, mag: false, rate: false, invuln: false, skip: false };
+const cheats = { money: false, mag: false, rate: false, invuln: false, skip: false, heavy: false, aimbot: false };
 const CHEAT_CODE = '1211999';
 let cheatsUnlocked = false;
 // Sniper aim-down-sights state
@@ -1985,7 +1989,7 @@ function tryShoot(now) {
   if (spectating) return;
   if (reloading && !cheats.mag || !player.alive) return;
   const g = GUNS[currentGun];
-  const dmgMul = boostActive ? 2 : 1;
+  const dmgMul = (boostActive ? 2 : 1) * (cheats.heavy ? 5 : 1);
   const adsAccuracy = (adsActive && g.scopeFov) ? 0.5 : 1;
   let rateMul = 1;
   if (boostActive) rateMul *= 2;
@@ -2865,6 +2869,30 @@ function tryJump() {
 
 function updatePlayer(dt) {
   if (!player.alive || spectating) return;
+  // Aimbot cheat: while ADS, snap aim to the nearest alive enemy's head hitbox if visible.
+  if (cheats.aimbot && adsActive) {
+    const targets = mpIsClient() ? Array.from(ghostEnemies.values()) : enemies;
+    let best = null, bestD = Infinity;
+    const eye = camera.position;
+    for (const e of targets) {
+      if (!e || (e.userData && e.userData.dead)) continue;
+      const s = e.scale.x || 1;
+      const headPos = e.position.clone().add(new THREE.Vector3(0, 1.75 * s, 0));
+      const dist = eye.distanceTo(headPos);
+      if (dist > 80) continue;
+      // wall LOS check
+      const dir = headPos.clone().sub(eye).normalize();
+      raycaster.set(eye, dir);
+      const wh = raycaster.intersectObjects(wallMeshes);
+      if (wh.length && wh[0].distance < dist - 0.1) continue;
+      if (dist < bestD) { bestD = dist; best = headPos; }
+    }
+    if (best) {
+      const dx = best.x - eye.x, dy = best.y - eye.y, dz = best.z - eye.z;
+      player.yaw   = Math.atan2(-dx, -dz);
+      player.pitch = Math.atan2(dy, Math.sqrt(dx*dx + dz*dz));
+    }
+  }
   camera.rotation.order = 'YXZ';
   camera.rotation.y = player.yaw;
   camera.rotation.x = player.pitch;
@@ -3735,6 +3763,8 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   bind('cheatRate',   'rate');
   bind('cheatInvuln', 'invuln');
   bind('cheatSkip',   'skip');
+  bind('cheatHeavy',  'heavy');
+  bind('cheatAimbot', 'aimbot');
 })();
 
 // sensitivity sliders
