@@ -225,13 +225,23 @@
   #streak .tube .txt.base { color: #5a4a28; }
   #streak .tube .txt.over { color: #1a0e00; text-shadow: 0 0 4px rgba(255,255,200,0.7);
     clip-path: inset(0 100% 0 0); transition: clip-path 0.18s ease-out; }
-  #hpbar {
-    width: 140px; height: 14px; background: #082010; border: 1px solid #000;
-    border-radius: 3px; overflow: hidden; margin-top: 2px;
-  }
+  #hpbar { display: none; }
   #hpbar > div { height: 100%; background: #33dd55; width: 100%; transition: width 0.15s; }
+  #hpBottom {
+    position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%);
+    width: 66vw; max-width: 1200px; z-index: 5;
+    background: rgba(0,0,0,0.55); padding: 4px 10px; border-radius: 6px;
+    font-family: monospace; color: #eee; font-size: 13px;
+  }
+  #hpBottom .hpRow { display: flex; align-items: center; gap: 10px; }
+  #hpBottom .hpLbl { font-weight: bold; min-width: 70px; }
+  #hpBottom .hpTrack {
+    flex: 1; height: 14px; background: #082010; border: 1px solid #000;
+    border-radius: 3px; overflow: hidden;
+  }
+  #hpBottom .hpTrack > div { height: 100%; background: #33dd55; width: 100%; transition: width 0.15s; }
   #hotbar {
-    position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+    position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
     display: flex; gap: 6px; z-index: 5;
   }
   .slot {
@@ -353,7 +363,7 @@
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.49</div>
+<div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.50</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -361,12 +371,13 @@
 <div id="roundClearAnim"><div class="rcBg"></div><div class="rcText">Round 1 Cleared!</div><div class="rcSub">next wave incoming…</div></div>
 <div id="lostAnim"><div class="lostText">YOU LOST</div></div>
 <div id="hud">
-  HP: <span id="hp">100</span> / 100
+  <span id="hp" style="display:none">100</span>
   <div id="hpbar"><div></div></div>
   Money: $<span id="money">0</span><br>
   Gun: <span id="gunName">Pistol</span><br>
   Ammo: <span id="ammo">12</span> / <span id="reserve">48</span>
 </div>
+<div id="hpBottom"><div class="hpRow"><div class="hpLbl">HP <span id="hpBottomNum">100</span>/100</div><div class="hpTrack"><div id="hpBottomFill"></div></div></div></div>
 <div id="hotbar"></div>
 <div id="scope"></div>
 <div id="scopeLines"></div>
@@ -2333,8 +2344,17 @@ function explode(pos, radius, damage, color = 0xff6600, selfDamage = true, shoot
     }
   }
   if (selfDamage) {
-    const dp = camera.position.distanceTo(pos);
-    if (dp < radius) damagePlayer(Math.max(1, Math.floor((1 - dp / radius) * Math.min(40, damage))));
+    // Splash damage to every alive player (local + remote in MP), so the host's AoE
+    // doesn't silently skip the client.
+    const players = (typeof getAlivePlayers === 'function') ? getAlivePlayers() : [{ pos: camera.position, isLocal: true }];
+    for (const pp of players) {
+      const dp = pp.pos.distanceTo(pos);
+      if (dp < radius) {
+        const amt = Math.max(1, Math.floor((1 - dp / radius) * Math.min(40, damage)));
+        if (pp.isLocal) damagePlayer(amt);
+        else queueRemoteDamage(pp.playerId, amt);
+      }
+    }
   }
   SFX.damage();
 }
@@ -3344,6 +3364,8 @@ document.getElementById('retryBtn').addEventListener('click', retryRound);
 const HUD = {
   hp: document.getElementById('hp'),
   hpFill: document.getElementById('hpbar').firstElementChild,
+  hpBottomNum: document.getElementById('hpBottomNum'),
+  hpBottomFill: document.getElementById('hpBottomFill'),
   money: document.getElementById('money'),
   gunName: document.getElementById('gunName'),
   ammo: document.getElementById('ammo'),
@@ -3357,6 +3379,8 @@ const HUD = {
 function updateHUD() {
   HUD.hp.textContent = player.hp;
   HUD.hpFill.style.width = Math.max(0, Math.min(100, player.hp)) + '%';
+  if (HUD.hpBottomNum) HUD.hpBottomNum.textContent = Math.max(0, Math.floor(player.hp));
+  if (HUD.hpBottomFill) HUD.hpBottomFill.style.width = Math.max(0, Math.min(100, player.hp)) + '%';
   const moneyStr = cheats.money ? '∞' : player.money;
   HUD.money.textContent = moneyStr;
   const shopMoneyAmt = document.getElementById('shopMoneyAmt');
@@ -4438,7 +4462,7 @@ function updateRemotePlayer() {
   const pose = p.getState('pose');
   if (!pose) return;
   remotePlayer.mesh.position.set(pose.x, pose.y - 1.7, pose.z);
-  remotePlayer.mesh.rotation.y = pose.yaw + Math.PI;
+  remotePlayer.mesh.rotation.y = pose.yaw;
   const hp = p.getState('hp');
   const fg = remotePlayer.mesh.userData.hpBarFg;
   if (fg && typeof hp === 'number') {
