@@ -81,6 +81,92 @@
   #hitmarker::after  { left: 0; top: 10px; width: 22px; height: 2px; transform: rotate(-45deg); }
   #hitmarker.kill::before, #hitmarker.kill::after { background: #ff3030; }
   #hitmarker.head::before, #hitmarker.head::after { background: #ffcc00; width: 26px; height: 3px; }
+  /* Gear icon in the top-right of the overlay */
+  #settingsGear {
+    position: absolute; top: 14px; right: 20px;
+    width: 46px; height: 46px; background: rgba(0,0,0,0.55);
+    border: 1px solid #666; border-radius: 50%;
+    color: #eee; font-size: 22px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-family: monospace; z-index: 11; user-select: none;
+  }
+  #settingsGear:hover { background: rgba(90,90,90,0.7); border-color: #aaa; }
+
+  /* Main Start Round button — large, central, high-contrast */
+  #startBtn.big {
+    font-size: 22px !important;
+    padding: 18px 52px !important;
+    min-width: 300px;
+    box-shadow: 0 4px 18px rgba(76,175,80,0.35);
+  }
+
+  /* Home icon (small, shown only on round-cleared screens) */
+  #shopHomeBtn.cornerIcon {
+    background: rgba(0,0,0,0.55);
+    border: 1px solid #666; border-radius: 50%;
+    width: 40px; height: 40px;
+    padding: 0; font-size: 18px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* Retro/80s "Round X Cleared" animation */
+  #roundClearAnim {
+    position: fixed; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    background: radial-gradient(circle at center, rgba(20,0,40,0.55) 0%, rgba(0,0,0,0.8) 100%);
+    z-index: 18; pointer-events: none;
+    font-family: 'Arial Black', 'Impact', monospace;
+  }
+  #roundClearAnim.on { display: flex; }
+  #roundClearAnim .rcBg {
+    position: absolute; inset: 0;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,0,255,0.04) 0px, rgba(255,0,255,0.04) 2px, transparent 2px, transparent 4px),
+      repeating-linear-gradient(90deg, rgba(0,255,255,0.04) 0px, rgba(0,255,255,0.04) 2px, transparent 2px, transparent 4px);
+    animation: rcScan 0.5s linear infinite;
+  }
+  @keyframes rcScan { 0% { transform: translateY(0); } 100% { transform: translateY(4px); } }
+  #roundClearAnim .rcText {
+    font-size: 84px; font-weight: 900; letter-spacing: 8px;
+    color: #fff;
+    text-shadow:
+      -2px 0 #ff00ff, 2px 0 #00ffff,
+      0 0 24px #ff00ff, 0 0 48px #ff00ff,
+      0 0 80px #00ffff;
+    animation: rcTextIn 3s cubic-bezier(.3,1.5,.5,1) forwards;
+    transform: scale(0);
+    opacity: 0;
+  }
+  @keyframes rcTextIn {
+    0%   { transform: scale(0) rotate(-5deg); opacity: 0; filter: blur(20px); }
+    15%  { transform: scale(1.35) rotate(2deg); opacity: 1; filter: blur(0); }
+    25%  { transform: scale(1) rotate(0deg); }
+    80%  { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.4) translateY(-40px); opacity: 0; filter: blur(6px); }
+  }
+  #roundClearAnim .rcSub {
+    position: absolute; top: 62%; left: 50%; transform: translateX(-50%);
+    color: #ff4bd3; font-size: 18px; font-family: monospace; letter-spacing: 4px;
+    animation: rcSubIn 3s ease-out forwards; opacity: 0;
+  }
+  @keyframes rcSubIn {
+    0%, 20% { opacity: 0; }
+    35%, 80% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* Mode toggles: home vs round-end */
+  #overlay[data-mode="home"] #shopHomeBtn { display: none !important; }
+  #overlay[data-mode="roundend"] #mpPanel { display: none !important; }
+  #overlay[data-mode="roundend"] #cheatsBlock { display: none !important; }
+  /* Boss HUD layout: multiple bars in a row */
+  #bossHud { width: auto; max-width: 80vw; display: none; }
+  #bossHud.active { display: flex; gap: 8px; justify-content: center; }
+  .bossBarUnit {
+    min-width: 120px; flex: 1 1 140px; max-width: 220px;
+  }
+  .bossBarUnit .bossBarLabel { font-size: 11px; color: #ff8080; }
+
   /* GPU-friendly vignette: pre-baked radial gradient, only opacity animates */
   #boost {
     position: fixed; inset: 0; pointer-events: none; z-index: 4;
@@ -226,16 +312,12 @@
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.36</div>
+<div id="versionTag" style="position:fixed;top:10px;left:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none">v1.37</div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
-<div id="bossHud" style="position:fixed;top:100px;left:50%;transform:translateX(-50%);width:380px;z-index:6;display:none;">
-  <div style="text-align:center;color:#ff6666;font-weight:bold;letter-spacing:2px;margin-bottom:3px;text-shadow:0 0 4px #000">BOSS</div>
-  <div style="height:18px;background:#330000;border:2px solid #000;border-radius:4px;overflow:hidden">
-    <div id="bossHudFill" style="height:100%;background:#ff2222;width:100%;transition:width 0.15s"></div>
-  </div>
-</div>
+<div id="bossHud" style="position:fixed;top:100px;left:50%;transform:translateX(-50%);z-index:6;"></div>
+<div id="roundClearAnim"><div class="rcBg"></div><div class="rcText">Round 1 Cleared!</div><div class="rcSub">next wave incoming…</div></div>
 <div id="hud">
   HP: <span id="hp">100</span> / 100
   <div id="hpbar"><div></div></div>
@@ -246,14 +328,16 @@
 <div id="hotbar"></div>
 <div id="scope"></div>
 <div id="scopeLines"></div>
-<div id="overlay">
+<div id="overlay" data-mode="home">
+  <button type="button" id="settingsGear" title="Settings">⚙</button>
   <h1 id="title">Stick Figure FPS</h1>
   <p id="subtitle" style="margin:0 0 8px">Click to lock the mouse and start playing.</p>
-  <div id="topActions" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:10px">
-    <button class="primary" id="startBtn" style="font-size:17px;padding:12px 28px">Start Round</button>
+  <div id="topActions" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:4px 0 14px">
+    <button class="primary big" id="startBtn">Start Round</button>
     <button class="primary" id="retryBtn" style="display:none"></button>
-    <button type="button" id="shopSettingsBtn" style="background:#555;color:#eee;border:1px solid #666;border-radius:4px;padding:10px 18px;cursor:pointer;font-family:monospace">Settings</button>
-    <button type="button" id="shopHomeBtn" style="background:#555;color:#eee;border:1px solid #666;border-radius:4px;padding:10px 18px;cursor:pointer;font-family:monospace">Home</button>
+    <!-- shopSettingsBtn kept hidden for legacy callers; gear icon supersedes it -->
+    <button type="button" id="shopSettingsBtn" style="display:none"></button>
+    <button type="button" id="shopHomeBtn" class="cornerIcon" title="Home">🏠</button>
   </div>
   <details id="controlsPanel" style="max-width:560px;margin:8px auto;text-align:left;font-size:13px;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:10px 16px">
     <summary style="cursor:pointer;font-weight:bold;color:#ffcc33;user-select:none;padding:4px 0">Show Controls</summary>
@@ -2370,6 +2454,8 @@ function killEnemy(e, shooterId = null) {
     else spawnHPBox(e.position, 25);
     killCounter++;
   }
+  // Pixelate-into-thin-air effect on death
+  spawnPixelBurst(e.position, e.userData.isBoss ? 0xaa2222 : 0x333333, e.userData.isBoss ? 90 : 24);
   scene.remove(e);
   const i = enemies.indexOf(e);
   if (i >= 0) enemies.splice(i, 1);
@@ -2999,16 +3085,19 @@ function endRound() {
   roundActive = false;
   round++;
   player.hp = Math.min(100, player.hp + 30);
-  // Victory after clearing round 12 (unless already in Survivor Mode)
   if (round === 13 && !survivorMode) {
     showWinScreen();
     return;
   }
-  openShop(`Round ${round - 1} cleared!`, `Next: Round ${round}. Spend your money wisely.`);
-  startBtn.textContent = `Start Round ${round}`;
-  startBtn.dataset.mode = 'start';
-  document.getElementById('retryBtn').style.display = 'none';
-  updateHUD();
+  const cleared = round - 1;
+  showRoundClearAnim(cleared, () => {
+    openShop(`Round ${cleared} cleared!`, `Next: Round ${round}. Spend your money wisely.`);
+    overlay.setAttribute('data-mode', 'roundend');
+    startBtn.textContent = `Start Round ${round}`;
+    startBtn.dataset.mode = 'start';
+    document.getElementById('retryBtn').style.display = 'none';
+    updateHUD();
+  });
 }
 
 function endGame() {
@@ -3230,13 +3319,30 @@ function updateHUD() {
   // On the client, the local `enemies` array is empty; use the ghost copies.
   const enemySrc = mpIsClient() ? Array.from(ghostEnemies.values()) : enemies;
   HUD.remaining.textContent = enemySrc.length;
-  let bossHp = 0, bossMax = 0;
-  for (const e of enemySrc) if (e.userData.isBoss) { bossHp += e.userData.hp; bossMax += e.userData.maxHp; }
-  if (bossMax > 0) {
-    HUD.bossHud.style.display = 'block';
-    HUD.bossHudFill.style.width = Math.max(0, (bossHp / bossMax) * 100) + '%';
+  const bosses = enemySrc.filter(e => e.userData.isBoss);
+  const bossHud = HUD.bossHud;
+  if (bosses.length > 0) {
+    bossHud.classList.add('active');
+    // Rebuild child bars to match count
+    while (bossHud.children.length < bosses.length) {
+      const unit = document.createElement('div');
+      unit.className = 'bossBarUnit';
+      unit.innerHTML = `<div class="bossBarLabel" style="text-align:center;font-weight:bold;letter-spacing:2px;margin-bottom:2px;text-shadow:0 0 4px #000">BOSS</div>
+        <div style="height:18px;background:#330000;border:2px solid #000;border-radius:4px;overflow:hidden">
+          <div class="bossBarFill" style="height:100%;background:#ff2222;width:100%;transition:width 0.15s"></div>
+        </div>`;
+      bossHud.appendChild(unit);
+    }
+    while (bossHud.children.length > bosses.length) bossHud.removeChild(bossHud.lastChild);
+    for (let i = 0; i < bosses.length; i++) {
+      const b = bosses[i];
+      const unit = bossHud.children[i];
+      const fill = unit.querySelector('.bossBarFill');
+      const pct = Math.max(0, (b.userData.hp / b.userData.maxHp) * 100);
+      fill.style.width = pct + '%';
+    }
   } else {
-    HUD.bossHud.style.display = 'none';
+    bossHud.classList.remove('active');
   }
 }
 
@@ -3271,6 +3377,7 @@ function loop() {
     // Rockets/plasma/arrows run on both sides: host's do real damage; client's are visual-only
     // because the client's enemies array is empty, so collision finds nothing to hurt.
     safeCall(updateRockets, dt);
+    safeCall(updatePixelParticles, dt);
     if (mouseDown) {
       const g = GUNS[currentGun];
       const mul = (boostActive ? 2 : 1) * (cheats.rate ? 3 : 1);
@@ -3472,8 +3579,10 @@ function goHome() {
   titleEl.textContent = 'Stick Figure FPS';
   subtitleEl.textContent = 'WASD move • Mouse look • LMB shoot • RMB scope (sniper) • R reload • Space jump (x2) • Shift sprint • Ctrl crouch • 1-8 / scroll switch guns • P pause';
   overlay.classList.remove('hidden');
+  overlay.setAttribute('data-mode', 'home');
   document.getElementById('retryBtn').style.display = 'none';
   document.getElementById('bossBanner').style.display = 'none';
+  document.getElementById('bossHud').classList.remove('active');
   document.getElementById('bossHud').style.display = 'none';
   startBtn.textContent = 'Start Round';
   startBtn.dataset.mode = 'start';
@@ -3640,6 +3749,7 @@ updateHotbar();
 // Settings button handlers
 document.getElementById('pauseSettingsBtn').addEventListener('click', openSettings);
 document.getElementById('shopSettingsBtn').addEventListener('click', openSettings);
+document.getElementById('settingsGear').addEventListener('click', openSettings);
 document.getElementById('settingsCloseBtn').addEventListener('click', closeSettings);
 document.getElementById('shopHomeBtn').addEventListener('click', goHome);
 
@@ -3736,6 +3846,64 @@ function ensurePeerLib() {
     return false;
   }
   return true;
+}
+
+// ---------- Visual FX: round-clear transition + boss pixelate ----------
+function showRoundClearAnim(n, cb) {
+  const el = document.getElementById('roundClearAnim');
+  const txt = el.querySelector('.rcText');
+  txt.textContent = `Round ${n} Cleared!`;
+  el.classList.remove('on');
+  // Restart CSS animation by re-adding the class next frame
+  requestAnimationFrame(() => {
+    el.classList.add('on');
+    // Reset animation by reflowing the child
+    txt.style.animation = 'none'; void txt.offsetWidth; txt.style.animation = '';
+  });
+  setTimeout(() => { el.classList.remove('on'); if (cb) cb(); }, 3000);
+}
+
+const pixelParticles = []; // { mesh, vel, life, maxLife }
+const _pixelGeom = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+function spawnPixelBurst(pos, color = 0xaa0000, count = 60) {
+  for (let i = 0; i < count; i++) {
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 });
+    const cube = new THREE.Mesh(_pixelGeom, mat);
+    cube.position.set(
+      pos.x + (Math.random() - 0.5) * 1.4,
+      pos.y + Math.random() * 2.2,
+      pos.z + (Math.random() - 0.5) * 1.4,
+    );
+    const v = new THREE.Vector3(
+      (Math.random() - 0.5) * 5,
+      Math.random() * 5 + 1,
+      (Math.random() - 0.5) * 5,
+    );
+    const spin = new THREE.Vector3(
+      (Math.random() - 0.5) * 6,
+      (Math.random() - 0.5) * 6,
+      (Math.random() - 0.5) * 6,
+    );
+    scene.add(cube);
+    pixelParticles.push({ mesh: cube, vel: v, spin, life: 1.2, maxLife: 1.2 });
+  }
+}
+function updatePixelParticles(dt) {
+  for (let i = pixelParticles.length - 1; i >= 0; i--) {
+    const p = pixelParticles[i];
+    p.life -= dt;
+    p.mesh.position.addScaledVector(p.vel, dt);
+    p.vel.y -= 10 * dt;
+    p.mesh.rotation.x += p.spin.x * dt;
+    p.mesh.rotation.y += p.spin.y * dt;
+    p.mesh.rotation.z += p.spin.z * dt;
+    p.mesh.material.opacity = Math.max(0, p.life / p.maxLife);
+    if (p.life <= 0) {
+      scene.remove(p.mesh);
+      p.mesh.material.dispose();
+      pixelParticles.splice(i, 1);
+    }
+  }
 }
 
 // Multiplayer role helpers — safe to call even when MP isn't active
@@ -3875,18 +4043,20 @@ function mpClientSync(dt) {
       round = newRound;
       try { startRound(); } catch (e) { console.warn('[mp] client startRound failed', e); }
     }
-    // Detect host ending a round — show either the win screen or the shop/round-cleared overlay
+    // Detect host ending a round — play the transition, then show win screen or shop
     if (!newActive && roundActive) {
       const cleared = newRound - 1;
       round = newRound;
       try {
         if (roundState.won) {
-          // Victory! Show the same big YOU WON screen as the host.
-          showWinScreen();
+          showRoundClearAnim(cleared, () => showWinScreen());
         } else {
-          openShop(`Round ${cleared} cleared!`, `Next: Round ${round}. Spend your money wisely.`);
-          startBtn.textContent = `Start Round ${round}`;
-          startBtn.dataset.mode = 'start';
+          showRoundClearAnim(cleared, () => {
+            openShop(`Round ${cleared} cleared!`, `Next: Round ${round}. Spend your money wisely.`);
+            overlay.setAttribute('data-mode', 'roundend');
+            startBtn.textContent = `Start Round ${round}`;
+            startBtn.dataset.mode = 'start';
+          });
         }
       } catch (e) { console.warn('[mp] client openShop failed', e); }
     }
@@ -3926,6 +4096,7 @@ function mpClientSync(dt) {
   }
   for (const [id, ghost] of ghostEnemies) {
     if (!seen.has(id)) {
+      spawnPixelBurst(ghost.position, ghost.userData.isBoss ? 0xaa2222 : 0x333333, ghost.userData.isBoss ? 90 : 24);
       scene.remove(ghost);
       ghostEnemies.delete(id);
     }
