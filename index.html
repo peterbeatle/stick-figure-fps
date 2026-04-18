@@ -348,10 +348,10 @@
 <div id="winScreen" style="position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:12;display:none;align-items:center;justify-content:center;flex-direction:column;color:#eee;font-family:monospace;text-align:center;padding:20px;">
   <h1 style="font-size:96px;margin:0;color:#ffcc33;text-shadow:0 0 30px #ff9900,0 0 60px #ff4400;letter-spacing:8px;font-weight:bold">YOU WON!</h1>
   <p style="font-size:18px;margin:18px 0 32px;opacity:0.9">You cleared all 12 rounds. The rounds get harder from here — 4 bosses every round, no end.</p>
-  <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center">
+  <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
     <button id="winContinueBtn" class="primary" style="font-size:16px;padding:12px 28px">Continue in Survivor Mode</button>
-    <button id="winSettingsBtn" style="background:#555;color:#eee;border:1px solid #666;border-radius:4px;padding:10px 22px;cursor:pointer;font-family:monospace;font-size:15px">Settings</button>
-    <button id="winHomeBtn" style="background:#555;color:#eee;border:1px solid #666;border-radius:4px;padding:10px 22px;cursor:pointer;font-family:monospace;font-size:15px">Home Screen</button>
+    <button id="winHomeBtn" style="background:#555;color:#eee;border:1px solid #666;border-radius:4px;padding:10px 22px;cursor:pointer;font-family:monospace;font-size:15px;min-width:220px">Home Screen</button>
+    <button id="winSettingsBtn" style="background:#555;color:#eee;border:1px solid #666;border-radius:4px;padding:10px 22px;cursor:pointer;font-family:monospace;font-size:15px;min-width:220px">Settings</button>
   </div>
 </div>
 
@@ -395,8 +395,8 @@
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
-  <div style="opacity:0.75;font-size:11px">Last Updated 3:05 AM PST 4.18.26</div>
-  <div>v1.83</div>
+  <div style="opacity:0.75;font-size:11px">Last Updated 3:20 AM PST 4.18.26</div>
+  <div>v1.85</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -1424,6 +1424,11 @@ function applyTheme(type) {
   }
 }
 
+function mapSpawnPoint(type) {
+  // Neon: north edge of the ziggurat ring so the player doesn't spawn inside the bottom tier
+  if (type === 'neon') return { x: 0, z: 18 };
+  return { x: 0, z: 0 };
+}
 function buildMap(type) {
   clearMap();
   useTerrain = (type === 'hills');
@@ -1435,6 +1440,20 @@ function buildMap(type) {
   else buildArena();
   wallMeshes = walls.map(w => w.mesh);
   try { setWeaponOutlines(type === 'neon'); } catch {}
+  // Neon map: overlay crisp white edge outlines on every structure so the dark meshes
+  // read against the dark ground.
+  if (type === 'neon') {
+    const outlineMat = new THREE.LineBasicMaterial({ color: 0xffffff });
+    for (const w of walls) {
+      if (w.isFloor) continue;
+      const edges = new THREE.EdgesGeometry(w.mesh.geometry);
+      const line = new THREE.LineSegments(edges, outlineMat);
+      line.position.copy(w.mesh.position);
+      line.rotation.copy(w.mesh.rotation);
+      scene.add(line);
+      decor.push(line);
+    }
+  }
 }
 
 let currentMap = 'arena';
@@ -4427,9 +4446,10 @@ function startRound() {
   if (want !== currentMap) {
     currentMap = want;
     buildMap(currentMap);
-    // place player somewhere safe — lift to terrain height if hilly
-    const y0 = terrainHeight(0, 0) + 1.7;
-    camera.position.set(0, y0, 0);
+    // Place player somewhere safe — on neon, step off the central ziggurat
+    const sp = mapSpawnPoint(currentMap);
+    const y0 = terrainHeight(sp.x, sp.z) + 1.7;
+    camera.position.set(sp.x, y0, sp.z);
     player.vy = 0;
     player.onGround = true;
     player.jumpsUsed = 0;
@@ -4439,7 +4459,8 @@ function startRound() {
   player.alive = true;
   if (spectating) {
     exitSpectate();
-    camera.position.set(0, 1.7, 0);
+    const sp = mapSpawnPoint(currentMap);
+    camera.position.set(sp.x, 1.7, sp.z);
     player.yaw = 0; player.pitch = 0;
     player.vy = 0;
   }
