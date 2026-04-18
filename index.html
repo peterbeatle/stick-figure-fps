@@ -194,6 +194,28 @@
     from { opacity: 0.55; }
     to   { opacity: 1; }
   }
+
+  /* Shield vignette — blue cousin of the rampage glow */
+  #shieldGlow {
+    position: fixed; inset: 0; pointer-events: none; z-index: 4;
+    background: radial-gradient(circle at center, rgba(60,160,255,0) 45%, rgba(60,160,255,0.55) 100%);
+    opacity: 0; transition: opacity 0.12s; will-change: opacity;
+  }
+  #shieldGlow.on { opacity: 1; animation: shieldPulse 0.7s ease-in-out infinite alternate; }
+  @keyframes shieldPulse {
+    from { opacity: 0.45; }
+    to   { opacity: 0.95; }
+  }
+
+  /* Booster-activated toast — shows the booster name briefly */
+  #boosterToast {
+    position: fixed; top: 30%; left: 50%; transform: translate(-50%, -50%) scale(0.6);
+    font-family: monospace; font-weight: 900; font-size: 42px; letter-spacing: 4px;
+    padding: 10px 26px; border-radius: 8px; z-index: 17; pointer-events: none;
+    opacity: 0; transition: opacity 0.18s, transform 0.18s;
+    text-shadow: 0 3px 10px rgba(0,0,0,0.85);
+  }
+  #boosterToast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   #boostLabel {
     position: fixed; top: 50%; left: 50%; transform: translate(-50%, -140px);
     color: #ffcc00; font-size: 28px; font-weight: bold; letter-spacing: 3px;
@@ -282,6 +304,8 @@
 <div id="damage"></div>
 <div id="hitmarker"></div>
 <div id="boost"></div>
+<div id="shieldGlow"></div>
+<div id="boosterToast"></div>
 <div id="boostLabel">RAMPAGE</div>
 <div id="streak">
   <div class="streakLabel">Flawless Streak</div>
@@ -397,7 +421,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v1.94</div>
+  <div>v1.96</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -508,6 +532,7 @@
     </div>
   </div>
   <div id="shopMoney" style="margin-top:12px;font-size:16px">Money: <span style="color:#4caf50;font-weight:bold">$<span id="shopMoneyAmt">0</span></span></div>
+  <div id="shopHint" style="margin-top:6px;font-size:12px;opacity:0.75;letter-spacing:1px"><span style="color:#7fff8d">Left click</span> Buy/Equip &nbsp;·&nbsp; <span style="color:#ff8080">Right click</span> Sell (70% refund)</div>
   <div class="shop" id="shop"></div>
 </div>
 
@@ -3128,6 +3153,30 @@ function spawnBooster(type) {
   scene.add(mesh);
   boosters.push({ mesh, type, bobT: Math.random() * Math.PI * 2, baseY });
 }
+const BOOSTER_TOAST = {
+  speed:   { text: 'Speed Activated!',    color: '#ffee33' },
+  shield:  { text: 'Shield Activated!',   color: '#66bbff' },
+  berserk: { text: 'Berserk Activated!',  color: '#ff5533' },
+  heal:    { text: 'HP Regen Activated!', color: '#ff88cc' },
+  freeze:  { text: 'Freeze Activated!',   color: '#99eeff' },
+  tornado: { text: 'Tornado Activated!',  color: '#dddddd' },
+  jetpack: { text: 'Jetpack Activated!',  color: '#ffaa55' },
+};
+function showBoosterToast(type) {
+  const entry = BOOSTER_TOAST[type];
+  if (!entry) return;
+  const el = document.getElementById('boosterToast');
+  if (!el) return;
+  el.textContent = entry.text;
+  el.style.color = entry.color;
+  el.style.background = 'rgba(0,0,0,0.55)';
+  el.classList.remove('show');
+  // Force a reflow so the CSS transition replays when the same booster fires twice
+  void el.offsetWidth;
+  el.classList.add('show');
+  clearTimeout(showBoosterToast._t);
+  showBoosterToast._t = setTimeout(() => el.classList.remove('show'), 1600);
+}
 function activateBooster(type) {
   if (type === 'speed')   speedBoostT   = BOOST_DUR;
   else if (type === 'shield')  shieldBoostT  = BOOST_DUR;
@@ -3137,6 +3186,7 @@ function activateBooster(type) {
   else if (type === 'tornado') tornadoBoostT = BOOST_DUR;
   else if (type === 'jetpack') jetpackBoostT = JETPACK_DUR;
   else if (type === 'nuke')    activateNukePodium();
+  if (type !== 'nuke') showBoosterToast(type);
   try { SFX.buy(); } catch {}
   updateBoosterHUD();
 }
@@ -3152,6 +3202,8 @@ function updateBoosterTimers(dt) {
   if (tornadoBoostT > 0) tornadoBoostT = Math.max(0, tornadoBoostT - dt);
   if (jetpackBoostT > 0) jetpackBoostT = Math.max(0, jetpackBoostT - dt);
   updateTornadoVisual();
+  const glow = document.getElementById('shieldGlow');
+  if (glow) glow.classList.toggle('on', shieldBoostT > 0);
   updateBoosterHUD();
 }
 function updateBoosterHUD() {
@@ -4423,6 +4475,22 @@ function buildShop() {
         SFX.buy();
         equipGun(key);
       }
+    });
+    // Right-click to sell — only owned, non-starter weapons with a real cost
+    el.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (!owned[key]) return;
+      if (key === 'knife' || key === 'pistol') return; // starters are locked to the player
+      const refund = Math.floor(g.cost * 0.7);
+      player.money += refund;
+      delete owned[key];
+      // Drop the weapon state too so re-buying resets ammo correctly
+      delete weaponState[key];
+      if (currentGun === key) equipGun('pistol');
+      try { SFX.buy(); } catch {}
+      updateHUD();
+      updateHotbar();
+      buildShop();
     });
     shopEl.appendChild(el);
   }
