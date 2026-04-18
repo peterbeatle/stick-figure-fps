@@ -389,7 +389,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4:00 PM PST 4.18.26</div>
-  <div>v1.66</div>
+  <div>v1.67</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -2132,7 +2132,7 @@ addEventListener('wheel', e => {
 let mouseDown = false;
 let wasShooting = false;
 // Booster Wand — RMB cycles through this list, LMB spawns the currently-selected one
-const WAND_TYPES = ['speed', 'shield', 'berserk', 'heal', 'freeze', 'tornado', 'jetpack'];
+const WAND_TYPES = ['speed', 'shield', 'berserk', 'heal', 'freeze', 'tornado', 'jetpack', 'nuke'];
 const WAND_TIP_COLORS = {
   speed:   { c: 0xffee33, e: 0xaa8800 },
   shield:  { c: 0x44aaff, e: 0x1166cc },
@@ -2141,6 +2141,7 @@ const WAND_TIP_COLORS = {
   freeze:  { c: 0x99eeff, e: 0x336699 },
   tornado: { c: 0xbbbbbb, e: 0x555555 },
   jetpack: { c: 0xff8833, e: 0x884411 },
+  nuke:    { c: 0x111111, e: 0x440000 },
 };
 let wandType = 'speed';
 function applyWandTipVisual() {
@@ -2866,6 +2867,29 @@ function makeFreezeBooster() {
   m.castShadow = true;
   return m;
 }
+// Bomb booster: cartoon black sphere with a brown fuse and a yellow spark
+function makeNukeBooster() {
+  const g = new THREE.Group();
+  const ball = new THREE.Mesh(
+    new THREE.SphereGeometry(0.32, 14, 10),
+    new THREE.MeshLambertMaterial({ color: 0x111111, emissive: 0x220000, emissiveIntensity: 0.5 })
+  );
+  g.add(ball);
+  const fuse = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.03, 0.03, 0.22, 8),
+    new THREE.MeshLambertMaterial({ color: 0x8a5a2a })
+  );
+  fuse.position.y = 0.42;
+  fuse.rotation.z = 0.4;
+  g.add(fuse);
+  const spark = new THREE.Mesh(
+    new THREE.SphereGeometry(0.08, 10, 8),
+    new THREE.MeshBasicMaterial({ color: 0xffee66, transparent: true, opacity: 0.9 })
+  );
+  spark.position.set(0.11, 0.55, 0);
+  g.add(spark);
+  return g;
+}
 // Jetpack booster: orange rocket with fins
 function makeJetpackBooster() {
   const g = new THREE.Group();
@@ -2923,6 +2947,7 @@ function spawnBooster(type) {
              : type === 'freeze'  ? makeFreezeBooster()
              : type === 'tornado' ? makeTornadoBooster()
              : type === 'jetpack' ? makeJetpackBooster()
+             : type === 'nuke'    ? makeNukeBooster()
              : /* heal */           makeHealBooster();
   const baseY = terrainHeight(x, z) + 0.8;
   mesh.position.set(x, baseY, z);
@@ -2937,6 +2962,7 @@ function activateBooster(type) {
   else if (type === 'freeze')  freezeBoostT  = BOOST_DUR;
   else if (type === 'tornado') tornadoBoostT = BOOST_DUR;
   else if (type === 'jetpack') jetpackBoostT = JETPACK_DUR;
+  else if (type === 'nuke')    triggerNuke();
   try { SFX.buy(); } catch {}
   updateBoosterHUD();
 }
@@ -3026,6 +3052,97 @@ function updateTornadoVisual() {
   } else if (tornadoMesh && tornadoMesh.parent) {
     scene.remove(tornadoMesh);
   }
+}
+
+// Nuke: alarm siren → missile falls from the sky → massive explosion → wipes enemies → round ends
+let _nukeInProgress = false;
+function triggerNuke() {
+  if (_nukeInProgress) return;
+  _nukeInProgress = true;
+  // Shelter-alarm siren: alternate two tones for ~2 seconds
+  try {
+    for (let i = 0; i < 8; i++) {
+      const t = i * 0.25;
+      playTone({ freq: 720, type: 'sawtooth', dur: 0.18, vol: 0.18, delay: t });
+      playTone({ freq: 460, type: 'sawtooth', dur: 0.18, vol: 0.18, delay: t + 0.12 });
+    }
+  } catch {}
+  // Falling missile
+  const missileMat = new THREE.MeshLambertMaterial({ color: 0x444444, emissive: 0x220000, emissiveIntensity: 0.4 });
+  const missile = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 4, 14), missileMat);
+  missile.add(body);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.8, 1.5, 14), missileMat);
+  nose.position.y = 2.75;
+  missile.add(nose);
+  const tail = new THREE.Mesh(
+    new THREE.ConeGeometry(1.2, 1.5, 10),
+    new THREE.MeshBasicMaterial({ color: 0xffaa22, transparent: true, opacity: 0.9 })
+  );
+  tail.position.y = -2.8; tail.rotation.x = Math.PI;
+  missile.add(tail);
+  missile.position.set(0, 120, 0);
+  scene.add(missile);
+  const impactDelay = 2.5;
+  const fallStart = performance.now();
+  const fallIv = setInterval(() => {
+    const t = (performance.now() - fallStart) / 1000;
+    const p = Math.min(1, t / impactDelay);
+    missile.position.y = 120 - p * 120;
+    if (p >= 1) clearInterval(fallIv);
+  }, 16);
+  setTimeout(() => {
+    scene.remove(missile);
+    // Kill every enemy on host (client's enemies list is empty)
+    if (!mpActive() || mpIsHost()) {
+      for (const e of [...enemies]) {
+        try { killEnemy(e, null); } catch {}
+      }
+    }
+    // Mushroom cloud: stem + rolling cap grown over ~2.5s
+    try { playNoise({ dur: 1.5, vol: 0.6, filterFreq: 300 }); } catch {}
+    try { playTone({ freq: 80, type: 'sine', dur: 2, vol: 0.5, slide: -60 }); } catch {}
+    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xff8822, transparent: true, opacity: 0.9 });
+    const smokeMat = new THREE.MeshBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.75 });
+    const flash = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), cloudMat);
+    flash.position.set(0, 2, 0);
+    scene.add(flash);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 2.5, 10, 16), smokeMat);
+    stem.position.set(0, 5, 0);
+    scene.add(stem);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), smokeMat);
+    cap.position.set(0, 14, 0);
+    scene.add(cap);
+    // Many pixel bursts scattered for "map tearing apart" feel
+    for (let i = 0; i < 30; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 6 + Math.random() * 20;
+      const px = Math.cos(a) * r, pz = Math.sin(a) * r;
+      setTimeout(() => {
+        try { spawnPixelBurst(new THREE.Vector3(px, 1 + Math.random() * 3, pz), 0xff8833, 40); } catch {}
+      }, Math.random() * 1800);
+    }
+    const boomStart = performance.now();
+    const boomIv = setInterval(() => {
+      const t = (performance.now() - boomStart) / 1000;
+      const s = Math.min(1, t / 2.5);
+      flash.scale.setScalar(1 + s * 30);
+      flash.material.opacity = 0.9 * (1 - s);
+      stem.scale.set(1 + s * 2, 1 + s * 2, 1 + s * 2);
+      cap.scale.setScalar(1 + s * 7);
+      cap.position.y = 14 + s * 6;
+      if (s >= 1) {
+        clearInterval(boomIv);
+        scene.remove(flash); scene.remove(stem); scene.remove(cap);
+      }
+    }, 30);
+    // End the round shortly after
+    if (!mpActive() || mpIsHost()) {
+      setTimeout(() => { _nukeInProgress = false; try { endRound(); } catch {} }, 3200);
+    } else {
+      setTimeout(() => { _nukeInProgress = false; }, 3200);
+    }
+  }, impactDelay * 1000);
 }
 
 function updateAmmoBoxes(dt) {
@@ -3859,6 +3976,7 @@ function startRound() {
     if (Math.random() < 0.35) spawnBooster('freeze');
     if (Math.random() < 0.30) spawnBooster('tornado');
     if (Math.random() < 0.40) spawnBooster('jetpack');
+    if (Math.random() < 0.01) spawnBooster('nuke'); // 1-in-100 rare drop
   }
   updateHUD();
   updateHotbar();
@@ -5145,6 +5263,7 @@ function mpClientSync(dt) {
               : b.t === 'freeze'  ? makeFreezeBooster()
               : b.t === 'tornado' ? makeTornadoBooster()
               : b.t === 'jetpack' ? makeJetpackBooster()
+              : b.t === 'nuke'    ? makeNukeBooster()
               :                     makeHealBooster();
       scene.add(m);
       gh = { mesh: m, type: b.t, bobT: Math.random() * Math.PI * 2, baseY: b.y };
@@ -5241,6 +5360,7 @@ async function startMultiplayer() {
                    : data.type === 'freeze'  ? makeFreezeBooster()
                    : data.type === 'tornado' ? makeTornadoBooster()
                    : data.type === 'jetpack' ? makeJetpackBooster()
+                   : data.type === 'nuke'    ? makeNukeBooster()
                    :                           makeHealBooster();
         mesh.position.set(data.x, data.y, data.z);
         scene.add(mesh);
@@ -5259,7 +5379,7 @@ async function startMultiplayer() {
         if (!window.Playroom) return;
         // Global-effect boosters: freeze and tornado affect all enemies, so they
         // should activate on every player (and on the host) regardless of claimer.
-        if (data.type === 'freeze' || data.type === 'tornado') {
+        if (data.type === 'freeze' || data.type === 'tornado' || data.type === 'nuke') {
           activateBooster(data.type);
           return;
         }
