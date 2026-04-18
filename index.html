@@ -395,8 +395,8 @@
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
-  <div style="opacity:0.75;font-size:11px">Last Updated 3:30 AM PST 4.18.26</div>
-  <div>v1.86</div>
+  <div style="opacity:0.75;font-size:11px">Last Updated 3:40 AM PST 4.18.26</div>
+  <div>v1.87</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -1427,8 +1427,8 @@ function applyTheme(type) {
 }
 
 function mapSpawnPoint(type) {
-  // Neon: north edge of the ziggurat ring so the player doesn't spawn inside the bottom tier
-  if (type === 'neon') return { x: 0, z: 18 };
+  // Neon: spawn on TOP of the ziggurat (5 tiers × 1.8m each = y=9)
+  if (type === 'neon') return { x: 0, z: 0, y: 9 };
   return { x: 0, z: 0 };
 }
 function buildMap(type) {
@@ -1445,15 +1445,25 @@ function buildMap(type) {
   // Neon map: overlay crisp white edge outlines on every structure so the dark meshes
   // read against the dark ground.
   if (type === 'neon') {
-    const outlineMat = new THREE.LineBasicMaterial({ color: 0xffffff });
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff });
+    const shellMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide });
     for (const w of walls) {
       if (w.isFloor) continue;
+      // Crisp white edge lines
       const edges = new THREE.EdgesGeometry(w.mesh.geometry);
-      const line = new THREE.LineSegments(edges, outlineMat);
+      const line = new THREE.LineSegments(edges, lineMat);
       line.position.copy(w.mesh.position);
       line.rotation.copy(w.mesh.rotation);
       scene.add(line);
       decor.push(line);
+      // Thicker back-face shell for extra contrast (visible as a thin outline rim)
+      const shell = new THREE.Mesh(w.mesh.geometry, shellMat);
+      shell.position.copy(w.mesh.position);
+      shell.rotation.copy(w.mesh.rotation);
+      shell.scale.setScalar(1.02);
+      shell.renderOrder = -1;
+      scene.add(shell);
+      decor.push(shell);
     }
   }
 }
@@ -3344,9 +3354,9 @@ function clearNukePodium() {
 }
 function activateNukePodium() {
   if (_nukePodium || _nukeInProgress) return;
-  // Podium at map center — open zone on every map
+  // Podium at map center — on neon, sit it on top of the ziggurat so it's reachable
   const px = 0, pz = 0;
-  const baseY = terrainHeight(px, pz);
+  const baseY = currentMap === 'neon' ? 9 : terrainHeight(px, pz);
   const g = new THREE.Group();
   const pedMat = new THREE.MeshLambertMaterial({ color: 0x555555, emissive: 0x222222, emissiveIntensity: 0.3 });
   const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.95, 1.2, 18), pedMat);
@@ -4450,7 +4460,7 @@ function startRound() {
     buildMap(currentMap);
     // Place player somewhere safe — on neon, step off the central ziggurat
     const sp = mapSpawnPoint(currentMap);
-    const y0 = terrainHeight(sp.x, sp.z) + 1.7;
+    const y0 = (sp.y != null ? sp.y : terrainHeight(sp.x, sp.z)) + 1.7;
     camera.position.set(sp.x, y0, sp.z);
     player.vy = 0;
     player.onGround = true;
@@ -4462,7 +4472,8 @@ function startRound() {
   if (spectating) {
     exitSpectate();
     const sp = mapSpawnPoint(currentMap);
-    camera.position.set(sp.x, 1.7, sp.z);
+    const y0 = (sp.y != null ? sp.y : 0) + 1.7;
+    camera.position.set(sp.x, y0, sp.z);
     player.yaw = 0; player.pitch = 0;
     player.vy = 0;
   }
