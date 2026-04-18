@@ -388,7 +388,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4:00 PM PST 4.18.26</div>
-  <div>v1.59</div>
+  <div>v1.60</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -420,6 +420,14 @@
   <div id="boosterHealRow" style="display:none;align-items:center;gap:8px;margin:2px 0">
     <span style="color:#ff77bb;font-weight:bold;min-width:60px">REGEN</span>
     <div style="flex:1;height:10px;background:#2a0a1a;border:1px solid #000;border-radius:3px;overflow:hidden"><div id="boosterHealFill" style="height:100%;background:#ff77bb;width:100%;transition:width 0.1s"></div></div>
+  </div>
+  <div id="boosterFreezeRow" style="display:none;align-items:center;gap:8px;margin:2px 0">
+    <span style="color:#99eeff;font-weight:bold;min-width:60px">FREEZE</span>
+    <div style="flex:1;height:10px;background:#001a2a;border:1px solid #000;border-radius:3px;overflow:hidden"><div id="boosterFreezeFill" style="height:100%;background:#99eeff;width:100%;transition:width 0.1s"></div></div>
+  </div>
+  <div id="boosterTornadoRow" style="display:none;align-items:center;gap:8px;margin:2px 0">
+    <span style="color:#bbbbbb;font-weight:bold;min-width:60px">TORNADO</span>
+    <div style="flex:1;height:10px;background:#222222;border:1px solid #000;border-radius:3px;overflow:hidden"><div id="boosterTornadoFill" style="height:100%;background:#bbbbbb;width:100%;transition:width 0.1s"></div></div>
   </div>
 </div>
 <div id="hotbar"></div>
@@ -2600,33 +2608,27 @@ function makeHPPickupMesh() {
   return m;
 }
 // Bullet-shaped ammo pickup: brass cylinder body + silver cone tip
-// Chunkier bullet shape so it reads as a round, not a pencil
-const bulletBodyGeom = new THREE.CylinderGeometry(0.17, 0.17, 0.28, 18);
-const bulletBodyMat  = new THREE.MeshLambertMaterial({ color: 0xffcc22, emissive: 0xaa7700, emissiveIntensity: 0.9 });
-const bulletTipGeom  = new THREE.ConeGeometry(0.17, 0.18, 18);
-const bulletTipMat   = new THREE.MeshLambertMaterial({ color: 0xffe066, emissive: 0xaa7700, emissiveIntensity: 0.7 });
-function makeSingleBulletMesh() {
-  const b = new THREE.Group();
-  const body = new THREE.Mesh(bulletBodyGeom, bulletBodyMat);
-  body.castShadow = true;
-  b.add(body);
-  const tip = new THREE.Mesh(bulletTipGeom, bulletTipMat);
-  tip.position.y = 0.22;
-  tip.castShadow = true;
-  b.add(tip);
-  return b;
-}
+// Yellow cube with "AMMO" written on every face
+const ammoTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#ffcc22';
+  ctx.fillRect(0, 0, 128, 128);
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 30px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('AMMO', 64, 64);
+  const t = new THREE.CanvasTexture(c);
+  t.minFilter = THREE.LinearFilter;
+  return t;
+})();
+const ammoLabeledMat = new THREE.MeshLambertMaterial({ map: ammoTex, emissive: 0x553300, emissiveIntensity: 0.5 });
 function makeAmmoPickupMesh() {
-  // Cluster of 3 bullets laid on their sides, nearly touching
-  const g = new THREE.Group();
-  const spacing = 0.36;
-  for (let i = 0; i < 3; i++) {
-    const b = makeSingleBulletMesh();
-    b.rotation.z = Math.PI / 2;
-    b.position.set((i - 1) * spacing, 0, 0);
-    g.add(b);
-  }
-  return g;
+  const m = new THREE.Mesh(ammoBoxGeom, ammoLabeledMat);
+  m.castShadow = true;
+  return m;
 }
 function spawnAmmoBox(pos, amount = 15) {
   const m = makeAmmoPickupMesh();
@@ -2660,6 +2662,8 @@ let speedBoostT = 0;
 let shieldBoostT = 0;
 let berserkBoostT = 0; // 3× weapon damage
 let healBoostT = 0;    // regen over time
+let freezeBoostT = 0;  // freeze all enemies
+let tornadoBoostT = 0; // suck enemies to map center
 function makeSpeedBooster() {
   const shape = new THREE.Shape();
   shape.moveTo(0.0, 0.55);
@@ -2702,6 +2706,27 @@ function makeBerserkBooster() {
   g.add(flame);
   return g;
 }
+// Freeze booster: cyan icosahedron (ice crystal look)
+function makeFreezeBooster() {
+  const m = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.45, 0),
+    new THREE.MeshLambertMaterial({ color: 0x99eeff, emissive: 0x336699, emissiveIntensity: 0.9, transparent: true, opacity: 0.92 })
+  );
+  m.castShadow = true;
+  return m;
+}
+// Tornado booster: grey torus (swirl icon)
+function makeTornadoBooster() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshLambertMaterial({ color: 0xbbbbbb, emissive: 0x555555, emissiveIntensity: 0.7 });
+  for (let i = 0; i < 3; i++) {
+    const t = new THREE.Mesh(new THREE.TorusGeometry(0.35 - i * 0.08, 0.05, 8, 16), mat);
+    t.rotation.x = Math.PI / 2;
+    t.position.y = (i - 1) * 0.18;
+    g.add(t);
+  }
+  return g;
+}
 // Regen booster: pink cross (plus sign) floating
 function makeHealBooster() {
   const g = new THREE.Group();
@@ -2721,6 +2746,8 @@ function spawnBooster(type) {
   const mesh = type === 'speed'   ? makeSpeedBooster()
              : type === 'shield'  ? makeShieldBooster()
              : type === 'berserk' ? makeBerserkBooster()
+             : type === 'freeze'  ? makeFreezeBooster()
+             : type === 'tornado' ? makeTornadoBooster()
              : /* heal */           makeHealBooster();
   const baseY = terrainHeight(x, z) + 0.8;
   mesh.position.set(x, baseY, z);
@@ -2732,6 +2759,8 @@ function activateBooster(type) {
   else if (type === 'shield')  shieldBoostT  = BOOST_DUR;
   else if (type === 'berserk') berserkBoostT = BOOST_DUR;
   else if (type === 'heal')    healBoostT    = BOOST_DUR;
+  else if (type === 'freeze')  freezeBoostT  = BOOST_DUR;
+  else if (type === 'tornado') tornadoBoostT = BOOST_DUR;
   try { SFX.buy(); } catch {}
   updateBoosterHUD();
 }
@@ -2743,6 +2772,9 @@ function updateBoosterTimers(dt) {
     healBoostT = Math.max(0, healBoostT - dt);
     if (player.alive) { player.hp = Math.min(100, player.hp + 10 * dt); updateHUD(); }
   }
+  if (freezeBoostT > 0)  freezeBoostT  = Math.max(0, freezeBoostT - dt);
+  if (tornadoBoostT > 0) tornadoBoostT = Math.max(0, tornadoBoostT - dt);
+  updateTornadoVisual();
   updateBoosterHUD();
 }
 function updateBoosterHUD() {
@@ -2753,6 +2785,8 @@ function updateBoosterHUD() {
     ['boosterShieldRow',  'boosterShieldFill',  shieldBoostT],
     ['boosterBerserkRow', 'boosterBerserkFill', berserkBoostT],
     ['boosterHealRow',    'boosterHealFill',    healBoostT],
+    ['boosterFreezeRow',  'boosterFreezeFill',  freezeBoostT],
+    ['boosterTornadoRow', 'boosterTornadoFill', tornadoBoostT],
   ];
   let anyActive = false;
   for (const [rowId, fillId, t] of rows) {
@@ -2775,7 +2809,13 @@ function updateBoostersHost(dt) {
     const dx = b.mesh.position.x - camera.position.x;
     const dz = b.mesh.position.z - camera.position.z;
     if (player.alive && !spectating && dx*dx + dz*dz < 1.7 * 1.7) {
-      activateBooster(b.type);
+      // In MP, broadcast so client also sees global-effect boosters (freeze/tornado).
+      // For personal boosters, the handler filters by playerId so only the claimer activates.
+      if (mpActive() && window.Playroom && Playroom.myPlayer()) {
+        try { Playroom.RPC.call('awardBooster', { playerId: Playroom.myPlayer().id, type: b.type }, Playroom.RPC.Mode.ALL); } catch {}
+      } else {
+        activateBooster(b.type);
+      }
       scene.remove(b.mesh);
       boosters.splice(i, 1);
     }
@@ -2784,6 +2824,30 @@ function updateBoostersHost(dt) {
 function clearBoosters() {
   for (const b of boosters) scene.remove(b.mesh);
   boosters.length = 0;
+}
+// Visual tornado at map center while the effect is active
+let tornadoMesh = null;
+function ensureTornadoMesh() {
+  if (tornadoMesh) return tornadoMesh;
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+  const bottom = new THREE.Mesh(new THREE.ConeGeometry(1.2, 10, 20, 1, true), mat);
+  bottom.position.y = 5;
+  g.add(bottom);
+  const top = new THREE.Mesh(new THREE.ConeGeometry(3.5, 6, 20, 1, true), mat);
+  top.position.y = 13;
+  g.add(top);
+  tornadoMesh = g;
+  return g;
+}
+function updateTornadoVisual() {
+  if (tornadoBoostT > 0) {
+    const m = ensureTornadoMesh();
+    if (!m.parent) { m.position.set(0, 0, 0); scene.add(m); }
+    m.rotation.y += 0.2;
+  } else if (tornadoMesh && tornadoMesh.parent) {
+    scene.remove(tornadoMesh);
+  }
 }
 
 function updateAmmoBoxes(dt) {
@@ -2936,7 +3000,24 @@ function enemyGunForRound(r) {
 }
 
 function updateEnemies(dt) {
+  const frozen = freezeBoostT > 0;
+  const pullT = tornadoBoostT > 0;
   for (const e of enemies) {
+    if (pullT) {
+      // Tornado sucks enemies toward the map center (0,0,0) — does not touch players
+      const dx = -e.position.x;
+      const dz = -e.position.z;
+      const len = Math.hypot(dx, dz);
+      if (len > 0.1) {
+        const pullSpeed = 9;
+        e.position.x += (dx / len) * pullSpeed * dt;
+        e.position.z += (dz / len) * pullSpeed * dt;
+      }
+    }
+    if (frozen) {
+      // Freeze: enemies don't move, don't shoot, don't reload progress
+      continue;
+    }
     // Stick King: leap toward the nearest player, layered on normal pathfinding.
     if (e.userData.isStickKing) {
       const ud = e.userData;
@@ -3512,7 +3593,9 @@ function startRound() {
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
   clearBoosters();
-  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0; updateBoosterHUD();
+  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0;
+  freezeBoostT = 0; tornadoBoostT = 0;
+  updateBoosterHUD(); updateTornadoVisual();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -3561,13 +3644,15 @@ function startRound() {
   if (!mpActive() || mpIsHost()) {
     const count = 3 + round * 2 + Math.floor(round / 3);
     for (let i = 0; i < count; i++) spawnEnemy();
-    scatterAmmoBoxes(2 + Math.floor(round / 2));
+    // Ammo no longer pre-spawns at round start — only drops from kills.
     // Boosters: each type has a chance to spawn this round
     clearBoosters();
     if (Math.random() < 0.55) spawnBooster('speed');
     if (Math.random() < 0.55) spawnBooster('shield');
     if (Math.random() < 0.45) spawnBooster('berserk');
     if (Math.random() < 0.45) spawnBooster('heal');
+    if (Math.random() < 0.35) spawnBooster('freeze');
+    if (Math.random() < 0.30) spawnBooster('tornado');
   }
   updateHUD();
   updateHotbar();
@@ -3619,7 +3704,9 @@ function retryRound() {
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
   clearBoosters();
-  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0; updateBoosterHUD();
+  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0;
+  freezeBoostT = 0; tornadoBoostT = 0;
+  updateBoosterHUD(); updateTornadoVisual();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -3659,7 +3746,9 @@ function restartGame() {
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
   clearBoosters();
-  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0; updateBoosterHUD();
+  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0;
+  freezeBoostT = 0; tornadoBoostT = 0;
+  updateBoosterHUD(); updateTornadoVisual();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -4079,7 +4168,9 @@ function goHome() {
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
   clearBoosters();
-  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0; updateBoosterHUD();
+  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0;
+  freezeBoostT = 0; tornadoBoostT = 0;
+  updateBoosterHUD(); updateTornadoVisual();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -4127,7 +4218,9 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   for (const b of ammoBoxes) scene.remove(b.mesh);
   ammoBoxes.length = 0;
   clearBoosters();
-  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0; updateBoosterHUD();
+  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0;
+  freezeBoostT = 0; tornadoBoostT = 0;
+  updateBoosterHUD(); updateTornadoVisual();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
   for (const x of explosions) scene.remove(x.mesh);
@@ -4924,6 +5017,12 @@ async function startMultiplayer() {
       });
       Playroom.RPC.register('awardBooster', (data) => {
         if (!window.Playroom) return;
+        // Global-effect boosters: freeze and tornado affect all enemies, so they
+        // should activate on every player (and on the host) regardless of claimer.
+        if (data.type === 'freeze' || data.type === 'tornado') {
+          activateBooster(data.type);
+          return;
+        }
         const me = Playroom.myPlayer();
         if (!me || data.playerId !== me.id) return;
         activateBooster(data.type);
