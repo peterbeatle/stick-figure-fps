@@ -389,7 +389,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4:00 PM PST 4.18.26</div>
-  <div>v1.73</div>
+  <div>v1.74</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -987,7 +987,7 @@ function buildArena() {
   addWall( -8,  -6, 2, 2, 3);
   addWall(  6,  -20, 4, 4, 3);
 
-  // Grass mounds — wide, short slabs players can walk/step onto (step height is 0.8m)
+  // Grass mounds — wide, short slabs players can walk/step onto
   const mounds = [
     [ 14,  -4, 7, 5, 0.7],
     [-16,   2, 8, 6, 0.9],
@@ -999,6 +999,35 @@ function buildArena() {
   for (const [x, z, w, d, h] of mounds) {
     addWallBox(x, h / 2, z, w, h, d, grassMat, false);
   }
+
+  // Big stepped hills — 3-tier grass ziggurats so players can climb them like natural hills
+  function bigHill(cx, cz, tiers, baseSize, tierH = 0.7) {
+    for (let i = 0; i < tiers; i++) {
+      const sz = baseSize - i * 1.8;
+      const y = i * tierH + tierH / 2;
+      addWallBox(cx, y, cz, sz, tierH, sz, grassMat, false);
+    }
+  }
+  bigHill( 26,   0, 5, 10);   // eastern ridge
+  bigHill(-24, -10, 6, 12);   // big SW hill
+  bigHill( -2,  26, 4,  9);   // north knoll
+  bigHill( 10, -28, 4,  8);   // south knoll
+
+  // Flat plateaus — single wider tier raised higher than the mounds, walkable tops
+  function plateau(cx, cz, w, d, h) {
+    addWallBox(cx, h / 2, cz, w, h, d, grassMat, false);
+    // Stepping stones climbing one edge so you can walk up without a double-jump
+    const stepCount = Math.max(2, Math.floor(h / 0.7));
+    for (let i = 0; i < stepCount; i++) {
+      const sy = ((i + 1) / stepCount) * h;
+      const sx = cx + w / 2 + 0.5 + i * 0.8;
+      addWallBox(sx, sy / 2, cz, 1.2, sy, d * 0.6, grassMat, false);
+    }
+  }
+  plateau( -28,  16,  7, 6, 3.2);
+  plateau(  22,  26,  8, 5, 2.6);
+  plateau(  -8,   0,  5, 5, 4.0);  // mid-map high vantage
+  plateau(  18, -24,  7, 6, 3.0);
 
   // Climbable trees — thin trunk + horizontal branch platforms at staggered heights
   function tree(cx, cz) {
