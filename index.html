@@ -389,7 +389,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:10px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4:00 PM PST 4.18.26</div>
-  <div>v1.62</div>
+  <div>v1.63</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -429,6 +429,10 @@
   <div id="boosterTornadoRow" style="display:none;align-items:center;gap:8px;margin:2px 0">
     <span style="color:#bbbbbb;font-weight:bold;min-width:60px">TORNADO</span>
     <div style="flex:1;height:10px;background:#222222;border:1px solid #000;border-radius:3px;overflow:hidden"><div id="boosterTornadoFill" style="height:100%;background:#bbbbbb;width:100%;transition:width 0.1s"></div></div>
+  </div>
+  <div id="boosterJetpackRow" style="display:none;align-items:center;gap:8px;margin:2px 0">
+    <span style="color:#ffaa55;font-weight:bold;min-width:60px">JETPACK</span>
+    <div style="flex:1;height:10px;background:#2a1200;border:1px solid #000;border-radius:3px;overflow:hidden"><div id="boosterJetpackFill" style="height:100%;background:#ffaa55;width:100%;transition:width 0.1s"></div></div>
   </div>
 </div>
 <div id="hotbar"></div>
@@ -927,6 +931,8 @@ const brickMat = new THREE.MeshLambertMaterial({ color: 0x8a6a5a });
 const concreteMat = new THREE.MeshLambertMaterial({ color: 0x9a9a98 });
 const glassMat = new THREE.MeshLambertMaterial({ color: 0x88aadd, transparent: true, opacity: 0.35 });
 const woodMat = new THREE.MeshLambertMaterial({ color: 0x5a4030 });
+const grassMat = new THREE.MeshLambertMaterial({ color: 0x3b8a3b });
+const leafMat = new THREE.MeshLambertMaterial({ color: 0x2c7a2c });
 const walls = [];
 let wallMeshes = [];
 const half = MAP_SIZE / 2;
@@ -968,16 +974,59 @@ function buildPerimeter() {
   addWall(-half, 0, 1, MAP_SIZE);
 }
 
-// Map 1 — flat arena with a few cover blocks
+// Map 1 — arena with cover, rolling mounds, and a few climbable trees
 function buildArena() {
   buildPerimeter();
+  // Cover blocks (center 3x3x2 at (0,0) removed so the player doesn't spawn inside it
+  // and so the tornado booster has an open landing zone for enemies)
   addWall( 10,  10, 4, 4, 3);
   addWall(-12,  14, 6, 2, 3);
   addWall( 18, -14, 2, 8, 3);
   addWall(-20, -18, 8, 2, 3);
-  addWall(  0,   0, 3, 3, 2);
   addWall( -8,  -6, 2, 2, 3);
   addWall(  6,  -20, 4, 4, 3);
+
+  // Grass mounds — wide, short slabs players can walk/step onto (step height is 0.8m)
+  const mounds = [
+    [ 14,  -4, 7, 5, 0.7],
+    [-16,   2, 8, 6, 0.9],
+    [  4,  18, 6, 5, 0.6],
+    [-22,  22, 7, 6, 1.0],
+    [ 22,  22, 5, 5, 0.7],
+    [ -6, -22, 6, 7, 0.8],
+  ];
+  for (const [x, z, w, d, h] of mounds) {
+    addWallBox(x, h / 2, z, w, h, d, grassMat, false);
+  }
+
+  // Climbable trees — thin trunk + horizontal branch platforms at staggered heights
+  function tree(cx, cz) {
+    // Trunk: tall thin wall (collidable). Keep footprint small so players can easily reach branches.
+    addWallBox(cx, 3.5, cz, 0.8, 7, 0.8, woodMat, false);
+    // Branches radiating around the trunk at increasing heights — double-jump to reach
+    const branches = [
+      [cx + 1.8, 2.2, cz,       2.4, 0.3, 0.5],
+      [cx,       3.6, cz + 1.8, 0.5, 0.3, 2.4],
+      [cx - 1.8, 4.8, cz,       2.4, 0.3, 0.5],
+      [cx,       5.9, cz - 1.8, 0.5, 0.3, 2.4],
+      [cx + 1.4, 6.8, cz + 1.4, 2.0, 0.3, 0.5],
+    ];
+    for (const [bx, by, bz, bw, bh, bd] of branches) {
+      addWallBox(bx, by, bz, bw, bh, bd, woodMat, false);
+    }
+    // Foliage — purely decorative spheres stacked at the top
+    for (const [ox, oy, oz, r] of [[0,7.2,0,2.0],[1.2,6.6,0.4,1.4],[-1.0,6.9,-0.6,1.3],[0.3,7.8,-0.8,1.2]]) {
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), leafMat);
+      leaf.position.set(cx + ox, oy, cz + oz);
+      leaf.castShadow = true;
+      scene.add(leaf);
+      decor.push(leaf);
+    }
+  }
+  tree( 18,  18);
+  tree(-18, -14);
+  tree( -4,   8);
+  tree( 16, -22);
 }
 
 // Map 2 — desert. The ground itself is deformed by terrainHeight(). We only add a few
@@ -2194,7 +2243,7 @@ function tryShoot(now) {
 
   // Booster Wand: spawn the next booster directly in front of the camera, cycling types
   if (g.wand) {
-    const types = ['speed', 'shield', 'berserk', 'heal', 'freeze', 'tornado'];
+    const types = ['speed', 'shield', 'berserk', 'heal', 'freeze', 'tornado', 'jetpack'];
     const idx = (tryShoot._wandIdx || 0) % types.length;
     tryShoot._wandIdx = idx + 1;
     const type = types[idx];
@@ -2207,6 +2256,7 @@ function tryShoot(now) {
                : type === 'berserk' ? makeBerserkBooster()
                : type === 'freeze'  ? makeFreezeBooster()
                : type === 'tornado' ? makeTornadoBooster()
+               : type === 'jetpack' ? makeJetpackBooster()
                :                      makeHealBooster();
     const baseY = terrainHeight(px, pz) + 0.8;
     if (mpIsClient()) {
@@ -2717,6 +2767,8 @@ let berserkBoostT = 0; // 3× weapon damage
 let healBoostT = 0;    // regen over time
 let freezeBoostT = 0;  // freeze all enemies
 let tornadoBoostT = 0; // suck enemies to map center
+let jetpackBoostT = 0; // hold Space to fly up
+const JETPACK_DUR = 15;
 function makeSpeedBooster() {
   const shape = new THREE.Shape();
   shape.moveTo(0.0, 0.55);
@@ -2768,6 +2820,29 @@ function makeFreezeBooster() {
   m.castShadow = true;
   return m;
 }
+// Jetpack booster: orange rocket with fins
+function makeJetpackBooster() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.16, 0.16, 0.55, 14),
+    new THREE.MeshLambertMaterial({ color: 0xff8833, emissive: 0x884411, emissiveIntensity: 0.8 })
+  );
+  g.add(body);
+  const tip = new THREE.Mesh(
+    new THREE.ConeGeometry(0.16, 0.22, 14),
+    new THREE.MeshLambertMaterial({ color: 0xffcc66, emissive: 0x884411, emissiveIntensity: 0.7 })
+  );
+  tip.position.y = 0.38;
+  g.add(tip);
+  const flameMat = new THREE.MeshBasicMaterial({ color: 0xffee66, transparent: true, opacity: 0.9 });
+  for (let i = 0; i < 2; i++) {
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.22, 8), flameMat);
+    flame.position.set((i === 0 ? -0.08 : 0.08), -0.42, 0);
+    flame.rotation.x = Math.PI;
+    g.add(flame);
+  }
+  return g;
+}
 // Tornado booster: grey torus (swirl icon)
 function makeTornadoBooster() {
   const g = new THREE.Group();
@@ -2801,6 +2876,7 @@ function spawnBooster(type) {
              : type === 'berserk' ? makeBerserkBooster()
              : type === 'freeze'  ? makeFreezeBooster()
              : type === 'tornado' ? makeTornadoBooster()
+             : type === 'jetpack' ? makeJetpackBooster()
              : /* heal */           makeHealBooster();
   const baseY = terrainHeight(x, z) + 0.8;
   mesh.position.set(x, baseY, z);
@@ -2814,6 +2890,7 @@ function activateBooster(type) {
   else if (type === 'heal')    healBoostT    = BOOST_DUR;
   else if (type === 'freeze')  freezeBoostT  = BOOST_DUR;
   else if (type === 'tornado') tornadoBoostT = BOOST_DUR;
+  else if (type === 'jetpack') jetpackBoostT = JETPACK_DUR;
   try { SFX.buy(); } catch {}
   updateBoosterHUD();
 }
@@ -2827,6 +2904,7 @@ function updateBoosterTimers(dt) {
   }
   if (freezeBoostT > 0)  freezeBoostT  = Math.max(0, freezeBoostT - dt);
   if (tornadoBoostT > 0) tornadoBoostT = Math.max(0, tornadoBoostT - dt);
+  if (jetpackBoostT > 0) jetpackBoostT = Math.max(0, jetpackBoostT - dt);
   updateTornadoVisual();
   updateBoosterHUD();
 }
@@ -2834,19 +2912,20 @@ function updateBoosterHUD() {
   const wrap = document.getElementById('boosterHud');
   if (!wrap) return;
   const rows = [
-    ['boosterSpeedRow',   'boosterSpeedFill',   speedBoostT],
-    ['boosterShieldRow',  'boosterShieldFill',  shieldBoostT],
-    ['boosterBerserkRow', 'boosterBerserkFill', berserkBoostT],
-    ['boosterHealRow',    'boosterHealFill',    healBoostT],
-    ['boosterFreezeRow',  'boosterFreezeFill',  freezeBoostT],
-    ['boosterTornadoRow', 'boosterTornadoFill', tornadoBoostT],
+    ['boosterSpeedRow',   'boosterSpeedFill',   speedBoostT,   BOOST_DUR],
+    ['boosterShieldRow',  'boosterShieldFill',  shieldBoostT,  BOOST_DUR],
+    ['boosterBerserkRow', 'boosterBerserkFill', berserkBoostT, BOOST_DUR],
+    ['boosterHealRow',    'boosterHealFill',    healBoostT,    BOOST_DUR],
+    ['boosterFreezeRow',  'boosterFreezeFill',  freezeBoostT,  BOOST_DUR],
+    ['boosterTornadoRow', 'boosterTornadoFill', tornadoBoostT, BOOST_DUR],
+    ['boosterJetpackRow', 'boosterJetpackFill', jetpackBoostT, JETPACK_DUR],
   ];
   let anyActive = false;
-  for (const [rowId, fillId, t] of rows) {
+  for (const [rowId, fillId, t, dur] of rows) {
     const row = document.getElementById(rowId);
     const fill = document.getElementById(fillId);
     if (!row || !fill) continue;
-    if (t > 0) { row.style.display = 'flex'; fill.style.width = (t / BOOST_DUR * 100) + '%'; anyActive = true; }
+    if (t > 0) { row.style.display = 'flex'; fill.style.width = (t / dur * 100) + '%'; anyActive = true; }
     else row.style.display = 'none';
   }
   wrap.style.display = anyActive ? 'block' : 'none';
@@ -3476,6 +3555,13 @@ function updatePlayer(dt) {
   }
 
   // ---------- Vertical physics (gravity + landing support) ----------
+  // Jetpack: hold Space to thrust upward; partial gravity compensation while held
+  if (jetpackBoostT > 0 && (keys['Space'] || keys['ShiftLeft'] && false)) {
+    player.vy += 34 * dt;               // strong upward thrust
+    if (player.vy > 10) player.vy = 10; // cap ascent speed
+    player.onGround = false;
+    player.jumpsUsed = 0;
+  }
   player.vy -= 20 * dt;
   camera.position.y += player.vy * dt;
   // Landing support = terrain + the highest wall/slab top AT OR BELOW current feet (with a tiny tolerance).
@@ -3647,7 +3733,7 @@ function startRound() {
   ammoBoxes.length = 0;
   clearBoosters();
   speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0;
-  freezeBoostT = 0; tornadoBoostT = 0;
+  freezeBoostT = 0; tornadoBoostT = 0; jetpackBoostT = 0;
   updateBoosterHUD(); updateTornadoVisual();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
@@ -3706,6 +3792,7 @@ function startRound() {
     if (Math.random() < 0.45) spawnBooster('heal');
     if (Math.random() < 0.35) spawnBooster('freeze');
     if (Math.random() < 0.30) spawnBooster('tornado');
+    if (Math.random() < 0.40) spawnBooster('jetpack');
   }
   updateHUD();
   updateHotbar();
@@ -3758,7 +3845,7 @@ function retryRound() {
   ammoBoxes.length = 0;
   clearBoosters();
   speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0;
-  freezeBoostT = 0; tornadoBoostT = 0;
+  freezeBoostT = 0; tornadoBoostT = 0; jetpackBoostT = 0;
   updateBoosterHUD(); updateTornadoVisual();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
@@ -3800,7 +3887,7 @@ function restartGame() {
   ammoBoxes.length = 0;
   clearBoosters();
   speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0;
-  freezeBoostT = 0; tornadoBoostT = 0;
+  freezeBoostT = 0; tornadoBoostT = 0; jetpackBoostT = 0;
   updateBoosterHUD(); updateTornadoVisual();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
@@ -4222,7 +4309,7 @@ function goHome() {
   ammoBoxes.length = 0;
   clearBoosters();
   speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0;
-  freezeBoostT = 0; tornadoBoostT = 0;
+  freezeBoostT = 0; tornadoBoostT = 0; jetpackBoostT = 0;
   updateBoosterHUD(); updateTornadoVisual();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
@@ -4272,7 +4359,7 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   ammoBoxes.length = 0;
   clearBoosters();
   speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0;
-  freezeBoostT = 0; tornadoBoostT = 0;
+  freezeBoostT = 0; tornadoBoostT = 0; jetpackBoostT = 0;
   updateBoosterHUD(); updateTornadoVisual();
   for (const r of rockets) scene.remove(r.mesh);
   rockets.length = 0;
@@ -4984,6 +5071,9 @@ function mpClientSync(dt) {
       const m = b.t === 'speed'   ? makeSpeedBooster()
               : b.t === 'shield'  ? makeShieldBooster()
               : b.t === 'berserk' ? makeBerserkBooster()
+              : b.t === 'freeze'  ? makeFreezeBooster()
+              : b.t === 'tornado' ? makeTornadoBooster()
+              : b.t === 'jetpack' ? makeJetpackBooster()
               :                     makeHealBooster();
       scene.add(m);
       gh = { mesh: m, type: b.t, bobT: Math.random() * Math.PI * 2, baseY: b.y };
@@ -5079,6 +5169,7 @@ async function startMultiplayer() {
                    : data.type === 'berserk' ? makeBerserkBooster()
                    : data.type === 'freeze'  ? makeFreezeBooster()
                    : data.type === 'tornado' ? makeTornadoBooster()
+                   : data.type === 'jetpack' ? makeJetpackBooster()
                    :                           makeHealBooster();
         mesh.position.set(data.x, data.y, data.z);
         scene.add(mesh);
