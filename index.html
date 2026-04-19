@@ -168,6 +168,26 @@
 
   #mpPanel.expanded { width: 520px; }
   #mpPanel .mpUrl { display: block; margin-top: 6px; font-family: monospace; word-break: break-all; overflow-wrap: anywhere; }
+  /* Ability orb HUD (left side, stacks earned abilities top-to-bottom) */
+  #abilityHud {
+    position: fixed; left: 12px; top: 50%; transform: translateY(-50%);
+    z-index: 6; display: flex; flex-direction: column; gap: 10px;
+    pointer-events: none;
+  }
+  .abilityOrb {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: none;
+    box-shadow: 0 0 14px currentColor, inset 0 0 6px rgba(255,255,255,0.6);
+    animation: abilityPulse 1.6s ease-in-out infinite alternate;
+  }
+  .abilityOrb.on { display: block; }
+  .abilityOrb.yellow { background: radial-gradient(circle at 35% 30%, #fff7a0 0%, #ffee44 45%, #c99800 100%); color: #ffcc44; }
+  .abilityOrb.green  { background: radial-gradient(circle at 35% 30%, #c8ffd0 0%, #44ee66 45%, #187030 100%); color: #44ee66; }
+  .abilityOrb.red    { background: radial-gradient(circle at 35% 30%, #ffb8c0 0%, #ff3344 45%, #800008 100%); color: #ff3344; }
+  @keyframes abilityPulse {
+    from { transform: scale(0.92); }
+    to   { transform: scale(1.06); }
+  }
   /* Sandbox preset buttons */
   .sxPreset { background:#333;color:#eee;border:1px solid #555;border-radius:3px;padding:4px 10px;cursor:pointer;font-family:monospace;font-size:12px }
   .sxPreset:hover { background:#444 }
@@ -446,8 +466,8 @@
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;pointer-events:none;line-height:1.4;white-space:nowrap">
-  <span style="font-weight:bold;color:#eee">v2.27</span>
-  <span style="opacity:0.75;font-size:11px">— Last Updated 4.18.26</span>
+  <span style="font-weight:bold;color:#eee">v2.29</span>
+  <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -572,6 +592,11 @@
 <div id="chestToast" style="position:fixed;top:18%;left:50%;transform:translate(-50%,-50%);background:rgba(80,60,0,0.88);color:#ffe033;font-family:monospace;font-weight:bold;font-size:22px;padding:12px 24px;border-radius:8px;letter-spacing:2px;z-index:16;display:none;pointer-events:none;text-align:center;text-shadow:0 2px 6px #000;border:2px solid #ffd020;box-shadow:0 0 30px rgba(255,200,40,0.55)">✦ CHEST READY ✦<br><span style="font-size:14px;color:#fff;letter-spacing:1px">Follow the yellow beacon to the chest</span></div>
 <div id="chestHint" style="position:fixed;top:60%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.75);color:#ffe033;font-family:monospace;font-weight:bold;font-size:22px;padding:10px 18px;border-radius:6px;letter-spacing:2px;z-index:9;display:none;pointer-events:none;text-shadow:0 2px 6px #000">Press E to Open Chest</div>
 <div id="chestLookUp" style="position:fixed;top:35%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;font-size:110px;color:#ffd020;letter-spacing:10px;z-index:15;display:none;pointer-events:none;text-shadow:0 4px 18px #000,0 0 30px #ffaa00">LOOK UP!</div>
+<div id="abilityHud">
+  <div id="orbDash" class="abilityOrb yellow" title="Dash — double-tap WASD"></div>
+  <div id="orbTriple" class="abilityOrb green" title="Triple Jump"></div>
+  <div id="orbSlam" class="abilityOrb red" title="Power Slam — double-tap Crouch mid-air"></div>
+</div>
 <div id="abilityGranted" style="position:fixed;top:32%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;z-index:17;display:none;pointer-events:none;text-align:center">
   <div id="abilityTitle" style="font-size:54px;color:#ffe033;letter-spacing:6px;text-shadow:0 0 24px #ff8800,0 0 48px #ff8800,0 2px 8px #000">NEW ABILITY GRANTED</div>
   <div id="abilityBody" style="font-size:22px;color:#fff;letter-spacing:3px;margin-top:12px;text-shadow:0 2px 6px #000">…</div>
@@ -4057,6 +4082,15 @@ let _slamActive = false;
 function resetAbilities() {
   hasDash = false; hasTripleJump = false; hasPowerSlam = false;
   _dashTimer = 0; _slamActive = false;
+  updateAbilityHud();
+}
+function updateAbilityHud() {
+  const d = document.getElementById('orbDash');
+  const t = document.getElementById('orbTriple');
+  const s = document.getElementById('orbSlam');
+  if (d) d.classList.toggle('on', hasDash);
+  if (t) t.classList.toggle('on', hasTripleJump);
+  if (s) s.classList.toggle('on', hasPowerSlam);
 }
 
 function makeChestPodium() {
@@ -4221,8 +4255,8 @@ function openChestLocal() {
       }, 16);
       try { spawnPixelBurst(new THREE.Vector3(sx, groundY + 1, sz), 0xffee66, onChest ? 40 : 18); } catch {}
     }
-    // Schedule ~12 random strikes over the map plus a final central strike at the chest
-    for (let i = 0; i < 14; i++) {
+    // Schedule ~28 random strikes over the map plus a final central strike at the chest
+    for (let i = 0; i < 28; i++) {
       setTimeout(() => {
         const a = Math.random() * Math.PI * 2;
         const r = 5 + Math.random() * 30;
@@ -4230,12 +4264,12 @@ function openChestLocal() {
         const sz = Math.sin(a) * r;
         strikeAt(sx, sz, false);
         try { playNoise({ dur: 0.12, vol: 0.2, filterFreq: 4000 }); } catch {}
-      }, Math.random() * 1100);
+      }, Math.random() * 2200);
     }
     // Guaranteed big strike on the chest at the end of the storm
     setTimeout(() => {
       strikeAt(px, pz, true);
-    }, 1150);
+    }, 2300);
     setTimeout(() => {
       {
         // Flash burst + open lid + show orb
@@ -4283,7 +4317,7 @@ function openChestLocal() {
           continueAfterChest();
         }, 5000);
       }
-    }, 1250);
+    }, 2400);
   }
 }
 
@@ -4295,6 +4329,7 @@ function grantAbilityForRound(r) {
   if (r === 3) { hasDash = true; text = 'DASH — double-tap W / A / S / D to dash in that direction'; }
   else if (r === 6) { hasTripleJump = true; text = 'TRIPLE JUMP — you can now jump three times in a row'; }
   else if (r === 9) { hasPowerSlam = true; text = 'POWER SLAM — double-tap Crouch while airborne to crash down with AoE damage'; }
+  updateAbilityHud();
   if (body) body.textContent = text;
   if (banner) {
     banner.style.display = 'block';
@@ -4935,7 +4970,7 @@ function tryJump() {
   if (!player.alive) return;
   if (!roundActive && !sandboxActive && !_chestPodium && !_chestInProgress) return;
   if (player.jumpsUsed >= (hasTripleJump ? 3 : 2)) return;
-  player.vy = 9.4;
+  player.vy = 11.5;
   player.onGround = false;
   player.jumpsUsed++;
 }
