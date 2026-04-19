@@ -476,10 +476,12 @@
   <div style="font-size:14px;letter-spacing:3px;color:#8fa8ff;margin-top:30px;opacity:0.85">Waiting for host to resume…</div>
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;pointer-events:none;line-height:1.4;white-space:nowrap">
-  <span style="font-weight:bold;color:#eee">v2.47</span>
+<div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
+  <span style="font-weight:bold;color:#eee">v2.49</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
+  <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
+<div id="changelogPanel" style="position:fixed;top:52px;right:12px;background:rgba(15,18,28,0.94);border:1px solid #445;border-radius:6px;padding:14px 18px;font-family:monospace;font-size:12px;color:#ddd;z-index:30;display:none;max-width:420px;max-height:60vh;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.7);line-height:1.5"></div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -783,6 +785,94 @@ function hideUsernameGate() {
   } else {
     showUsernameGate();
   }
+})();
+
+// ---------- Changelog (dropdown from version tag on home screen) ----------
+const CHANGELOG = [
+  ['v2.49', 'More prominent dropdown arrow + gold border glow on the version tag to show it is clickable.'],
+  ['v2.48', 'Version panel dropdown — click the version on home screen for per-update summaries.'],
+  ['v2.47', 'Chest flow now works in MP (all players see chest + lightning + "NEW ABILITY" banner + get the ability). Player colors by lobby position: host = blue, P2 = green, P3 = yellow, P4 = orange. Colors reflect on stick figures and scoreboard.'],
+  ['v2.46', 'Settings persistence added (keybinds, FPS HUD toggles, Max FPS, Render Scale, cheats unlocked). 4-player multiplayer foundation (room cap 2 → 4, remotePlayers Map, minimap arrows per remote).'],
+  ['v2.45', 'Full-screen "GAME PAUSED" banner for clients when host pauses.'],
+  ['v2.44', 'Scoreboard polish — "(you)" removed, player names title-cased.'],
+  ['v2.43', 'Scoreboard column headers capitalized: Round / Session.'],
+  ['v2.42', 'Big map + scoreboard auto-close on round transitions.'],
+  ['v2.41', 'Big map + scoreboard hide on round end / animations.'],
+  ['v2.40', 'Scoreboard (Tab) added with live kills/damage/accuracy/deaths per player.'],
+  ['v2.39', 'Big live-radar map (hold M to open, full-size).'],
+  ['v2.38', 'Camera snaps to chest before "NEW ABILITY" banner freeze.'],
+  ['v2.37', 'Power Slam text tweak.'],
+  ['v2.36', 'Locked ability orbs made a bit more visible.'],
+  ['v2.35', 'Gun upgrade stars enlarged + glow.'],
+  ['v2.34', '"Press Enter to continue" on NEW ABILITY banner — game freezes until press.'],
+  ['v2.33', '4 stars shown on gun cards (L1 = ★☆☆☆). Upgrade multiplier softened to 1.125×.'],
+  ['v2.32', 'Gun leveling system: 1–4 stars, 1.25× per level (softened to 1.125× in v2.33).'],
+  ['v2.31', 'Bazooka buff: damage 200 → 400, mag 1 → 3.'],
+  ['v2.30', 'Ability orb HUD on left side — locked grey orbs visible by default.'],
+  ['v2.29', 'Earned ability orbs pulse + glow in their color.'],
+  ['v2.28', 'Jump height buff (7.5 → 9.4), lightning storm 2× duration + strikes.'],
+  ['v2.27', 'Power Slam damage 180 → 500.'],
+  ['v2.26', 'Jump height tuned up to 11.5.'],
+  ['v2.25', 'Lightning storm replaces single bolt — 28 strikes over 2.2s.'],
+  ['v2.24', 'Input gate fix: movement + look work during chest sequence.'],
+  ['v2.23', 'Chest reward + 3 abilities: Dash (Rd 3), Triple Jump (Rd 6), Power Slam (Rd 9). Enemy Wand spawns at aimed surface.'],
+  ['v2.22', 'Red outline around HP box plus — thicker border.'],
+  ['v2.21', 'Version panel top-center; settings corner close button; projectile enemy accuracy tightened.'],
+  ['v2.20', 'Render Scale slider (big perf fix: DPR capped at 1.5×).'],
+  ['v2.19', 'FPS HUD moved, bright-green FPS number.'],
+  ['v2.18', 'FPS ticker + Ping + Max FPS cap in Settings.'],
+  ['v2.17', 'Coords HUD in campaign; topbar hidden in sandbox.'],
+  ['v2.16', 'Heat-seeking projectiles when aimbot is active.'],
+  ['v2.15', 'Cotton-candy hills sky + neon purple sky.'],
+  ['v2.14', 'Coords HUD default-on in sandbox; aimbot gravity-aware for Stick King.'],
+  ['v2.13', 'Aimbot aims at body center for projectiles (hitbox-aligned).'],
+  ['v2.12', 'Controls panel + fly hint updated from Ctrl → C.'],
+  ['v2.11', 'Aimbot range 80m → 160m; Ctrl crouch default moved to C.'],
+  ['v2.10', 'Sandbox instant respawn on death.'],
+  ['v2.09', 'Sandbox death fix, weapon skin on restart, enemy wand cursor aim, aimbot 100% accuracy.'],
+  ['v2.08', 'Microsoft Clarity analytics token wired.'],
+  ['v2.07', 'Cloudflare Web Analytics token wired.'],
+  ['v2.06', 'Username gate on first visit; name tied to Clarity sessions + MP labels.'],
+  ['v2.05', 'Cloudflare + Clarity analytics snippets embedded.'],
+  ['v2.04', 'Critical fix: sandbox TDZ ReferenceError unblocked all home-screen buttons.'],
+  ['v2.03', 'Fly mode indicator, enemy wand, fullscreen crash guard.'],
+  ['v2.02', 'Nuke in sandbox no longer ends the round.'],
+  ['v2.01', 'Sandbox fly-sprint via Shift.'],
+  ['v2.00', 'Sandbox Mode foundation: blank map, map maker, fly, noclip, spawn enemies/boosters.'],
+];
+(function wireChangelog() {
+  const tag = document.getElementById('versionTag');
+  const panel = document.getElementById('changelogPanel');
+  const caret = document.getElementById('versionCaret');
+  if (!tag || !panel) return;
+  // Build the panel HTML once (shows latest 12 entries)
+  panel.innerHTML = CHANGELOG.slice(0, 12).map(([v, body]) =>
+    `<div style="padding:6px 0;border-bottom:1px solid #2a2d3a">
+       <div style="color:#ffcc33;font-weight:bold;margin-bottom:3px">${v}</div>
+       <div style="opacity:0.88">${body}</div>
+     </div>`
+  ).join('') + '<div style="text-align:center;opacity:0.5;font-size:10px;padding:6px 0 0">(showing 12 most recent)</div>';
+  function isHomeVisible() {
+    const ov = document.getElementById('overlay');
+    return ov && !ov.classList.contains('hidden') && ov.getAttribute('data-mode') === 'home';
+  }
+  function refreshInteractivity() {
+    const home = isHomeVisible();
+    tag.style.cursor = home ? 'pointer' : 'default';
+    caret.style.display = home ? 'inline' : 'none';
+    tag.style.border = home ? '1px solid rgba(255,204,51,0.45)' : '';
+    tag.style.boxShadow = home ? '0 0 10px rgba(255,204,51,0.25)' : '';
+    if (!home) {
+      panel.style.display = 'none';
+    }
+  }
+  tag.addEventListener('click', (e) => {
+    if (!isHomeVisible()) return;
+    panel.style.display = (panel.style.display === 'none' || !panel.style.display) ? 'block' : 'none';
+  });
+  // Re-evaluate visibility whenever overlay mode changes — poll lightly
+  setInterval(refreshInteractivity, 300);
+  refreshInteractivity();
 })();
 
 // ---------- Crosshair ----------
