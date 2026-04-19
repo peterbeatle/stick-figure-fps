@@ -470,10 +470,14 @@
   <p style="opacity:0.7;font-size:12px;margin-top:8px">Press P to toggle • Esc also resumes</p>
 </div>
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
-<div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
+<div id="hostPausedBanner" style="position:fixed;inset:0;background:rgba(10,20,50,0.82);color:#fff;z-index:12;display:none;align-items:center;justify-content:center;flex-direction:column;font-family:monospace;font-weight:900;pointer-events:none;text-align:center">
+  <div style="font-size:84px;letter-spacing:10px;color:#ffcc33;text-shadow:0 0 24px #4a78ff,0 0 40px #4a78ff,0 4px 12px #000">GAME PAUSED</div>
+  <div style="font-size:28px;letter-spacing:6px;color:#cfd8ff;margin-top:16px;text-shadow:0 2px 8px #000">Host has paused the game</div>
+  <div style="font-size:14px;letter-spacing:3px;color:#8fa8ff;margin-top:30px;opacity:0.85">Waiting for host to resume…</div>
+</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;pointer-events:none;line-height:1.4;white-space:nowrap">
-  <span style="font-weight:bold;color:#eee">v2.44</span>
+  <span style="font-weight:bold;color:#eee">v2.45</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
@@ -6001,7 +6005,7 @@ function loop() {
   if (mpIsClient() && mpHostPlayer) {
     try { hostPaused = !!mpHostPlayer.getState('hostPaused'); } catch {}
   }
-  document.getElementById('hostPausedBanner').style.display = (mpIsClient() && hostPaused) ? 'block' : 'none';
+  document.getElementById('hostPausedBanner').style.display = (mpIsClient() && hostPaused) ? 'flex' : 'none';
   // Keep the ready-up button label in sync between rounds in multiplayer
   if (mpActive() && !roundActive) updateReadyUI();
   if (mpActive() && document.getElementById('winScreen').style.display === 'flex') updateWinReadyUI();
