@@ -425,7 +425,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v2.03</div>
+  <div>v2.04</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -2034,9 +2034,12 @@ const GUNS = {
 };
 const owned = { knife: true, pistol: true };
 const SLOT_ORDER = ['knife', 'pistol', 'smg', 'shotgun', 'assault', 'rifle', 'sniper', 'lmg', 'bazooka', 'railgun', 'plasma', 'crossbow', 'fingers'];
+// Sandbox flag is declared here (early) so getSlotOrder/updateHotbar etc. don't hit a
+// temporal-dead-zone reference error when they run at init, before the sandbox module block.
+let sandboxActive = false;
 function getSlotOrder() {
   let order = cheats.wand ? [...SLOT_ORDER, 'wand'] : [...SLOT_ORDER];
-  if (typeof sandboxActive !== 'undefined' && sandboxActive) order.push('enemyWand');
+  if (sandboxActive) order.push('enemyWand');
   return order;
 }
 // Keyboard codes and display labels for the 13 weapon slots (top row: ` 1 2 3 4 5 6 7 8 9 0 - =)
@@ -6478,7 +6481,7 @@ document.getElementById('mpLeaveBtn').addEventListener('click', leaveLobby);
 // =====================================================================
 // SANDBOX MODE
 // =====================================================================
-let sandboxActive = false;
+// sandboxActive declared earlier so TDZ-sensitive call sites (getSlotOrder, etc.) don't break
 let sxFly = false;
 let sxNoclip = false;
 let sxFreezeAI = false;
