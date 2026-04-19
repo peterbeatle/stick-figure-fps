@@ -446,7 +446,7 @@
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;pointer-events:none;line-height:1.4;white-space:nowrap">
-  <span style="font-weight:bold;color:#eee">v2.21</span>
+  <span style="font-weight:bold;color:#eee">v2.23</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.18.26</span>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
@@ -569,6 +569,13 @@
 <div id="hpBottom"><div class="hpRow"><div class="hpLbl">HP <span id="hpBottomNum">100</span>/100</div><div class="hpTrack"><div id="hpBottomFill"></div></div></div></div>
 <div id="nukePodiumHint" style="position:fixed;top:60%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.75);color:#ffcc33;font-family:monospace;font-weight:bold;font-size:22px;padding:10px 18px;border-radius:6px;letter-spacing:2px;z-index:9;display:none;pointer-events:none;text-shadow:0 2px 6px #000">Press E to ARM NUKE</div>
 <div id="nukeToast" style="position:fixed;top:18%;left:50%;transform:translate(-50%,-50%);background:rgba(80,0,0,0.88);color:#ffcc22;font-family:monospace;font-weight:bold;font-size:22px;padding:12px 24px;border-radius:8px;letter-spacing:2px;z-index:16;display:none;pointer-events:none;text-align:center;text-shadow:0 2px 6px #000;border:2px solid #ff4040;box-shadow:0 0 30px rgba(255,40,40,0.55)">☢ BOMB READY ☢<br><span style="font-size:14px;color:#fff;letter-spacing:1px">Follow the red beacon to the big red button</span></div>
+<div id="chestToast" style="position:fixed;top:18%;left:50%;transform:translate(-50%,-50%);background:rgba(80,60,0,0.88);color:#ffe033;font-family:monospace;font-weight:bold;font-size:22px;padding:12px 24px;border-radius:8px;letter-spacing:2px;z-index:16;display:none;pointer-events:none;text-align:center;text-shadow:0 2px 6px #000;border:2px solid #ffd020;box-shadow:0 0 30px rgba(255,200,40,0.55)">✦ CHEST READY ✦<br><span style="font-size:14px;color:#fff;letter-spacing:1px">Follow the yellow beacon to the chest</span></div>
+<div id="chestHint" style="position:fixed;top:60%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.75);color:#ffe033;font-family:monospace;font-weight:bold;font-size:22px;padding:10px 18px;border-radius:6px;letter-spacing:2px;z-index:9;display:none;pointer-events:none;text-shadow:0 2px 6px #000">Press E to Open Chest</div>
+<div id="chestLookUp" style="position:fixed;top:35%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;font-size:110px;color:#ffd020;letter-spacing:10px;z-index:15;display:none;pointer-events:none;text-shadow:0 4px 18px #000,0 0 30px #ffaa00">LOOK UP!</div>
+<div id="abilityGranted" style="position:fixed;top:32%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;z-index:17;display:none;pointer-events:none;text-align:center">
+  <div id="abilityTitle" style="font-size:54px;color:#ffe033;letter-spacing:6px;text-shadow:0 0 24px #ff8800,0 0 48px #ff8800,0 2px 8px #000">NEW ABILITY GRANTED</div>
+  <div id="abilityBody" style="font-size:22px;color:#fff;letter-spacing:3px;margin-top:12px;text-shadow:0 2px 6px #000">…</div>
+</div>
 <div id="lookUpBanner" style="position:fixed;top:35%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;font-size:110px;color:#ff2222;letter-spacing:10px;z-index:15;display:none;pointer-events:none;text-shadow:0 4px 18px #000,0 0 30px #ff0000">LOOK UP!</div>
 <canvas id="minimap" width="200" height="200" style="position:fixed;left:12px;top:12px;z-index:7;border-radius:50%;background:rgba(0,0,0,0.55);box-shadow:0 0 8px rgba(0,0,0,0.6);pointer-events:none"></canvas>
 <div id="boosterHud" style="position:fixed;top:160px;right:12px;z-index:6;background:rgba(0,0,0,0.6);padding:6px 10px;border-radius:6px;font-family:monospace;font-size:12px;color:#eee;display:none;min-width:170px">
@@ -2518,8 +2525,43 @@ addEventListener('keydown', e => {
     e.preventDefault();
   }
   if (e.code === keyBind.reload) tryReload();
-  if (e.code === keyBind.interact && pointerLocked) tryNukeInteract();
+  if (e.code === keyBind.interact && pointerLocked) { tryNukeInteract(); tryChestInteract(); }
   if (e.code === keyBind.jump && pointerLocked) { tryJump(); e.preventDefault(); }
+  // Dash: double-tap a movement key within 300ms
+  if (hasDash && pointerLocked && !e.repeat) {
+    const moveCode = (e.code === keyBind.forward) ? 'KeyW'
+                   : (e.code === keyBind.back)    ? 'KeyS'
+                   : (e.code === keyBind.left)    ? 'KeyA'
+                   : (e.code === keyBind.right)   ? 'KeyD' : null;
+    if (moveCode) {
+      const now = performance.now();
+      if (now - (_dashLastTap[moveCode] || 0) < 300) {
+        // Compute dash direction in world space from camera yaw + which key
+        const yaw = player.yaw;
+        const fwdX = -Math.sin(yaw), fwdZ = -Math.cos(yaw);
+        const rgtX =  Math.cos(yaw), rgtZ = -Math.sin(yaw);
+        let dx = 0, dz = 0;
+        if (moveCode === 'KeyW') { dx = fwdX; dz = fwdZ; }
+        else if (moveCode === 'KeyS') { dx = -fwdX; dz = -fwdZ; }
+        else if (moveCode === 'KeyD') { dx = rgtX; dz = rgtZ; }
+        else if (moveCode === 'KeyA') { dx = -rgtX; dz = -rgtZ; }
+        _dashVx = dx * 30; _dashVz = dz * 30; // 30 m/s × 0.2s = 6m dash
+        _dashTimer = 0.2;
+        _dashLastTap[moveCode] = 0;
+      } else {
+        _dashLastTap[moveCode] = now;
+      }
+    }
+  }
+  // Power slam: double-tap crouch while airborne
+  if (hasPowerSlam && pointerLocked && e.code === keyBind.crouch && !e.repeat) {
+    const now = performance.now();
+    if (now - _slamLastCrouchTap < 300 && !player.onGround && !_slamActive) {
+      _slamActive = true;
+      player.vy = -60; // very fast drop
+    }
+    _slamLastCrouchTap = now;
+  }
   // Top row of the keyboard: ` 1 2 3 4 5 6 7 8 9 0 - = → 13 weapon slots
   const idx = SLOT_HOTKEYS.indexOf(e.code);
   if (idx >= 0 && idx < SLOT_ORDER.length) {
@@ -3244,10 +3286,10 @@ const hpPlusTex = (() => {
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#22cc44';
   ctx.fillRect(0, 0, 128, 128);
-  // Red border plus (drawn slightly larger than the white plus, serves as an outline)
+  // Red border plus (drawn thicker than the white plus for a bolder outline)
   ctx.fillStyle = '#cc1818';
-  ctx.fillRect(52, 20, 24, 88);
-  ctx.fillRect(20, 52, 88, 24);
+  ctx.fillRect(48, 16, 32, 96);
+  ctx.fillRect(16, 48, 96, 32);
   // White plus on top
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(56, 24, 16, 80);
@@ -3991,6 +4033,269 @@ function launchNuke() {
     }
   }, 16);
 }
+// =========================================================================
+// CHESTS + ABILITIES (rounds 3, 6, 9 post-boss rewards)
+// =========================================================================
+// Ability flags. Reset on death/restart/goHome.
+let hasDash = false;
+let hasTripleJump = false;
+let hasPowerSlam = false;
+let _chestPodium = null;          // { group, beam, position: Vector3, lidMesh }
+let _chestInProgress = false;      // true during the open→orb→ability-text sequence
+let _pendingChestRound = 0;        // which round is waiting for chest completion before endRound continues
+
+// Dash state
+let _dashLastTap = { KeyW: 0, KeyA: 0, KeyS: 0, KeyD: 0 };
+let _dashTimer = 0;
+let _dashVx = 0;
+let _dashVz = 0;
+
+// Power slam state
+let _slamLastCrouchTap = 0;
+let _slamActive = false;
+
+function resetAbilities() {
+  hasDash = false; hasTripleJump = false; hasPowerSlam = false;
+  _dashTimer = 0; _slamActive = false;
+}
+
+function makeChestPodium() {
+  if (_chestPodium || _chestInProgress) return;
+  const px = 0, pz = 0;
+  const baseY = currentMap === 'neon' ? 9 : terrainHeight(px, pz);
+  const g = new THREE.Group();
+  // Pedestal (matches nuke podium style)
+  const pedMat = new THREE.MeshLambertMaterial({ color: 0x555555, emissive: 0x222222, emissiveIntensity: 0.3 });
+  const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.95, 1.2, 18), pedMat);
+  ped.position.y = 0.6;
+  g.add(ped);
+  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.12, 18), pedMat);
+  plate.position.y = 1.26;
+  g.add(plate);
+  // Chest body (dark wood with gold bands)
+  const woodMat = new THREE.MeshLambertMaterial({ color: 0x6a3a18, emissive: 0x220a00, emissiveIntensity: 0.4 });
+  const goldMat = new THREE.MeshLambertMaterial({ color: 0xffcc33, emissive: 0x885500, emissiveIntensity: 0.6 });
+  const chestBody = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.75, 0.9), woodMat);
+  chestBody.position.y = 1.72;
+  g.add(chestBody);
+  // Gold trim on corners
+  for (const [dx, dz] of [[0, 0.48], [0, -0.48]]) {
+    const band = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.08, 0.04), goldMat);
+    band.position.set(dx, 1.72, dz);
+    g.add(band);
+  }
+  for (const [dx, dz] of [[0.63, 0], [-0.63, 0]]) {
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 0.95), goldMat);
+    band.position.set(dx, 1.72, dz);
+    g.add(band);
+  }
+  // Lock + keyhole on front
+  const lock = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.05), goldMat);
+  lock.position.set(0, 1.72, 0.47);
+  g.add(lock);
+  // Lid (starts closed, animated open on reveal)
+  const lid = new THREE.Group();
+  const lidMesh = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.3, 0.92), woodMat);
+  lidMesh.position.set(0, 0.15, 0);
+  lid.add(lidMesh);
+  const lidBand = new THREE.Mesh(new THREE.BoxGeometry(1.27, 0.06, 0.04), goldMat);
+  lidBand.position.set(0, 0.3, 0.48);
+  lid.add(lidBand);
+  lid.position.set(0, 2.10, -0.45); // pivot at back edge so it opens upward/backward
+  g.add(lid);
+  // Rise animation: start sunk, rise over 1s
+  g.position.set(px, baseY - 2, pz);
+  scene.add(g);
+  _chestPodium = { group: g, lid, position: new THREE.Vector3(px, baseY, pz) };
+  const riseStart = performance.now();
+  const riseIv = setInterval(() => {
+    const t = (performance.now() - riseStart) / 1000;
+    const p = Math.min(1, t / 1.0);
+    g.position.y = baseY - 2 + p * 2;
+    if (p >= 1) clearInterval(riseIv);
+  }, 16);
+  // Yellow beacon column
+  const beamMat = new THREE.MeshBasicMaterial({ color: 0xffdd33, transparent: true, opacity: 0.55, depthWrite: false });
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 150, 16, 1, true), beamMat);
+  beam.position.set(px, baseY + 75, pz);
+  beam.renderOrder = 2;
+  scene.add(beam);
+  _chestPodium.beam = beam;
+  // Toast banner
+  const toast = document.getElementById('chestToast');
+  if (toast) {
+    toast.style.display = 'block';
+    clearTimeout(makeChestPodium._t);
+    makeChestPodium._t = setTimeout(() => { toast.style.display = 'none'; }, 4500);
+  }
+}
+
+function clearChestPodium() {
+  if (_chestPodium) {
+    scene.remove(_chestPodium.group);
+    if (_chestPodium.beam) scene.remove(_chestPodium.beam);
+    _chestPodium = null;
+  }
+  const hint = document.getElementById('chestHint');
+  if (hint) hint.style.display = 'none';
+  const toast = document.getElementById('chestToast');
+  if (toast) toast.style.display = 'none';
+}
+
+function updateChestHint() {
+  const hint = document.getElementById('chestHint');
+  if (!hint) return;
+  if (!_chestPodium || _chestInProgress || !player.alive || spectating) {
+    hint.style.display = 'none';
+    return;
+  }
+  if (_chestPodium.beam) {
+    _chestPodium.beam.material.opacity = 0.4 + Math.sin(performance.now() * 0.006) * 0.25;
+  }
+  const dx = _chestPodium.position.x - camera.position.x;
+  const dz = _chestPodium.position.z - camera.position.z;
+  hint.style.display = Math.hypot(dx, dz) < 3 ? 'block' : 'none';
+}
+
+function tryChestInteract() {
+  if (!_chestPodium || _chestInProgress) return;
+  const dx = _chestPodium.position.x - camera.position.x;
+  const dz = _chestPodium.position.z - camera.position.z;
+  if (Math.hypot(dx, dz) > 3) return;
+  if (mpActive() && window.Playroom) {
+    try { Playroom.RPC.call('chestOpen', {}, Playroom.RPC.Mode.ALL); } catch {}
+  } else {
+    openChestLocal();
+  }
+}
+
+// Classic Zelda "new item" fanfare, approximated with our tone helper
+function playItemGetFanfare() {
+  try {
+    const seq = [
+      { f: 660, d: 0.11, t: 0.00 },  // E5 pickup
+      { f: 740, d: 0.10, t: 0.13 },  // F#5
+      { f: 830, d: 0.10, t: 0.25 },  // G#5
+      { f: 990, d: 0.80, t: 0.40 },  // B5 sustained
+    ];
+    for (const n of seq) playTone({ freq: n.f, type: 'triangle', dur: n.d, vol: 0.25, delay: n.t });
+    playTone({ freq: 660, type: 'triangle', dur: 0.9, vol: 0.12, delay: 0.40 }); // harmony
+  } catch {}
+}
+
+function openChestLocal() {
+  if (_chestInProgress) return;
+  _chestInProgress = true;
+  // Hide the toast/hint
+  const hint = document.getElementById('chestHint');
+  if (hint) hint.style.display = 'none';
+  const toast = document.getElementById('chestToast');
+  if (toast) toast.style.display = 'none';
+  // LOOK UP banner (1s)
+  const lookUp = document.getElementById('chestLookUp');
+  if (lookUp) {
+    lookUp.style.display = 'block';
+    setTimeout(() => { lookUp.style.display = 'none'; }, 1000);
+  }
+  try { playTone({ freq: 900, type: 'sawtooth', dur: 0.3, vol: 0.28 }); } catch {}
+  // Lightning bolt descends from sky over ~1.2s then strikes chest
+  if (_chestPodium) {
+    const px = _chestPodium.position.x;
+    const pz = _chestPodium.position.z;
+    const topY = _chestPodium.position.y + 80;
+    const chestY = _chestPodium.position.y + 1.8;
+    const boltMat = new THREE.MeshBasicMaterial({ color: 0xffee66, transparent: true, opacity: 0.92 });
+    const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 80, 10), boltMat);
+    bolt.position.set(px, topY, pz);
+    scene.add(bolt);
+    const boltStart = performance.now();
+    const boltIv = setInterval(() => {
+      const t = (performance.now() - boltStart) / 1000;
+      const p = Math.min(1, t / 1.2);
+      bolt.position.y = topY - p * (topY - chestY);
+      bolt.material.opacity = 0.92 * (1 - p * 0.3);
+      if (p >= 1) {
+        clearInterval(boltIv);
+        scene.remove(bolt);
+        // Flash burst + open lid + show orb
+        try { playNoise({ dur: 0.4, vol: 0.55, filterFreq: 1200 }); } catch {}
+        try { playTone({ freq: 60, type: 'sine', dur: 0.5, vol: 0.4, slide: -30 }); } catch {}
+        try { spawnPixelBurst(new THREE.Vector3(px, chestY, pz), 0xffee44, 40); } catch {}
+        // Animate lid opening
+        if (_chestPodium && _chestPodium.lid) {
+          const lidStart = performance.now();
+          const lidIv = setInterval(() => {
+            const lt = (performance.now() - lidStart) / 1000;
+            const lp = Math.min(1, lt / 0.5);
+            _chestPodium.lid.rotation.x = -lp * Math.PI * 0.6;
+            if (lp >= 1) clearInterval(lidIv);
+          }, 16);
+        }
+        // Orb — color based on which round this is for
+        const orbColor = (_pendingChestRound === 3) ? 0xffee44   // yellow
+                       : (_pendingChestRound === 6) ? 0x44ee66   // green
+                       :                              0xff3344; // red
+        const orb = new THREE.Mesh(
+          new THREE.SphereGeometry(0.28, 16, 12),
+          new THREE.MeshBasicMaterial({ color: orbColor, transparent: true, opacity: 0.95 })
+        );
+        orb.position.set(px, chestY + 0.3, pz);
+        scene.add(orb);
+        // Orb floats and pulses for 5s
+        const orbStart = performance.now();
+        const orbIv = setInterval(() => {
+          const ot = (performance.now() - orbStart) / 1000;
+          orb.position.y = chestY + 0.3 + Math.sin(ot * 4) * 0.15;
+          orb.scale.setScalar(1 + Math.sin(ot * 6) * 0.15);
+          if (ot >= 5) {
+            clearInterval(orbIv);
+            scene.remove(orb);
+          }
+        }, 30);
+        // Grant the ability for this round + show the "NEW ABILITY" banner
+        grantAbilityForRound(_pendingChestRound);
+        playItemGetFanfare();
+        // After 5s: clean up podium + continue to normal round-clear flow
+        setTimeout(() => {
+          clearChestPodium();
+          _chestInProgress = false;
+          continueAfterChest();
+        }, 5000);
+      }
+    }, 16);
+  }
+}
+
+function grantAbilityForRound(r) {
+  const title = document.getElementById('abilityTitle');
+  const body = document.getElementById('abilityBody');
+  const banner = document.getElementById('abilityGranted');
+  let text = '';
+  if (r === 3) { hasDash = true; text = 'DASH — double-tap W / A / S / D to dash in that direction'; }
+  else if (r === 6) { hasTripleJump = true; text = 'TRIPLE JUMP — you can now jump three times in a row'; }
+  else if (r === 9) { hasPowerSlam = true; text = 'POWER SLAM — double-tap Crouch while airborne to crash down with AoE damage'; }
+  if (body) body.textContent = text;
+  if (banner) {
+    banner.style.display = 'block';
+    setTimeout(() => { banner.style.display = 'none'; }, 5000);
+  }
+}
+
+function continueAfterChest() {
+  const cleared = _pendingChestRound;
+  _pendingChestRound = 0;
+  if (!mpActive() || mpIsHost()) {
+    showRoundClearAnim(cleared, () => {
+      openShop(`Round ${cleared} cleared!`, `Next: Round ${cleared + 1}. Spend your money wisely.`);
+      overlay.setAttribute('data-mode', 'roundend');
+      startBtn.textContent = `Start Round ${cleared + 1}`;
+      startBtn.dataset.mode = 'start';
+      document.getElementById('retryBtn').style.display = 'none';
+      updateHUD();
+    });
+  }
+}
+
 function triggerNuke() {
   if (_nukeInProgress) return;
   _nukeInProgress = true;
@@ -4607,7 +4912,7 @@ player.onGround = true;
 player.jumpsUsed = 0;
 function tryJump() {
   if (!player.alive || !roundActive) return;
-  if (player.jumpsUsed >= 2) return;
+  if (player.jumpsUsed >= (hasTripleJump ? 3 : 2)) return;
   player.vy = 7.5;
   player.onGround = false;
   player.jumpsUsed++;
@@ -4717,6 +5022,12 @@ function updatePlayer(dt) {
   const feetY = camera.position.y - eyeH;
   const headY = camera.position.y + 0.1; // roughly top of head
   const next = camera.position.clone().addScaledVector(move, speed * dt);
+  // Dash — add a burst velocity to the movement this frame
+  if (_dashTimer > 0) {
+    next.x += _dashVx * dt;
+    next.z += _dashVz * dt;
+    _dashTimer -= dt;
+  }
   // Horizontal collision — skip floors, skip walls we are above, skip walls we pass under,
   // and skip any wall whose top is within step-up range so the player can walk onto ramp
   // slabs without being blocked horizontally first.
@@ -4784,7 +5095,21 @@ function updatePlayer(dt) {
     camera.position.y = floorEye;
     if (player.vy < 0) {
       player.vy = 0;
-      if (!player.onGround) { player.onGround = true; player.jumpsUsed = 0; }
+      if (!player.onGround) {
+        player.onGround = true;
+        player.jumpsUsed = 0;
+        // Power slam: detonate AoE on impact
+        if (_slamActive) {
+          _slamActive = false;
+          const impactY = camera.position.y - eyeH;
+          const impactPos = new THREE.Vector3(camera.position.x, impactY, camera.position.z);
+          // Huge blast — wipe nearby enemies
+          explode(impactPos, 10, 180, 0xffaa44, false, null);
+          try { spawnPixelBurst(impactPos, 0xffaa44, 80); } catch {}
+          try { playNoise({ dur: 0.6, vol: 0.7, filterFreq: 200 }); } catch {}
+          try { playTone({ freq: 80, type: 'sine', dur: 0.7, vol: 0.55, slide: -40 }); } catch {}
+        }
+      }
     }
   } else {
     player.onGround = false;
@@ -5038,6 +5363,12 @@ function endRound() {
     return;
   }
   const cleared = round - 1;
+  // Rounds 3/6/9: spawn a reward chest before the standard round-clear transition
+  if ((cleared === 3 || cleared === 6 || cleared === 9) && !sandboxActive) {
+    _pendingChestRound = cleared;
+    makeChestPodium();
+    return; // continueAfterChest() will resume the flow once the player opens it
+  }
   showRoundClearAnim(cleared, () => {
     openShop(`Round ${cleared} cleared!`, `Next: Round ${round}. Spend your money wisely.`);
     overlay.setAttribute('data-mode', 'roundend');
@@ -5093,6 +5424,7 @@ function retryRound() {
   killStreak = 0;
   if (boostActive) endBoost();
   bossSpawned = false; stickKingSpawned = false;
+  resetAbilities(); clearChestPodium();
   gameOver = false;
   document.getElementById('bossBanner').style.display = 'none';
   document.getElementById('bossHud').style.display = 'none';
@@ -5141,6 +5473,7 @@ function restartGame() {
   round = 1;
   killCounter = 0;
   bossSpawned = false; stickKingSpawned = false;
+  resetAbilities(); clearChestPodium();
   gameOver = false;
   survivorMode = false;
   document.getElementById('winScreen').style.display = 'none';
@@ -5409,6 +5742,7 @@ function loop() {
     safeCall(updateBoosterTimers, dt);
     safeCall(updateMinimap, dt);
     safeCall(updateNukePodiumHint, dt);
+    safeCall(updateChestHint, dt);
     safeCall(updateCoordsHUD, dt);
     // Rockets/plasma/arrows run on both sides: host's do real damage; client's are visual-only
     // because the client's enemies array is empty, so collision finds nothing to hurt.
@@ -5617,6 +5951,8 @@ function goHome() {
   round = 1; killCounter = 0; killStreak = 0;
   if (boostActive) endBoost();
   bossSpawned = false; stickKingSpawned = false;
+  resetAbilities(); clearChestPodium();
+  resetAbilities(); clearChestPodium();
   gameOver = false; roundActive = false; survivorMode = false;
   document.getElementById('winScreen').style.display = 'none';
   currentMap = 'arena'; buildMap('arena');
@@ -6585,6 +6921,7 @@ async function startMultiplayer() {
         boosters.push({ mesh, type: data.type, bobT: Math.random() * Math.PI * 2, baseY: data.y });
       });
       Playroom.RPC.register('nukeLaunch', () => { launchNuke(); });
+      Playroom.RPC.register('chestOpen', () => { openChestLocal(); });
       Playroom.RPC.register('claimBooster', (data, sender) => {
         if (!mpIsHost()) return;
         const idx = boosters.findIndex(b => b.mesh.uuid === data.id);
@@ -6817,6 +7154,7 @@ function enterSandbox() {
   // Reset state
   gameOver = false; roundActive = false; survivorMode = false;
   bossSpawned = false; stickKingSpawned = false;
+  resetAbilities(); clearChestPodium();
   killCounter = 0; killStreak = 0;
   if (boostActive) endBoost();
   // Clear any leftovers
