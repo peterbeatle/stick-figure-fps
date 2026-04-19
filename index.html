@@ -177,9 +177,9 @@
   .abilityOrb {
     width: 34px; height: 34px; border-radius: 50%;
     display: block;
-    background: radial-gradient(circle at 35% 30%, #777 0%, #444 45%, #222 100%);
-    opacity: 0.35;
-    box-shadow: 0 0 6px rgba(0,0,0,0.6), inset 0 0 4px rgba(255,255,255,0.2);
+    background: radial-gradient(circle at 35% 30%, #a0a0a0 0%, #606060 45%, #303030 100%);
+    opacity: 0.6;
+    box-shadow: 0 0 8px rgba(0,0,0,0.5), inset 0 0 4px rgba(255,255,255,0.3);
     animation: none;
     transition: opacity 0.25s;
   }
@@ -473,7 +473,7 @@
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;pointer-events:none;line-height:1.4;white-space:nowrap">
-  <span style="font-weight:bold;color:#eee">v2.34</span>
+  <span style="font-weight:bold;color:#eee">v2.36</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
@@ -5286,7 +5286,7 @@ function buildShop() {
           ? `<div style="margin-top:4px;font-size:11px;color:#ffcc33"><b>MAX LEVEL</b></div>`
           : `<button type="button" class="gunUpgrade" style="margin-top:4px;background:${canUpgrade?'#4caf50':'#555'};color:#fff;border:0;border-radius:3px;padding:3px 8px;font-family:monospace;font-size:11px;cursor:${canUpgrade?'pointer':'not-allowed'};width:100%">Upgrade → Lvl ${lvl+1} ($${uCost})</button>`)
       : '';
-    el.innerHTML = `<h3>${g.name} <span style="font-size:11px;color:#ffcc33;opacity:0.85">${lvlPips}</span></h3>
+    el.innerHTML = `<h3>${g.name} <span style="font-size:18px;color:#ffcc33;letter-spacing:2px;text-shadow:0 0 8px rgba(255,200,0,0.4)">${lvlPips}</span></h3>
       <small>DMG ${dmgNow} • RPS ${rpsNow} • Mag ${magNow}</small>
       <small style="${statusStyle}"><b>${status}</b></small>
       ${upgradeBtn}`;
