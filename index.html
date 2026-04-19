@@ -425,7 +425,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v1.99</div>
+  <div>v2.00</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -5057,7 +5057,7 @@ function loop() {
   // Keep the ready-up button label in sync between rounds in multiplayer
   if (mpActive() && !roundActive) updateReadyUI();
   if (mpActive() && document.getElementById('winScreen').style.display === 'flex') updateWinReadyUI();
-  if (roundActive && !paused && !(mpIsClient() && hostPaused)) {
+  if ((roundActive || sandboxActive) && !paused && !(mpIsClient() && hostPaused)) {
     safeCall(updatePlayer, dt);
     if (!mpActive() || mpIsHost()) {
       safeCall(updateEnemies, dt);
@@ -6845,6 +6845,13 @@ function sandboxSpawnEnemy(type, gunKey) {
 // ---- Per-frame sandbox tick (fly physics, freeze AI, coords HUD) ----
 function sandboxTick(dt) {
   if (!sandboxActive) return;
+  // Abyss safety: if you fall too far below the map, teleport back to spawn
+  if (camera.position.y < -40) {
+    const sp = mapSpawnPoint(currentMap);
+    const y0 = (sp.y != null ? sp.y : terrainHeight(sp.x, sp.z)) + 1.7;
+    camera.position.set(sp.x, y0, sp.z);
+    player.vy = 0;
+  }
   if (sxShowCoords) {
     document.getElementById('sxCoords').textContent =
       `x: ${camera.position.x.toFixed(1)}  y: ${camera.position.y.toFixed(1)}  z: ${camera.position.z.toFixed(1)}`;
