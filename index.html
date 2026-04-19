@@ -439,7 +439,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v2.14</div>
+  <div>v2.16</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -1582,9 +1582,35 @@ function buildNeon() {
   }
 }
 
+// Vertical gradient sky as a canvas texture (top → middle → bottom stops)
+function makeGradientSky(stops) {
+  const c = document.createElement('canvas');
+  c.width = 2; c.height = 512;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, c.height);
+  for (const [pos, color] of stops) g.addColorStop(pos, color);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, c.width, c.height);
+  const t = new THREE.CanvasTexture(c);
+  t.minFilter = THREE.LinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  return t;
+}
+const _cottonCandySky = makeGradientSky([
+  [0.0, '#8ad1ff'],  // top: soft sky blue
+  [0.35, '#e7a2cf'], // upper-middle: cotton candy pink
+  [0.7, '#ffc4a5'],  // peach glow
+  [1.0, '#ffe2b5'],  // warm horizon
+]);
+const _neonNightSky = makeGradientSky([
+  [0.0, '#1a0030'],  // deep space purple
+  [0.45, '#3a0a6a'], // rich neon violet
+  [0.75, '#6a1aaa'], // magenta-purple
+  [1.0, '#2a0050'],  // darker horizon haze
+]);
+
 function applyTheme(type) {
   if (type === 'neon') {
-    scene.background = new THREE.Color(0x0a0018);
+    scene.background = _neonNightSky;
     scene.fog.color.setHex(0x18062a);
     scene.fog.near = 15; scene.fog.far = 70;
     sun.color.setHex(0x9988ff);
@@ -1594,15 +1620,15 @@ function applyTheme(type) {
     ambient.intensity = 0.55;
     groundMat.color.setHex(0x0a0020);
   } else if (type === 'hills') {
-    // desert / near-sunset
-    scene.background = new THREE.Color(0xd98a4a);
-    scene.fog.color.setHex(0xd98a4a);
-    scene.fog.near = 25; scene.fog.far = 95;
-    sun.color.setHex(0xffa55a);
+    // cotton-candy sunset (inspired by San Diego right before sundown)
+    scene.background = _cottonCandySky;
+    scene.fog.color.setHex(0xf2b8a0);
+    scene.fog.near = 30; scene.fog.far = 110;
+    sun.color.setHex(0xffc090);
     sun.intensity = 0.85;
-    sun.position.set(-50, 30, -40); // low angle for sunset
-    ambient.color.setHex(0xffb080);
-    ambient.intensity = 0.55;
+    sun.position.set(-50, 25, -40);
+    ambient.color.setHex(0xffc8d8);
+    ambient.intensity = 0.6;
     groundMat.color.setHex(0xc9a37a);
   } else if (type === 'city') {
     scene.background = new THREE.Color(0x6a7a95);
@@ -2817,7 +2843,7 @@ function tryShoot(now) {
       // Local visual-only rocket so client sees their own shot (no damage — enemies array is empty on client)
       spawnRocket(muzzle.clone(), dir.clone(), g.blastRadius, 0);
     } else {
-      spawnRocket(muzzle, dir, g.blastRadius, g.damage * dmgMul);
+      spawnRocket(muzzle, dir, g.blastRadius, g.damage * dmgMul, false, null, cheats.aimbot ? aimbotLockedEnemy : null);
     }
     if (!cheats.mag && mag === 0 && reserve > 0) tryReload();
     syncWeaponState();
@@ -2853,7 +2879,7 @@ function tryShoot(now) {
         d.z += (Math.random() - 0.5) * g.spread * 2;
         d.normalize();
         const start = muzzle.clone().addScaledVector(d, 0.3);
-        spawnArrow(start, d, g.blastRadius, g.damage * dmgMul);
+        spawnArrow(start, d, g.blastRadius, g.damage * dmgMul, false, null, cheats.aimbot ? aimbotLockedEnemy : null);
       }
     }
     if (!cheats.mag && mag === 0 && reserve > 0) tryReload();
@@ -2879,7 +2905,7 @@ function tryShoot(now) {
       }, Playroom.RPC.Mode.HOST); } catch {}
       spawnPlasma(muzzle.clone(), dir.clone(), g.blastRadius, 0); // visual only
     } else {
-      spawnPlasma(muzzle, dir, g.blastRadius, g.damage * dmgMul);
+      spawnPlasma(muzzle, dir, g.blastRadius, g.damage * dmgMul, false, null, cheats.aimbot ? aimbotLockedEnemy : null);
     }
     if (!cheats.mag && mag === 0 && reserve > 0) tryReload();
     syncWeaponState();
@@ -3079,27 +3105,27 @@ const rocketMat = new THREE.MeshLambertMaterial({ color: 0x555555, emissive: 0x9
 const plasmaGeom = new THREE.SphereGeometry(0.15, 10, 8);
 const plasmaMat = new THREE.MeshBasicMaterial({ color: 0x66ffaa });
 const explosions = []; // {mesh, life, maxLife, color}
-function spawnRocket(pos, dir, radius, damage, fromEnemy = false, shooterId = null) {
+function spawnRocket(pos, dir, radius, damage, fromEnemy = false, shooterId = null, homingTarget = null) {
   const m = new THREE.Mesh(rocketGeom, rocketMat);
   m.position.copy(pos);
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   scene.add(m);
-  rockets.push({ mesh: m, vel: dir.clone().multiplyScalar(30), radius, damage, life: 3, kind: 'rocket', fromEnemy, shooterId });
+  rockets.push({ mesh: m, vel: dir.clone().multiplyScalar(30), radius, damage, life: 3, kind: 'rocket', fromEnemy, shooterId, homingTarget });
 }
-function spawnPlasma(pos, dir, radius, damage, fromEnemy = false, shooterId = null) {
+function spawnPlasma(pos, dir, radius, damage, fromEnemy = false, shooterId = null, homingTarget = null) {
   const m = new THREE.Mesh(plasmaGeom, plasmaMat);
   m.position.copy(pos);
   scene.add(m);
-  rockets.push({ mesh: m, vel: dir.clone().multiplyScalar(55), radius, damage, life: 2, kind: 'plasma', fromEnemy, shooterId });
+  rockets.push({ mesh: m, vel: dir.clone().multiplyScalar(55), radius, damage, life: 2, kind: 'plasma', fromEnemy, shooterId, homingTarget });
 }
 const arrowGeom = new THREE.CylinderGeometry(0.03, 0.03, 0.45, 6);
 const arrowMat = new THREE.MeshLambertMaterial({ color: 0x8a8a8a, emissive: 0x225522, emissiveIntensity: 0.35 });
-function spawnArrow(pos, dir, radius, damage, fromEnemy = false, shooterId = null) {
+function spawnArrow(pos, dir, radius, damage, fromEnemy = false, shooterId = null, homingTarget = null) {
   const m = new THREE.Mesh(arrowGeom, arrowMat);
   m.position.copy(pos);
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   scene.add(m);
-  rockets.push({ mesh: m, vel: dir.clone().multiplyScalar(60), radius, damage, life: 2.5, kind: 'arrow', fromEnemy, shooterId });
+  rockets.push({ mesh: m, vel: dir.clone().multiplyScalar(60), radius, damage, life: 2.5, kind: 'arrow', fromEnemy, shooterId, homingTarget });
 }
 function explode(pos, radius, damage, color = 0xff6600, selfDamage = true, shooterId = null) {
   const mesh = new THREE.Mesh(
@@ -3138,6 +3164,17 @@ function explode(pos, radius, damage, color = 0xff6600, selfDamage = true, shoot
 function updateRockets(dt) {
   for (let i = rockets.length - 1; i >= 0; i--) {
     const r = rockets[i];
+    // Heat-seeking: when an aimbot-fired projectile has a live homing target,
+    // rotate its velocity vector each frame toward the target's body center.
+    if (r.homingTarget && r.homingTarget.userData && !r.homingTarget.userData.dead && r.homingTarget.parent) {
+      const s = r.homingTarget.scale.x || 1;
+      const aim = r.homingTarget.position.clone().add(new THREE.Vector3(0, 1.0 * s, 0));
+      const toTarget = aim.sub(r.mesh.position).normalize();
+      const speed = r.vel.length();
+      // Full homing — snap velocity to point at the target. Projectile keeps its speed.
+      r.vel.copy(toTarget.multiplyScalar(speed));
+      r.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), toTarget.clone().normalize());
+    }
     const step = r.vel.clone().multiplyScalar(dt);
     r.mesh.position.add(step);
     r.life -= dt;
@@ -4562,8 +4599,11 @@ function tryJump() {
   player.jumpsUsed++;
 }
 
+let aimbotLockedEnemy = null;
 function updatePlayer(dt) {
   if (!player.alive || spectating) return;
+  // Reset the lock each frame; the aimbot block below sets it if we find a target
+  if (!cheats.aimbot || !adsActive) aimbotLockedEnemy = null;
   // Aimbot cheat: while ADS, snap aim to the nearest alive enemy's head hitbox if visible.
   // Track each enemy's velocity so we can lead projectile weapons (bazooka/plasma/arrow).
   if (cheats.aimbot && adsActive) {
@@ -4598,6 +4638,7 @@ function updatePlayer(dt) {
       if (wh.length && wh[0].distance < dist - 0.1) continue;
       if (dist < bestD) { bestD = dist; best = headPos; bestEnemy = e; }
     }
+    aimbotLockedEnemy = bestEnemy || null;
     if (best && bestEnemy) {
       const g = GUNS[currentGun];
       let projSpeed = 0;
