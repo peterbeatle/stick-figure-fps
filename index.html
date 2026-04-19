@@ -5,6 +5,20 @@
 <meta charset="UTF-8" />
 <title>Stick Figure FPS</title>
 <link rel="icon" href="data:,">
+
+<!-- ===== Analytics ===== -->
+<!-- Cloudflare Web Analytics: replace YOUR_CLOUDFLARE_TOKEN with the token Cloudflare gives you -->
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "YOUR_CLOUDFLARE_TOKEN"}'></script>
+
+<!-- Microsoft Clarity: replace YOUR_CLARITY_ID with the project ID Clarity gives you -->
+<script type="text/javascript">
+  (function(c,l,a,r,i,t,y){
+    c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+    t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+    y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+  })(window, document, "clarity", "script", "YOUR_CLARITY_ID");
+</script>
+<!-- ===== /Analytics ===== -->
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font-family: monospace; color: #eee; }
   #game { width: 100vw; height: 100vh; display: block; }
@@ -425,7 +439,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v2.04</div>
+  <div>v2.06</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -433,6 +447,17 @@
 <div id="bossHud" style="position:fixed;top:100px;left:50%;transform:translateX(-50%);z-index:6;"></div>
 <div id="roundClearAnim"><div class="rcBg"></div><div class="rcText">Round 1 Cleared!</div><div class="rcSub">next wave incoming…</div></div>
 <div id="lostAnim"><div class="lostText">YOU LOST</div></div>
+
+<!-- Username gate: shown on first visit. Name is stored in localStorage and tied to Clarity sessions. -->
+<div id="usernameModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:99;display:none;align-items:center;justify-content:center;flex-direction:column;color:#eee;font-family:monospace;text-align:center;padding:20px">
+  <h1 style="font-size:36px;margin:0 0 8px;color:#ffcc33;letter-spacing:4px">STICK FIGURE FPS</h1>
+  <p style="margin:0 0 18px;opacity:0.85;font-size:15px">Enter your name to play</p>
+  <div style="display:flex;flex-direction:column;gap:10px;align-items:center">
+    <input type="text" id="usernameInput" maxlength="20" placeholder="Your name" style="background:#222;color:#eee;border:1px solid #555;border-radius:4px;padding:12px 16px;font-family:monospace;font-size:17px;width:280px;text-align:center">
+    <button type="button" id="usernameSubmit" style="background:#4caf50;color:white;border:0;border-radius:4px;padding:12px 28px;cursor:pointer;font-family:monospace;font-size:17px;min-width:140px">Start</button>
+  </div>
+  <p style="margin-top:22px;opacity:0.5;font-size:11px;max-width:360px">Your name is stored locally on this device only. No email, no password — just what your friends should call you in matches.</p>
+</div>
 
 <!-- Sandbox-mode HUD hints (always-visible cheatsheet, top-right) -->
 <div id="sandboxHints" style="position:fixed;top:200px;right:12px;z-index:6;background:rgba(0,0,0,0.45);color:#bbb;font-family:monospace;font-size:11px;padding:6px 10px;border-radius:6px;line-height:1.5;display:none;pointer-events:none;text-align:right">
@@ -571,6 +596,7 @@
   <button type="button" id="settingsGear" title="Settings">⚙</button>
   <h1 id="title">Stick Figure FPS</h1>
   <p id="subtitle" style="margin:0 0 8px">Click to lock the mouse and start playing.</p>
+  <p id="playerNameRow" style="margin:2px 0 8px;font-size:13px;opacity:0.7">Playing as <b id="playerNameShow" style="color:#ffcc33">—</b> <a href="#" id="changeNameLink" style="color:#7fc8ff;text-decoration:none;margin-left:6px">(change)</a></p>
   <div id="topActions" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:4px 0 14px">
     <button class="primary big" id="startBtn">Start Round</button>
     <button class="primary" id="retryBtn" style="display:none"></button>
@@ -639,6 +665,59 @@
 </script>
 <script type="module">
 import * as THREE from 'three';
+
+// ---------- Player name (stored locally) ----------
+const PLAYER_NAME_KEY = 'stickFigureFpsName';
+function getPlayerName() {
+  try { return localStorage.getItem(PLAYER_NAME_KEY) || ''; } catch { return ''; }
+}
+function setPlayerName(name) {
+  name = (name || '').trim().slice(0, 20);
+  if (!name) return false;
+  try { localStorage.setItem(PLAYER_NAME_KEY, name); } catch {}
+  // Tag Microsoft Clarity sessions so you can search recordings by name
+  try { if (typeof window.clarity === 'function') window.clarity('identify', name); } catch {}
+  // Broadcast to Playroom if we're in a lobby
+  try { if (window.Playroom && Playroom.myPlayer) Playroom.myPlayer().setState('playerName', name, true); } catch {}
+  const show = document.getElementById('playerNameShow');
+  if (show) show.textContent = name;
+  return true;
+}
+function showUsernameGate(force = false) {
+  const modal = document.getElementById('usernameModal');
+  const input = document.getElementById('usernameInput');
+  if (!modal || !input) return;
+  input.value = getPlayerName();
+  modal.style.display = 'flex';
+  setTimeout(() => input.focus(), 10);
+}
+function hideUsernameGate() {
+  const modal = document.getElementById('usernameModal');
+  if (modal) modal.style.display = 'none';
+}
+(function wireUsernameGate() {
+  const submit = () => {
+    const val = document.getElementById('usernameInput').value;
+    if (setPlayerName(val)) hideUsernameGate();
+  };
+  document.getElementById('usernameSubmit').addEventListener('click', submit);
+  document.getElementById('usernameInput').addEventListener('keydown', (e) => {
+    if (e.code === 'Enter') submit();
+  });
+  document.getElementById('changeNameLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    showUsernameGate(true);
+  });
+  // Initialize label + gate visibility on first load
+  const existing = getPlayerName();
+  if (existing) {
+    const show = document.getElementById('playerNameShow');
+    if (show) show.textContent = existing;
+    try { if (typeof window.clarity === 'function') window.clarity('identify', existing); } catch {}
+  } else {
+    showUsernameGate();
+  }
+})();
 
 // ---------- Crosshair ----------
 const DEFAULT_CROSSHAIR = { shape: 'dot', color: '#ff69b4', size: 2, thickness: 2, gap: 4 };
@@ -5726,6 +5805,17 @@ let mpRole = 'none'; // 'host' or 'client' or 'none'
 let remotePlayer = null; // { pose: {x,y,z,yaw,pitch,gun}, mesh }
 let mpPoseTimer = null;
 
+function drawPlayerNameOntoCanvas(canvas, name) {
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = 'bold 36px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 6;
+  ctx.strokeText(name, canvas.width / 2, canvas.height / 2);
+  ctx.fillStyle = '#7fc8ff';
+  ctx.fillText(name, canvas.width / 2, canvas.height / 2);
+}
 function makeRemotePlayerMesh() {
   const g = new THREE.Group();
   const blueBone = new THREE.MeshBasicMaterial({ color: 0x4aa3ff });
@@ -5754,23 +5844,20 @@ function makeRemotePlayerMesh() {
   gunPlaceholder.userData.isPlaceholderGun = true;
   g.add(gunPlaceholder);
   g.userData.gunPlaceholder = gunPlaceholder;
-  // floating name/label
-  const canvas = document.createElement('canvas');
-  canvas.width = 256; canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  ctx.font = 'bold 36px monospace';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.strokeStyle = '#000'; ctx.lineWidth = 6;
-  ctx.strokeText('P2', canvas.width/2, canvas.height/2);
-  ctx.fillStyle = '#7fc8ff';
-  ctx.fillText('P2', canvas.width/2, canvas.height/2);
-  const tex = new THREE.CanvasTexture(canvas);
-  const labelMat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+  // floating name/label — starts as "P2" and swapped in updateRemotePlayer when a name arrives
+  const nameCanvas = document.createElement('canvas');
+  nameCanvas.width = 512; nameCanvas.height = 64;
+  const nameTex = new THREE.CanvasTexture(nameCanvas);
+  nameTex.minFilter = THREE.LinearFilter;
+  drawPlayerNameOntoCanvas(nameCanvas, 'P2');
+  const labelMat = new THREE.SpriteMaterial({ map: nameTex, depthTest: false });
   const label = new THREE.Sprite(labelMat);
   label.position.set(0, 2.6, 0);
-  label.scale.set(1.2, 0.3, 1);
+  label.scale.set(1.8, 0.3, 1);
   g.add(label);
+  g.userData.nameCanvas = nameCanvas;
+  g.userData.nameTex = nameTex;
+  g.userData.currentName = 'P2';
   // Green HP bar above the remote player (width, outline, bg, fg)
   const hpGroup = new THREE.Group();
   const outl = new THREE.Mesh(new THREE.PlaneGeometry(1.06, 0.24), new THREE.MeshBasicMaterial({ color: 0x000000, depthTest: false }));
@@ -6367,6 +6454,8 @@ async function startMultiplayer() {
       me.setState('hp', player.hp, false);
       me.setState('alive', !!player.alive, true);
       me.setState('gun', currentGun, true);
+      const myName = getPlayerName();
+      if (myName) me.setState('playerName', myName, true);
     }, 50);
   } catch (e) {
     console.error('[mp] insertCoin failed', e);
@@ -6454,6 +6543,13 @@ function updateRemotePlayer() {
     const ratio = Math.max(0, Math.min(1, hp / 100));
     fg.scale.x = ratio || 0.001;
     fg.position.x = -1.0 * (1 - ratio) / 2;
+  }
+  // Refresh the floating name label if the remote player published one
+  const remoteName = p.getState('playerName');
+  if (remoteName && remotePlayer.mesh.userData.currentName !== remoteName) {
+    drawPlayerNameOntoCanvas(remotePlayer.mesh.userData.nameCanvas, remoteName);
+    remotePlayer.mesh.userData.nameTex.needsUpdate = true;
+    remotePlayer.mesh.userData.currentName = remoteName;
   }
   // Swap in the remote's actual weapon when it changes
   const remoteGun = p.getState('gun');
