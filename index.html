@@ -477,7 +477,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;pointer-events:none;line-height:1.4;white-space:nowrap">
-  <span style="font-weight:bold;color:#eee">v2.46</span>
+  <span style="font-weight:bold;color:#eee">v2.47</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
@@ -5123,7 +5123,8 @@ function updateScoreboard() {
   const titleCase = (n) => (n || '').replace(/\b\w/g, c => c.toUpperCase());
   const myName = titleCase(getPlayerName() || 'You');
   const acc = stats.shotsFired > 0 ? Math.round(stats.shotsHit / stats.shotsFired * 100) : 0;
-  rows.push({ name: myName, kR: stats.killsRound, kS: stats.killsSession, acc, dR: stats.damageRound, dS: stats.damageSession, dth: stats.deaths });
+  const myCol = myPlayerColor();
+  rows.push({ name: myName, color: myCol.css, kR: stats.killsRound, kS: stats.killsSession, acc, dR: stats.damageRound, dS: stats.damageSession, dth: stats.deaths });
   if (mpActive() && window.Playroom) {
     for (const p of mpAllPlayers.values()) {
       const myId = Playroom.myPlayer() && Playroom.myPlayer().id;
@@ -5132,7 +5133,8 @@ function updateScoreboard() {
         const s = p.getState('stats') || {};
         const name = titleCase(p.getState('playerName') || 'P2');
         const a = (s.sF || 0) > 0 ? Math.round((s.sH || 0) / s.sF * 100) : 0;
-        rows.push({ name, kR: s.kR || 0, kS: s.kS || 0, acc: a, dR: s.dR || 0, dS: s.dS || 0, dth: s.dth || 0 });
+        const col = getPlayerColor(p.id);
+        rows.push({ name, color: col.css, kR: s.kR || 0, kS: s.kS || 0, acc: a, dR: s.dR || 0, dS: s.dS || 0, dth: s.dth || 0 });
       } catch {}
     }
   }
@@ -5152,7 +5154,7 @@ function updateScoreboard() {
     </thead><tbody>`;
   for (const r of rows) {
     html += `<tr style="border-bottom:1px solid #2a2d3a">
-      <td style="padding:6px 8px;color:#fff">${r.name}</td>
+      <td style="padding:6px 8px;color:${r.color || '#fff'};font-weight:bold">${r.name}</td>
       <td style="padding:6px 8px;text-align:right">${r.kR}</td>
       <td style="padding:6px 8px;text-align:right">${r.kS}</td>
       <td style="padding:6px 8px;text-align:right">${r.acc}%</td>
@@ -6680,9 +6682,41 @@ let mpRole = 'none'; // 'host' or 'client' or 'none'
 // to the first remote (used by spectate-camera logic).
 const remotePlayers = new Map();
 let remotePlayer = null;
+
+// Player colors by lobby position: host=blue, P2=green, P3=yellow, P4=orange
+const PLAYER_COLORS = [
+  { hex: 0x4aa3ff, css: '#4aa3ff', emissive: 0x224466 }, // blue
+  { hex: 0x4ddb4d, css: '#4ddb4d', emissive: 0x1d6020 }, // green
+  { hex: 0xffd84a, css: '#ffd84a', emissive: 0x7a5a00 }, // yellow
+  { hex: 0xff8833, css: '#ff8833', emissive: 0x7a3300 }, // orange
+];
+function getMpPlayerOrder() {
+  // Returns ordered list of player IDs: host first, then clients by join id sort
+  let hostId = null;
+  const otherIds = [];
+  for (const [id, pl] of mpAllPlayers) {
+    try {
+      if (pl.getState && pl.getState('isHostFlag')) hostId = id;
+      else otherIds.push(id);
+    } catch { otherIds.push(id); }
+  }
+  otherIds.sort();
+  return hostId ? [hostId, ...otherIds] : otherIds;
+}
+function getPlayerColor(playerId) {
+  if (!playerId) return PLAYER_COLORS[0];
+  const order = getMpPlayerOrder();
+  const idx = order.indexOf(playerId);
+  return PLAYER_COLORS[Math.max(0, Math.min(idx === -1 ? 0 : idx, PLAYER_COLORS.length - 1))];
+}
+function myPlayerColor() {
+  if (!mpActive() || !window.Playroom) return PLAYER_COLORS[0];
+  const me = Playroom.myPlayer && Playroom.myPlayer();
+  return me ? getPlayerColor(me.id) : PLAYER_COLORS[0];
+}
 let mpPoseTimer = null;
 
-function drawPlayerNameOntoCanvas(canvas, name) {
+function drawPlayerNameOntoCanvas(canvas, name, colorCss) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.font = 'bold 36px monospace';
@@ -6690,14 +6724,15 @@ function drawPlayerNameOntoCanvas(canvas, name) {
   ctx.textBaseline = 'middle';
   ctx.strokeStyle = '#000'; ctx.lineWidth = 6;
   ctx.strokeText(name, canvas.width / 2, canvas.height / 2);
-  ctx.fillStyle = '#7fc8ff';
+  ctx.fillStyle = colorCss || '#7fc8ff';
   ctx.fillText(name, canvas.width / 2, canvas.height / 2);
 }
-function makeRemotePlayerMesh() {
+function makeRemotePlayerMesh(color) {
+  const col = color || PLAYER_COLORS[0];
   const g = new THREE.Group();
-  const blueBone = new THREE.MeshBasicMaterial({ color: 0x4aa3ff });
-  const blueHead = new THREE.MeshLambertMaterial({ color: 0x4aa3ff, emissive: 0x224466, emissiveIntensity: 0.4 });
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), blueHead);
+  const boneMat = new THREE.MeshBasicMaterial({ color: col.hex });
+  const headMat = new THREE.MeshLambertMaterial({ color: col.hex, emissive: col.emissive, emissiveIntensity: 0.4 });
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), headMat);
   head.position.set(0, 1.75, 0);
   head.add(makeFriendlyFace(0.25));
   g.add(head);
@@ -6709,7 +6744,7 @@ function makeRemotePlayerMesh() {
     [0,0.9,0],[ 0.25,0.0,0],
   ];
   for (let i = 0; i < pts.length; i += 2) {
-    g.add(makeBone(pts[i], pts[i+1], blueBone));
+    g.add(makeBone(pts[i], pts[i+1], boneMat));
   }
   // Real weapon mesh is attached dynamically once we know what the remote player has equipped.
   // We keep a small placeholder box until the first 'gun' state arrives.
@@ -6726,7 +6761,7 @@ function makeRemotePlayerMesh() {
   nameCanvas.width = 512; nameCanvas.height = 64;
   const nameTex = new THREE.CanvasTexture(nameCanvas);
   nameTex.minFilter = THREE.LinearFilter;
-  drawPlayerNameOntoCanvas(nameCanvas, 'P2');
+  drawPlayerNameOntoCanvas(nameCanvas, 'P2', col.css);
   const labelMat = new THREE.SpriteMaterial({ map: nameTex, depthTest: false });
   const label = new THREE.Sprite(labelMat);
   label.position.set(0, 2.6, 0);
@@ -6953,7 +6988,11 @@ function mpBroadcastWorld(dt) {
       t: b.type,
     })), false);
     me.setState('rockets', rocketSnap, false);
-    me.setState('round', { n: round, active: roundActive, map: currentMap, bossSpawned, won: (round >= 13 && !survivorMode), lost: !!gameOver }, true);
+    me.setState('round', {
+      n: round, active: roundActive, map: currentMap, bossSpawned,
+      won: (round >= 13 && !survivorMode), lost: !!gameOver,
+      chestRound: _pendingChestRound || 0,
+    }, true);
   } catch (e) { console.warn('[mp] broadcast failed', e); }
 }
 
@@ -6993,8 +7032,19 @@ function mpClientSync(dt) {
       round = newRound;
       try { startRound(); } catch (e) { console.warn('[mp] client startRound failed', e); }
     }
+    // Chest round: host signaled a chest spawn — mirror it locally so this client also
+    // sees the chest, lightning, ability orb, and "NEW ABILITY" banner.
+    const hostChestRound = roundState.chestRound || 0;
+    if (hostChestRound && !_chestPodium && !_chestInProgress && !_pendingChestRound) {
+      _pendingChestRound = hostChestRound;
+      try { makeChestPodium(); } catch (e) { console.warn('[mp] client chest spawn failed', e); }
+    }
+    // While a chest is pending or the banner is up on either side, DON'T play the
+    // regular round-clear animation yet. Wait until the chest flow fully completes
+    // (host clears chestRound via continueAfterChest).
+    const chestBusy = !!_pendingChestRound || !!_chestPodium || _chestInProgress || _awaitingAbilityContinue || hostChestRound;
     // Detect host ending a round — play the transition, then show win screen or shop
-    if (!newActive && roundActive) {
+    if (!newActive && roundActive && !chestBusy) {
       const cleared = newRound - 1;
       round = newRound;
       try {
@@ -7011,7 +7061,7 @@ function mpClientSync(dt) {
       } catch (e) { console.warn('[mp] client openShop failed', e); }
     }
     round = newRound;
-    roundActive = newActive;
+    if (!chestBusy) roundActive = newActive;
     // Mirror the BOSS INCOMING banner when the host spawns bosses
     const bossNow = !!roundState.bossSpawned;
     if (bossNow && !mpLastBossSpawned) {
@@ -7307,10 +7357,12 @@ async function startMultiplayer() {
       const myId = Playroom.myPlayer().id;
       if (p.id !== myId && !remotePlayers.has(p.id)) {
         console.log('[mp] remote player joined:', p.id);
+        const col = getPlayerColor(p.id);
         const entry = {
           playroomPlayer: p,
           pose: { x: 0, y: 1.7, z: 0, yaw: 0, pitch: 0 },
-          mesh: makeRemotePlayerMesh(),
+          mesh: makeRemotePlayerMesh(col),
+          color: col,
         };
         scene.add(entry.mesh);
         remotePlayers.set(p.id, entry);
@@ -7438,7 +7490,7 @@ function updateRemotePlayer() {
     }
     const remoteName = p.getState('playerName');
     if (remoteName && entry.mesh.userData.currentName !== remoteName) {
-      drawPlayerNameOntoCanvas(entry.mesh.userData.nameCanvas, remoteName);
+      drawPlayerNameOntoCanvas(entry.mesh.userData.nameCanvas, remoteName, (entry.color && entry.color.css) || '#7fc8ff');
       entry.mesh.userData.nameTex.needsUpdate = true;
       entry.mesh.userData.currentName = remoteName;
     }
