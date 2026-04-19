@@ -348,6 +348,8 @@
       <label><input type="checkbox" id="showPingChk"> Show Ping <span style="opacity:0.6;font-size:11px">(shows "solo" in single-player; real ms in multiplayer)</span></label>
     </div>
     <label style="display:flex;align-items:center;gap:8px;margin-top:6px">Max FPS <input type="range" id="maxFpsSlider" min="30" max="241" step="1" value="241" style="flex:1"> <span id="maxFpsVal">Unlimited</span></label>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:6px">Render Scale <input type="range" id="renderScaleSlider" min="0.5" max="2.0" step="0.1" value="1.0" style="flex:1"> <span id="renderScaleVal">1.0×</span></label>
+    <div style="font-size:11px;opacity:0.65;margin-top:-2px">Higher = sharper + slower. Lower = blurrier + faster. Try 0.8 if FPS feels low.</div>
 
     <h3 style="margin:16px 0 6px;color:#ffcc33">Sensitivity</h3>
     <label style="display:flex;align-items:center;gap:8px;margin:6px 0">
@@ -444,7 +446,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v2.19</div>
+  <div>v2.20</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -1082,7 +1084,9 @@ function setTrack(i) {
 // ---------- Setup ----------
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
+// Cap pixel ratio at 1.5 by default — on retina/4K laptops, native DPR (2–3) makes
+// the renderer work 4–9× harder per frame, which on its own can crater FPS to ~30.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 
@@ -5920,6 +5924,12 @@ document.getElementById('maxFpsSlider').addEventListener('input', e => {
   const v = +e.target.value;
   perfMaxFps = (v >= 241) ? 0 : v;
   document.getElementById('maxFpsVal').textContent = perfMaxFps === 0 ? 'Unlimited' : (perfMaxFps + ' FPS');
+});
+document.getElementById('renderScaleSlider').addEventListener('input', e => {
+  const v = +e.target.value;
+  document.getElementById('renderScaleVal').textContent = v.toFixed(1) + '×';
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5) * v);
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
 // ---- Controls rebind UI ----
