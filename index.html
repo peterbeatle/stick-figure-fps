@@ -473,7 +473,7 @@
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;pointer-events:none;line-height:1.4;white-space:nowrap">
-  <span style="font-weight:bold;color:#eee">v2.32</span>
+  <span style="font-weight:bold;color:#eee">v2.34</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
@@ -607,6 +607,7 @@
 <div id="abilityGranted" style="position:fixed;top:32%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;z-index:17;display:none;pointer-events:none;text-align:center">
   <div id="abilityTitle" style="font-size:54px;color:#ffe033;letter-spacing:6px;text-shadow:0 0 24px #ff8800,0 0 48px #ff8800,0 2px 8px #000">NEW ABILITY GRANTED</div>
   <div id="abilityBody" style="font-size:22px;color:#fff;letter-spacing:3px;margin-top:12px;text-shadow:0 2px 6px #000">…</div>
+  <div id="abilityContinue" style="font-size:16px;color:#ffcc33;letter-spacing:4px;margin-top:26px;text-shadow:0 0 12px #ff8800,0 2px 6px #000;animation:abilityPulse 1s ease-in-out infinite alternate">PRESS ENTER TO CONTINUE</div>
 </div>
 <div id="lookUpBanner" style="position:fixed;top:35%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;font-size:110px;color:#ff2222;letter-spacing:10px;z-index:15;display:none;pointer-events:none;text-shadow:0 4px 18px #000,0 0 30px #ff0000">LOOK UP!</div>
 <canvas id="minimap" width="200" height="200" style="position:fixed;left:12px;top:12px;z-index:7;border-radius:50%;background:rgba(0,0,0,0.55);box-shadow:0 0 8px rgba(0,0,0,0.6);pointer-events:none"></canvas>
@@ -2191,12 +2192,12 @@ const GUNS = {
   enemyWand: { name: 'Enemy Wand', damage: 0, fireRate: 3, magSize: 1, reserve: 0, reloadTime: 0, spread: 0, cost: 0, auto: true, enemyWand: true },
 };
 const owned = { knife: true, pistol: true };
-// Per-gun level (1–4). 1.25× stat multiplier per level above 1.
+// Per-gun level (1–4). 1.125× stat multiplier per level above 1.
 const gunLevels = {};
 const GUN_MAX_LEVEL = 4;
 const GUN_UPGRADE_COSTS = [0, 500, 1500, 3500]; // cost to go from level i → i+1 (index = current level - 1 up to 3)
 function levelOf(key) { return gunLevels[key] || 1; }
-function levelMul(key) { return Math.pow(1.25, levelOf(key) - 1); }
+function levelMul(key) { return Math.pow(1.125, levelOf(key) - 1); }
 function upgradeCost(key) {
   const lvl = levelOf(key);
   if (lvl >= GUN_MAX_LEVEL) return null;
@@ -2574,6 +2575,7 @@ addEventListener('keydown', e => {
   if (pointerLocked && (e.ctrlKey || e.code === 'ControlLeft' || e.code === 'ControlRight')) {
     e.preventDefault();
   }
+  if (e.code === 'Enter' && _awaitingAbilityContinue) { dismissAbilityBanner(); return; }
   if (e.code === keyBind.reload) tryReload();
   if (e.code === keyBind.interact && pointerLocked) { tryNukeInteract(); tryChestInteract(); }
   if (e.code === keyBind.jump && pointerLocked) { tryJump(); e.preventDefault(); }
@@ -4093,6 +4095,7 @@ let hasPowerSlam = false;
 let _chestPodium = null;          // { group, beam, position: Vector3, lidMesh }
 let _chestInProgress = false;      // true during the open→orb→ability-text sequence
 let _pendingChestRound = 0;        // which round is waiting for chest completion before endRound continues
+let _awaitingAbilityContinue = false; // true while the NEW ABILITY banner is shown + game is frozen
 
 // Dash state
 let _dashLastTap = { KeyW: 0, KeyA: 0, KeyS: 0, KeyD: 0 };
@@ -4335,12 +4338,8 @@ function openChestLocal() {
         // Grant the ability for this round + show the "NEW ABILITY" banner
         grantAbilityForRound(_pendingChestRound);
         playItemGetFanfare();
-        // After 5s: clean up podium + continue to normal round-clear flow
-        setTimeout(() => {
-          clearChestPodium();
-          _chestInProgress = false;
-          continueAfterChest();
-        }, 5000);
+        // Freeze the game and wait for the player to press Enter to continue
+        _awaitingAbilityContinue = true;
       }
     }, 2400);
   }
@@ -4356,10 +4355,16 @@ function grantAbilityForRound(r) {
   else if (r === 9) { hasPowerSlam = true; text = 'POWER SLAM — double-tap Crouch while airborne to crash down with AoE damage'; }
   updateAbilityHud();
   if (body) body.textContent = text;
-  if (banner) {
-    banner.style.display = 'block';
-    setTimeout(() => { banner.style.display = 'none'; }, 5000);
-  }
+  if (banner) banner.style.display = 'block';
+}
+function dismissAbilityBanner() {
+  if (!_awaitingAbilityContinue) return;
+  _awaitingAbilityContinue = false;
+  const banner = document.getElementById('abilityGranted');
+  if (banner) banner.style.display = 'none';
+  clearChestPodium();
+  _chestInProgress = false;
+  continueAfterChest();
 }
 
 function continueAfterChest() {
@@ -5003,6 +5008,7 @@ function tryJump() {
 let aimbotLockedEnemy = null;
 function updatePlayer(dt) {
   if (!player.alive || spectating) return;
+  if (_awaitingAbilityContinue) return; // freeze until Enter is pressed
   // Reset the lock each frame; the aimbot block below sets it if we find a target
   if (!cheats.aimbot || !adsActive) aimbotLockedEnemy = null;
   // Aimbot cheat: while ADS, snap aim to the nearest alive enemy's head hitbox if visible.
@@ -5274,7 +5280,7 @@ function buildShop() {
                  :              `$${g.cost} (need more)`;
     const statusStyle = canBuy ? 'color:#4caf50' : '';
     // Gold stars for levels 2-4
-    const lvlPips = '★'.repeat(lvl - 1) + '☆'.repeat(GUN_MAX_LEVEL - lvl);
+    const lvlPips = '★'.repeat(lvl) + '☆'.repeat(GUN_MAX_LEVEL - lvl);
     const upgradeBtn = isOwned
       ? (uCost === null
           ? `<div style="margin-top:4px;font-size:11px;color:#ffcc33"><b>MAX LEVEL</b></div>`
