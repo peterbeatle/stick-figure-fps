@@ -446,7 +446,7 @@
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;pointer-events:none;line-height:1.4;white-space:nowrap">
-  <span style="font-weight:bold;color:#eee">v2.24</span>
+  <span style="font-weight:bold;color:#eee">v2.27</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.18.26</span>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
@@ -4198,25 +4198,46 @@ function openChestLocal() {
     setTimeout(() => { lookUp.style.display = 'none'; }, 1000);
   }
   try { playTone({ freq: 900, type: 'sawtooth', dur: 0.3, vol: 0.28 }); } catch {}
-  // Lightning bolt descends from sky over ~1.2s then strikes chest
+  // Lightning STORM: random bolts raining across the map for ~1.2s, plus a central strike on the chest
   if (_chestPodium) {
     const px = _chestPodium.position.x;
     const pz = _chestPodium.position.z;
-    const topY = _chestPodium.position.y + 80;
     const chestY = _chestPodium.position.y + 1.8;
     const boltMat = new THREE.MeshBasicMaterial({ color: 0xffee66, transparent: true, opacity: 0.92 });
-    const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 80, 10), boltMat);
-    bolt.position.set(px, topY, pz);
-    scene.add(bolt);
-    const boltStart = performance.now();
-    const boltIv = setInterval(() => {
-      const t = (performance.now() - boltStart) / 1000;
-      const p = Math.min(1, t / 1.2);
-      bolt.position.y = topY - p * (topY - chestY);
-      bolt.material.opacity = 0.92 * (1 - p * 0.3);
-      if (p >= 1) {
-        clearInterval(boltIv);
-        scene.remove(bolt);
+    function strikeAt(sx, sz, onChest = false) {
+      const topY = 90;
+      const groundY = terrainHeight(sx, sz);
+      const len = topY - groundY;
+      const bolt = new THREE.Mesh(new THREE.CylinderGeometry(onChest ? 0.6 : 0.25, onChest ? 0.6 : 0.25, len, 10), boltMat.clone());
+      bolt.position.set(sx, groundY + len / 2, sz);
+      bolt.renderOrder = 3;
+      scene.add(bolt);
+      // Fade out over ~0.35s
+      const born = performance.now();
+      const iv = setInterval(() => {
+        const t = (performance.now() - born) / 1000;
+        bolt.material.opacity = Math.max(0, 0.92 * (1 - t / 0.35));
+        if (t >= 0.35) { clearInterval(iv); scene.remove(bolt); }
+      }, 16);
+      try { spawnPixelBurst(new THREE.Vector3(sx, groundY + 1, sz), 0xffee66, onChest ? 40 : 18); } catch {}
+    }
+    // Schedule ~12 random strikes over the map plus a final central strike at the chest
+    for (let i = 0; i < 14; i++) {
+      setTimeout(() => {
+        const a = Math.random() * Math.PI * 2;
+        const r = 5 + Math.random() * 30;
+        const sx = Math.cos(a) * r;
+        const sz = Math.sin(a) * r;
+        strikeAt(sx, sz, false);
+        try { playNoise({ dur: 0.12, vol: 0.2, filterFreq: 4000 }); } catch {}
+      }, Math.random() * 1100);
+    }
+    // Guaranteed big strike on the chest at the end of the storm
+    setTimeout(() => {
+      strikeAt(px, pz, true);
+    }, 1150);
+    setTimeout(() => {
+      {
         // Flash burst + open lid + show orb
         try { playNoise({ dur: 0.4, vol: 0.55, filterFreq: 1200 }); } catch {}
         try { playTone({ freq: 60, type: 'sine', dur: 0.5, vol: 0.4, slide: -30 }); } catch {}
@@ -4262,7 +4283,7 @@ function openChestLocal() {
           continueAfterChest();
         }, 5000);
       }
-    }, 16);
+    }, 1250);
   }
 }
 
@@ -4911,9 +4932,10 @@ player.vy = 0;
 player.onGround = true;
 player.jumpsUsed = 0;
 function tryJump() {
-  if (!player.alive || !roundActive) return;
+  if (!player.alive) return;
+  if (!roundActive && !sandboxActive && !_chestPodium && !_chestInProgress) return;
   if (player.jumpsUsed >= (hasTripleJump ? 3 : 2)) return;
-  player.vy = 7.5;
+  player.vy = 9.4;
   player.onGround = false;
   player.jumpsUsed++;
 }
@@ -5104,7 +5126,7 @@ function updatePlayer(dt) {
           const impactY = camera.position.y - eyeH;
           const impactPos = new THREE.Vector3(camera.position.x, impactY, camera.position.z);
           // Huge blast — wipe nearby enemies
-          explode(impactPos, 10, 180, 0xffaa44, false, null);
+          explode(impactPos, 10, 500, 0xffaa44, false, null);
           try { spawnPixelBurst(impactPos, 0xffaa44, 80); } catch {}
           try { playNoise({ dur: 0.6, vol: 0.7, filterFreq: 200 }); } catch {}
           try { playTone({ freq: 80, type: 'sine', dur: 0.7, vol: 0.55, slide: -40 }); } catch {}
@@ -5345,7 +5367,8 @@ function startRound() {
     if (Math.random() < 0.35) spawnBooster('freeze');
     if (Math.random() < 0.30) spawnBooster('tornado');
     if (Math.random() < 0.40) spawnBooster('jetpack');
-    if (Math.random() < 0.10) spawnBooster('nuke'); // 10/100 chance
+    // Bomb never spawns on chest reward rounds (3/6/9) — the sequences would collide
+    if (round !== 3 && round !== 6 && round !== 9 && Math.random() < 0.10) spawnBooster('nuke');
   }
   updateHUD();
   updateHotbar();
