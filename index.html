@@ -154,6 +154,10 @@
 
   #mpPanel.expanded { width: 520px; }
   #mpPanel .mpUrl { display: block; margin-top: 6px; font-family: monospace; word-break: break-all; overflow-wrap: anywhere; }
+  /* Sandbox preset buttons */
+  .sxPreset { background:#333;color:#eee;border:1px solid #555;border-radius:3px;padding:4px 10px;cursor:pointer;font-family:monospace;font-size:12px }
+  .sxPreset:hover { background:#444 }
+  .sxPreset.active { background:#2864c2;border-color:#7fc8ff;color:#fff }
   /* "You Lost" animation — same motion as round-clear, red text */
   #lostAnim {
     position: fixed; inset: 0; display: none;
@@ -421,7 +425,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v1.96</div>
+  <div>v1.99</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -429,6 +433,94 @@
 <div id="bossHud" style="position:fixed;top:100px;left:50%;transform:translateX(-50%);z-index:6;"></div>
 <div id="roundClearAnim"><div class="rcBg"></div><div class="rcText">Round 1 Cleared!</div><div class="rcSub">next wave incoming…</div></div>
 <div id="lostAnim"><div class="lostText">YOU LOST</div></div>
+
+<!-- Sandbox-mode HUD hints (always-visible cheatsheet, top-right) -->
+<div id="sandboxHints" style="position:fixed;top:200px;right:12px;z-index:6;background:rgba(0,0,0,0.45);color:#bbb;font-family:monospace;font-size:11px;padding:6px 10px;border-radius:6px;line-height:1.5;display:none;pointer-events:none;text-align:right">
+  <div><span style="color:#ffcc33">B</span> · Toggle Menu</div>
+  <div><span style="color:#ffcc33">Space×2</span> · Toggle Fly</div>
+  <div><span style="color:#ffcc33">Space</span> / <span style="color:#ffcc33">Ctrl</span> · Up / Down (fly)</div>
+  <div><span style="color:#ffcc33">Shift</span> · Sprint / Fast Fly</div>
+  <div><span style="color:#ffcc33">V</span> · Toggle Noclip</div>
+  <div><span style="color:#ffcc33">N</span> · Quick-spawn Enemy</div>
+</div>
+
+<!-- Sandbox menu (toggled with B) -->
+<div id="sandboxMenu" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#16161c;color:#eee;font-family:monospace;font-size:13px;border:1px solid #444;border-radius:8px;padding:18px 22px;width:min(640px,94vw);max-height:80vh;overflow:auto;z-index:18;display:none;box-shadow:0 8px 30px rgba(0,0,0,0.7)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <h2 style="margin:0;color:#7fc8ff;letter-spacing:2px">SANDBOX</h2>
+    <div style="display:flex;gap:6px">
+      <button type="button" id="sandboxCloseBtn" style="background:#444;color:#fff;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Close (B)</button>
+      <button type="button" id="sandboxExitBtn" style="background:#882020;color:#fff;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Exit Sandbox</button>
+    </div>
+  </div>
+  <p style="opacity:0.7;font-size:12px;margin:0 0 12px">Free play. No rounds. All weapons + cheats unlocked.</p>
+
+  <h3 style="margin:14px 0 6px;color:#ffcc33">Map</h3>
+  <div id="sandboxMaps" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+
+  <h3 style="margin:14px 0 6px;color:#ffcc33">Spawn Enemies</h3>
+  <div style="display:grid;grid-template-columns:auto 1fr auto 1fr auto;gap:6px;align-items:center">
+    <label>Type</label>
+    <select id="sxEnemyType" style="background:#222;color:#eee;border:1px solid #444;border-radius:3px;padding:4px"><option value="grunt">Regular</option><option value="boss">Boss</option><option value="king">Stick King</option></select>
+    <label>Weapon</label>
+    <select id="sxEnemyGun" style="background:#222;color:#eee;border:1px solid #444;border-radius:3px;padding:4px"></select>
+    <label>Count <input id="sxEnemyCount" type="number" min="1" max="50" value="3" style="width:60px;background:#222;color:#eee;border:1px solid #444;border-radius:3px;padding:4px"></label>
+  </div>
+  <div style="margin-top:8px;display:flex;gap:8px">
+    <button type="button" id="sxSpawnEnemy" style="background:#2864c2;color:#fff;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Spawn</button>
+    <button type="button" id="sxKillAll" style="background:#882020;color:#fff;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Kill All Enemies</button>
+  </div>
+
+  <h3 style="margin:14px 0 6px;color:#ffcc33">Spawn Booster</h3>
+  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+    <select id="sxBoosterType" style="background:#222;color:#eee;border:1px solid #444;border-radius:3px;padding:4px">
+      <option value="speed">Speed</option><option value="shield">Shield</option><option value="berserk">Berserk</option><option value="heal">Regen</option><option value="freeze">Freeze</option><option value="tornado">Tornado</option><option value="jetpack">Jetpack</option><option value="nuke">Bomb</option>
+    </select>
+    <button type="button" id="sxSpawnBooster" style="background:#2864c2;color:#fff;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Spawn in Front</button>
+  </div>
+
+  <h3 style="margin:14px 0 6px;color:#ffcc33">World</h3>
+  <div style="display:flex;gap:14px;flex-wrap:wrap">
+    <label><input type="checkbox" id="sxFreezeAI"> Freeze enemies</label>
+    <label><input type="checkbox" id="sxNoclip"> Noclip (V)</label>
+    <label><input type="checkbox" id="sxFly"> Fly mode (Space×2)</label>
+    <label><input type="checkbox" id="sxShowCoords"> Show coords</label>
+  </div>
+  <label style="display:flex;align-items:center;gap:8px;margin-top:6px">Fly speed <input type="range" id="sxFlySpeed" min="5" max="40" step="1" value="14" style="flex:1"> <span id="sxFlySpeedVal">14</span></label>
+  <button type="button" id="sxResetPos" style="margin-top:8px;background:#444;color:#fff;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Reset Position</button>
+
+  <h3 style="margin:14px 0 6px;color:#ffcc33">Map Maker (Blank Map only)</h3>
+  <div id="sxMapMaker" style="opacity:0.45;pointer-events:none">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+      <button type="button" class="sxPreset" data-preset="block-s">Small Block</button>
+      <button type="button" class="sxPreset" data-preset="block-m">Med Block</button>
+      <button type="button" class="sxPreset" data-preset="block-l">Large Block</button>
+      <button type="button" class="sxPreset" data-preset="wall">Wall</button>
+      <button type="button" class="sxPreset" data-preset="ramp">Ramp</button>
+      <button type="button" class="sxPreset" data-preset="tree">Tree</button>
+      <button type="button" class="sxPreset" data-preset="building">Building Shell</button>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+      <label>Color</label>
+      <input type="color" id="sxBlockColor" value="#888888">
+      <label>Rotation</label>
+      <select id="sxRotation" style="background:#222;color:#eee;border:1px solid #444;border-radius:3px;padding:4px">
+        <option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option>
+      </select>
+    </div>
+    <p style="opacity:0.7;font-size:11px;margin:6px 0">Select a preset, then <b>left-click</b> to place at the surface you're aiming at, <b>right-click</b> to remove the block under your crosshair.</p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px">
+      <input id="sxSaveName" type="text" placeholder="map name" style="background:#222;color:#eee;border:1px solid #444;border-radius:3px;padding:4px;flex:1">
+      <button type="button" id="sxSave" style="background:#4caf50;color:#fff;border:0;border-radius:4px;padding:6px 12px;cursor:pointer;font-family:monospace">Save</button>
+    </div>
+    <div style="margin-top:6px"><b>Saved maps:</b> <span id="sxSavedList" style="opacity:0.85"></span></div>
+    <div style="margin-top:6px"><button type="button" id="sxClearMap" style="background:#882020;color:#fff;border:0;border-radius:4px;padding:6px 12px;cursor:pointer;font-family:monospace">Clear All Blocks</button></div>
+  </div>
+
+  <h3 style="margin:14px 0 6px;color:#ffcc33">Cheats (no passcode in sandbox)</h3>
+  <div id="sxCheats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:4px 14px"></div>
+</div>
+<div id="sxCoords" style="position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:6;background:rgba(0,0,0,0.5);color:#bbb;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;display:none;pointer-events:none">x: 0 y: 0 z: 0</div>
 <div id="hud">
   <span id="hp" style="display:none">100</span>
   <span id="money" style="display:none">0</span>
@@ -506,6 +598,9 @@
       <button type="button" id="mpLeaveBtn" style="background:#666;color:white;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace;display:none">Leave</button>
     </div>
     <div id="mpStatus" style="margin-top:6px;opacity:0.85;word-break:break-all;overflow-wrap:anywhere"></div>
+  </div>
+  <div id="sandboxLaunch" style="position:fixed;top:200px;left:14px;z-index:11">
+    <button type="button" id="sandboxBtn" style="background:#2864c2;color:white;border:0;border-radius:4px;padding:8px 18px;cursor:pointer;font-family:monospace">Sandbox Mode</button>
   </div>
   <div id="cheatsBlock" style="margin-top:10px">
     <button type="button" id="cheatsBtn" style="background:#444;color:#ccc;border:1px solid #666;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Cheats</button>
@@ -1462,10 +1557,11 @@ function buildMap(type) {
   clearMap();
   useTerrain = (type === 'hills');
   reshapeGround();
-  applyTheme(type);
+  applyTheme(type === 'blank' ? 'arena' : type);
   if (type === 'hills') buildHills();
   else if (type === 'city') buildCity();
   else if (type === 'neon') buildNeon();
+  else if (type === 'blank') buildPerimeter();
   else buildArena();
   wallMeshes = walls.map(w => w.mesh);
   try { setWeaponOutlines(type === 'neon'); } catch {}
@@ -2350,6 +2446,8 @@ function applyWandTipVisual() {
 }
 applyWandTipVisual();
 addEventListener('mousedown', e => {
+  // In sandbox build mode, LMB places blocks instead of firing
+  if (sandboxActive && sxBuildPreset && e.button === 0) return;
   if (e.button === 0 && pointerLocked) mouseDown = true;
   if (e.button === 2) {
     if (!pointerLocked) return;
@@ -4100,12 +4198,20 @@ function updateEnemies(dt) {
       const accuracyBoost = Math.min(0.05, round * 0.005);
       let spread = Math.max(0.01, profile.spread - accuracyBoost) + Math.min(0.05, dist * 0.002);
       if (e.userData.isStickKing) spread *= 0.18; // sharply more accurate per request
+      // Bazooka tactic: aim for the player's FEET (splash hits the ground) and tighten spread so
+      // the rocket actually lands where intended. Only applied for this weapon/round.
+      const isBazooka = e.userData.gunKey === 'bazooka';
+      if (isBazooka) spread *= 0.35;
       const dmgMul = e.userData.isStickKing ? 3.6 : (e.userData.isBoss ? 1.8 : 1.0);
       const dmg = Math.max(1, Math.floor(profile.dmg * dmgMul));
       const gunWorld = new THREE.Vector3();
       e.userData.gunMesh.getWorldPosition(gunWorld);
+      // Aim point: usually the player's body center, but bazookas target the feet
+      const aimPos = isBazooka
+        ? new THREE.Vector3(targetPos.x, 0.15, targetPos.z)
+        : targetPos;
       // per-shot LOS safety check from the gun's actual position (toward picked target)
-      const gunToP = targetPos.clone().sub(gunWorld);
+      const gunToP = aimPos.clone().sub(gunWorld);
       const gunDist = gunToP.length();
       gunToP.normalize();
       raycaster.set(gunWorld, gunToP);
@@ -4117,7 +4223,7 @@ function updateEnemies(dt) {
       const shots = profile.shots;
       for (let s = 0; s < shots; s++) {
         if (profile.kind === 'bullet' && enemyBullets.length > 90) break;
-        const dir = targetPos.clone().sub(gunWorld).normalize();
+        const dir = aimPos.clone().sub(gunWorld).normalize();
         dir.x += (Math.random() - 0.5) * spread * 2;
         dir.y += (Math.random() - 0.5) * spread * 2;
         dir.z += (Math.random() - 0.5) * spread * 2;
@@ -4324,7 +4430,7 @@ function updatePlayer(dt) {
   // Horizontal collision — skip floors, skip walls we are above, skip walls we pass under,
   // and skip any wall whose top is within step-up range so the player can walk onto ramp
   // slabs without being blocked horizontally first.
-  for (const w of walls) {
+  if (!(sandboxActive && sxNoclip)) for (const w of walls) {
     if (w.isFloor) continue;
     if (feetY + 0.05 >= w.max.y) continue;   // above the wall
     if (w.max.y <= feetY + 0.3) continue;    // low enough to step onto — let the step-up logic handle it
@@ -4363,6 +4469,8 @@ function updatePlayer(dt) {
   }
 
   // ---------- Vertical physics (gravity + landing support) ----------
+  // Sandbox fly mode bypasses gravity entirely (handled by sandboxTick driving Y directly).
+  if (sandboxActive && sxFly) return;
   // Jetpack: hold Space to thrust upward; partial gravity compensation while held
   if (jetpackBoostT > 0 && keys[keyBind.jump]) {
     player.vy += 34 * dt;               // strong upward thrust
@@ -6300,6 +6408,483 @@ function updateRemotePlayer() {
 
 document.getElementById('mpStartBtn').addEventListener('click', startMultiplayer);
 document.getElementById('mpLeaveBtn').addEventListener('click', leaveLobby);
+
+// =====================================================================
+// SANDBOX MODE
+// =====================================================================
+let sandboxActive = false;
+let sxFly = false;
+let sxNoclip = false;
+let sxFreezeAI = false;
+let sxShowCoords = false;
+let sxFlySpeed = 14;
+let sxBuildPreset = null;     // 'block-s' | 'wall' | 'ramp' | 'tree' | 'building' | etc
+let sxBlockColor = 0x888888;
+let sxRotationDeg = 0;
+let sxLastSpaceTap = 0;
+const sxPlacedBlocks = [];    // [{ type, x, y, z, w, h, d, color, rotY }]
+
+function sandboxGiveAllWeapons() {
+  for (const k of Object.keys(GUNS)) { owned[k] = true; }
+  if (sandboxActive) owned.wand = true;
+  for (const k of Object.keys(GUNS)) {
+    const g = GUNS[k];
+    if (!g.melee) weaponState[k] = { mag: g.magSize, reserve: g.reserve };
+  }
+  updateHotbar();
+}
+
+function enterSandbox() {
+  if (mpActive()) return; // sandbox is solo only
+  sandboxActive = true;
+  // Reset state
+  gameOver = false; roundActive = false; survivorMode = false;
+  bossSpawned = false; stickKingSpawned = false;
+  killCounter = 0; killStreak = 0;
+  if (boostActive) endBoost();
+  // Clear any leftovers
+  for (const e of enemies) scene.remove(e); enemies.length = 0;
+  for (const b of enemyBullets) scene.remove(b.mesh); enemyBullets.length = 0;
+  for (const m of muzzleFlashes) scene.remove(m.mesh); muzzleFlashes.length = 0;
+  for (const b of ammoBoxes) scene.remove(b.mesh); ammoBoxes.length = 0;
+  for (const r of rockets) scene.remove(r.mesh); rockets.length = 0;
+  for (const x of explosions) scene.remove(x.mesh); explosions.length = 0;
+  clearBoosters();
+  clearNukePodium();
+  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0;
+  freezeBoostT = 0; tornadoBoostT = 0; jetpackBoostT = 0;
+  updateBoosterHUD(); updateTornadoVisual();
+  sxPlacedBlocks.length = 0;
+  // Give all weapons + money
+  player.money = 999999;
+  sandboxGiveAllWeapons();
+  // Build first map
+  currentMap = 'arena';
+  buildMap('arena');
+  // Reset position & state
+  player.hp = 100; player.alive = true;
+  player.vy = 0; player.onGround = true; player.jumpsUsed = 0;
+  player.yaw = 0; player.pitch = 0;
+  camera.position.set(0, 1.7, 0);
+  // Hide overlay & show in-game UI
+  overlay.classList.add('hidden');
+  document.getElementById('sandboxHints').style.display = 'block';
+  buildSandboxMenu();
+  document.getElementById('sandboxMenu').style.display = 'block';
+  document.getElementById('retryBtn').style.display = 'none';
+  document.getElementById('bossBanner').style.display = 'none';
+  document.getElementById('bossHud').style.display = 'none';
+  updateHUD();
+  // No pointer lock yet — user closes menu first
+}
+function exitSandbox() {
+  sandboxActive = false;
+  sxFly = false; sxNoclip = false; sxFreezeAI = false; sxShowCoords = false; sxBuildPreset = null;
+  document.getElementById('sandboxHints').style.display = 'none';
+  document.getElementById('sandboxMenu').style.display = 'none';
+  document.getElementById('sxCoords').style.display = 'none';
+  // Reset cheats
+  for (const k of Object.keys(cheats)) cheats[k] = false;
+  // Defer to standard goHome cleanup
+  goHome();
+}
+
+function toggleSandboxMenu(open) {
+  const m = document.getElementById('sandboxMenu');
+  const wantOpen = open != null ? open : (m.style.display === 'none');
+  m.style.display = wantOpen ? 'block' : 'none';
+  if (wantOpen) { document.exitPointerLock?.(); refreshSavedMapsUI(); }
+  else { canvas.requestPointerLock?.(); }
+}
+
+// ---- Sandbox menu builder ----
+function buildSandboxMenu() {
+  // Map picker
+  const mapsWrap = document.getElementById('sandboxMaps');
+  mapsWrap.innerHTML = '';
+  for (const name of ['arena', 'hills', 'city', 'neon', 'blank']) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = name === 'blank' ? 'Blank (Map Maker)' : name[0].toUpperCase() + name.slice(1);
+    b.style.cssText = 'background:#333;color:#eee;border:1px solid #555;border-radius:3px;padding:6px 12px;cursor:pointer;font-family:monospace;font-size:12px';
+    if (name === currentMap) b.style.background = '#2864c2';
+    b.addEventListener('click', () => {
+      currentMap = name;
+      buildMap(name);
+      sxPlacedBlocks.length = 0;
+      // Reset position to spawn for that map
+      const sp = mapSpawnPoint(currentMap);
+      const y0 = (sp.y != null ? sp.y : terrainHeight(sp.x, sp.z)) + 1.7;
+      camera.position.set(sp.x, y0, sp.z);
+      player.vy = 0;
+      buildSandboxMenu(); // refresh selection styling
+      // Map Maker tab availability
+      const mm = document.getElementById('sxMapMaker');
+      mm.style.opacity = name === 'blank' ? '1' : '0.45';
+      mm.style.pointerEvents = name === 'blank' ? 'auto' : 'none';
+    });
+    mapsWrap.appendChild(b);
+  }
+  // Enemy gun dropdown
+  const gunSel = document.getElementById('sxEnemyGun');
+  gunSel.innerHTML = '';
+  for (const k of NON_KNIFE_GUNS) {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = GUNS[k].name;
+    gunSel.appendChild(o);
+  }
+  // Initial map maker tab visibility
+  const mm = document.getElementById('sxMapMaker');
+  mm.style.opacity = currentMap === 'blank' ? '1' : '0.45';
+  mm.style.pointerEvents = currentMap === 'blank' ? 'auto' : 'none';
+  // Cheats panel (no passcode in sandbox)
+  const cwrap = document.getElementById('sxCheats');
+  cwrap.innerHTML = '';
+  const cheatLabels = [
+    ['money','Unlimited money'],['mag','Unlimited mag'],['rate','Extreme fire rate'],
+    ['invuln','Invincibility'],['skip','Round skip (n/a)'],['heavy','Heavy Damage (5×)'],
+    ['aimbot','Aimbot (ADS)'],['wand','Booster Wand'],
+  ];
+  for (const [key, label] of cheatLabels) {
+    const lbl = document.createElement('label');
+    lbl.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!cheats[key];
+    cb.addEventListener('change', () => {
+      cheats[key] = cb.checked;
+      if (key === 'wand') {
+        if (cheats.wand) owned.wand = true; else delete owned.wand;
+        if (!cheats.wand && currentGun === 'wand') equipGun('pistol');
+        updateHotbar();
+      }
+    });
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(' ' + label));
+    cwrap.appendChild(lbl);
+  }
+}
+
+// ---- Sandbox button + menu wiring ----
+document.getElementById('sandboxBtn').addEventListener('click', enterSandbox);
+document.getElementById('sandboxCloseBtn').addEventListener('click', () => toggleSandboxMenu(false));
+document.getElementById('sandboxExitBtn').addEventListener('click', exitSandbox);
+
+document.getElementById('sxSpawnEnemy').addEventListener('click', () => {
+  const type = document.getElementById('sxEnemyType').value;
+  const gunKey = document.getElementById('sxEnemyGun').value;
+  const count = Math.max(1, Math.min(50, +document.getElementById('sxEnemyCount').value || 1));
+  for (let i = 0; i < count; i++) sandboxSpawnEnemy(type, gunKey);
+});
+document.getElementById('sxKillAll').addEventListener('click', () => {
+  for (const e of [...enemies]) { try { killEnemy(e, null); } catch {} }
+});
+document.getElementById('sxSpawnBooster').addEventListener('click', () => {
+  const type = document.getElementById('sxBoosterType').value;
+  const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+  const px = camera.position.x + dir.x * 3;
+  const pz = camera.position.z + dir.z * 3;
+  const baseY = terrainHeight(px, pz) + 0.8;
+  const mesh = type === 'speed' ? makeSpeedBooster() : type === 'shield' ? makeShieldBooster()
+             : type === 'berserk' ? makeBerserkBooster() : type === 'freeze' ? makeFreezeBooster()
+             : type === 'tornado' ? makeTornadoBooster() : type === 'jetpack' ? makeJetpackBooster()
+             : type === 'nuke' ? makeNukeBooster() : makeHealBooster();
+  mesh.position.set(px, baseY, pz);
+  scene.add(mesh);
+  boosters.push({ mesh, type, bobT: Math.random() * Math.PI * 2, baseY });
+});
+document.getElementById('sxFreezeAI').addEventListener('change', e => sxFreezeAI = e.target.checked);
+document.getElementById('sxNoclip').addEventListener('change', e => sxNoclip = e.target.checked);
+document.getElementById('sxFly').addEventListener('change', e => { sxFly = e.target.checked; player.vy = 0; });
+document.getElementById('sxShowCoords').addEventListener('change', e => {
+  sxShowCoords = e.target.checked;
+  document.getElementById('sxCoords').style.display = sxShowCoords ? 'block' : 'none';
+});
+document.getElementById('sxFlySpeed').addEventListener('input', e => {
+  sxFlySpeed = +e.target.value;
+  document.getElementById('sxFlySpeedVal').textContent = sxFlySpeed;
+});
+document.getElementById('sxResetPos').addEventListener('click', () => {
+  const sp = mapSpawnPoint(currentMap);
+  const y0 = (sp.y != null ? sp.y : terrainHeight(sp.x, sp.z)) + 1.7;
+  camera.position.set(sp.x, y0, sp.z);
+  player.vy = 0;
+});
+
+// Map Maker preset palette
+document.querySelectorAll('.sxPreset').forEach(b => {
+  b.addEventListener('click', () => {
+    const p = b.dataset.preset;
+    sxBuildPreset = (sxBuildPreset === p) ? null : p;
+    document.querySelectorAll('.sxPreset').forEach(x => x.classList.toggle('active', x.dataset.preset === sxBuildPreset));
+  });
+});
+document.getElementById('sxBlockColor').addEventListener('input', e => {
+  sxBlockColor = parseInt(e.target.value.slice(1), 16);
+});
+document.getElementById('sxRotation').addEventListener('change', e => {
+  sxRotationDeg = +e.target.value;
+});
+document.getElementById('sxClearMap').addEventListener('click', () => {
+  for (const b of [...sxPlacedBlocks]) {
+    if (b.wallRef && b.wallRef.mesh) {
+      scene.remove(b.wallRef.mesh);
+      const idx = walls.indexOf(b.wallRef);
+      if (idx >= 0) walls.splice(idx, 1);
+    }
+    if (b.outlineRefs) for (const o of b.outlineRefs) { scene.remove(o); }
+  }
+  sxPlacedBlocks.length = 0;
+  wallMeshes = walls.map(w => w.mesh);
+});
+
+// ---- Save / Load ----
+function refreshSavedMapsUI() {
+  const list = document.getElementById('sxSavedList');
+  if (!list) return;
+  const all = loadSavedMaps();
+  const names = Object.keys(all);
+  if (!names.length) { list.textContent = '(none yet)'; return; }
+  list.innerHTML = '';
+  for (const name of names) {
+    const span = document.createElement('span');
+    span.style.cssText = 'margin-right:10px';
+    const load = document.createElement('a');
+    load.href = '#'; load.textContent = name; load.style.color = '#7fc8ff';
+    load.addEventListener('click', (e) => { e.preventDefault(); loadSavedMap(name); });
+    const del = document.createElement('a');
+    del.href = '#'; del.textContent = ' [×]'; del.style.color = '#ff8080';
+    del.addEventListener('click', (e) => { e.preventDefault(); deleteSavedMap(name); });
+    span.appendChild(load); span.appendChild(del);
+    list.appendChild(span);
+  }
+}
+function loadSavedMaps() {
+  try { return JSON.parse(localStorage.getItem('sandboxMaps') || '{}'); } catch { return {}; }
+}
+function writeSavedMaps(o) {
+  try { localStorage.setItem('sandboxMaps', JSON.stringify(o)); } catch {}
+}
+document.getElementById('sxSave').addEventListener('click', () => {
+  const name = (document.getElementById('sxSaveName').value || '').trim();
+  if (!name) { alert('Enter a name'); return; }
+  const all = loadSavedMaps();
+  all[name] = sxPlacedBlocks.map(b => ({ type:b.type, x:b.x, y:b.y, z:b.z, w:b.w, h:b.h, d:b.d, color:b.color, rotY:b.rotY }));
+  writeSavedMaps(all);
+  refreshSavedMapsUI();
+});
+function deleteSavedMap(name) {
+  const all = loadSavedMaps();
+  delete all[name];
+  writeSavedMaps(all);
+  refreshSavedMapsUI();
+}
+function loadSavedMap(name) {
+  const all = loadSavedMaps();
+  const data = all[name];
+  if (!data) return;
+  // Switch to blank, clear, then replay placements
+  currentMap = 'blank';
+  buildMap('blank');
+  sxPlacedBlocks.length = 0;
+  for (const b of data) placePresetAt(b.type, b.x, b.y, b.z, b.color, b.rotY);
+  buildSandboxMenu();
+}
+
+// ---- Preset placement ----
+function rotateAroundY(point, angleRad, cx, cz) {
+  const c = Math.cos(angleRad), s = Math.sin(angleRad);
+  const dx = point.x - cx, dz = point.z - cz;
+  return { x: cx + dx * c - dz * s, y: point.y, z: cz + dx * s + dz * c };
+}
+function trackPlacedWall(type, x, y, z, w, h, d, color, rotY) {
+  const wall = walls[walls.length - 1];
+  sxPlacedBlocks.push({ type, x, y, z, w, h, d, color, rotY, wallRef: wall });
+  wallMeshes = walls.map(w => w.mesh);
+}
+function placePresetAt(type, cx, cy, cz, colorHex, rotY) {
+  const mat = new THREE.MeshLambertMaterial({ color: colorHex });
+  const yaw = (rotY || 0) * Math.PI / 180;
+  function add(dx, dy, dz, w, h, d, m) {
+    const p = rotateAroundY({ x: cx + dx, y: cy + dy, z: cz + dz }, yaw, cx, cz);
+    const useW = (Math.abs(yaw % Math.PI) < 0.01) ? w : d;
+    const useD = (Math.abs(yaw % Math.PI) < 0.01) ? d : w;
+    addWallBox(p.x, p.y, p.z, useW, h, useD, m || mat, false);
+    trackPlacedWall(type, p.x, p.y, p.z, useW, h, useD, colorHex, rotY);
+  }
+  if (type === 'block-s') {
+    add(0, 0.5, 0, 1, 1, 1);
+  } else if (type === 'block-m') {
+    add(0, 1, 0, 2, 2, 2);
+  } else if (type === 'block-l') {
+    add(0, 2, 0, 4, 4, 4);
+  } else if (type === 'wall') {
+    add(0, 1.5, 0, 4, 3, 0.4);
+  } else if (type === 'ramp') {
+    // Stepped ramp 6 wide, rises 4m over 12m run (step rise 0.2m, 20 slabs)
+    const steps = 20, rise = 4, run = 12;
+    for (let i = 0; i < steps; i++) {
+      const t = (i + 0.5) / steps;
+      const topY = (i + 1) / steps * rise;
+      const segLen = run / steps + 0.08;
+      const slabThick = rise / steps + 0.4;
+      const off = -run / 2 + run * t;
+      add(0, topY - slabThick / 2, off, 6, slabThick, segLen);
+    }
+  } else if (type === 'tree') {
+    // Trunk + leaf decoration
+    add(0, 3.5, 0, 0.8, 7, 0.8, new THREE.MeshLambertMaterial({ color: 0x5a4030 }));
+    const leaf = new THREE.Mesh(new THREE.SphereGeometry(2, 12, 10), new THREE.MeshLambertMaterial({ color: 0x2c7a2c }));
+    leaf.position.set(cx, cy + 7.5, cz);
+    scene.add(leaf); decor.push(leaf);
+    sxPlacedBlocks[sxPlacedBlocks.length - 1].decorRef = leaf;
+  } else if (type === 'building') {
+    // 3-story open shell with door on +Z face
+    const w = 8, stories = 3, floorH = 4.5, wallT = 0.4, doorW = 3, doorH = 3;
+    const totalH = stories * floorH;
+    // back wall
+    add(0, totalH/2, -w/2, w, totalH, wallT);
+    // side walls
+    add(-w/2, totalH/2, 0, wallT, totalH, w);
+    add( w/2, totalH/2, 0, wallT, totalH, w);
+    // front wall pieces around door
+    const side = (w - doorW) / 2;
+    add(-(w/2 - side/2), totalH/2, w/2, side, totalH, wallT);
+    add( (w/2 - side/2), totalH/2, w/2, side, totalH, wallT);
+    add(0, doorH + (totalH - doorH)/2, w/2, doorW, totalH - doorH, wallT);
+    // upper floors
+    for (let s = 1; s < stories; s++) {
+      add(0, s * floorH + 0.15, 0, w - wallT*2, 0.3, w - wallT*2);
+    }
+    // roof
+    add(0, totalH + 0.15, 0, w - wallT*2, 0.3, w - wallT*2);
+  }
+}
+
+// ---- Click handlers in sandbox: build & remove ----
+canvas.addEventListener('mousedown', (e) => {
+  if (!sandboxActive || !sxBuildPreset || !pointerLocked) return;
+  if (e.button === 0) {
+    // Place: raycast forward, find surface, snap above it
+    const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+    const origin = camera.position.clone();
+    raycaster.set(origin, dir);
+    const hit = raycaster.intersectObjects([...wallMeshes, ground], false)[0];
+    let p;
+    if (hit) {
+      p = hit.point.clone();
+    } else {
+      p = origin.clone().add(dir.multiplyScalar(8));
+      p.y = terrainHeight(p.x, p.z);
+    }
+    placePresetAt(sxBuildPreset, p.x, p.y, p.z, sxBlockColor, sxRotationDeg);
+  } else if (e.button === 2) {
+    // Remove: raycast against placed blocks only
+    const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+    raycaster.set(camera.position, dir);
+    const placedMeshes = sxPlacedBlocks.filter(b => b.wallRef).map(b => b.wallRef.mesh);
+    const hit = raycaster.intersectObjects(placedMeshes, false)[0];
+    if (hit) {
+      const blockIdx = sxPlacedBlocks.findIndex(b => b.wallRef && b.wallRef.mesh === hit.object);
+      if (blockIdx >= 0) {
+        const block = sxPlacedBlocks[blockIdx];
+        const wIdx = walls.indexOf(block.wallRef);
+        if (wIdx >= 0) { scene.remove(block.wallRef.mesh); walls.splice(wIdx, 1); }
+        if (block.decorRef) { scene.remove(block.decorRef); }
+        sxPlacedBlocks.splice(blockIdx, 1);
+        wallMeshes = walls.map(w => w.mesh);
+      }
+    }
+  }
+});
+
+// ---- B key + V key + N key + double-Space fly toggle ----
+addEventListener('keydown', e => {
+  if (!sandboxActive) return;
+  if (e.code === 'KeyB' && !e.repeat) toggleSandboxMenu();
+  if (e.code === 'KeyV' && !e.repeat) {
+    sxNoclip = !sxNoclip;
+    const cb = document.getElementById('sxNoclip'); if (cb) cb.checked = sxNoclip;
+  }
+  if (e.code === 'KeyN' && !e.repeat) sandboxSpawnEnemy('grunt', 'pistol');
+  if (e.code === keyBind.jump && !e.repeat && pointerLocked) {
+    const now = performance.now();
+    if (now - sxLastSpaceTap < 300) {
+      sxFly = !sxFly; player.vy = 0;
+      const cb = document.getElementById('sxFly'); if (cb) cb.checked = sxFly;
+    }
+    sxLastSpaceTap = now;
+  }
+});
+
+function sandboxSpawnEnemy(type, gunKey) {
+  let e;
+  if (type === 'king') e = makeStickKing();
+  else if (type === 'boss') e = makeBoss();
+  else e = makeStickFigure();
+  let x, z, tries = 0;
+  do {
+    x = (Math.random() - 0.5) * (MAP_SIZE - 6);
+    z = (Math.random() - 0.5) * (MAP_SIZE - 6);
+    tries++;
+  } while (
+    tries < 30 &&
+    (Math.hypot(x - camera.position.x, z - camera.position.z) < 8 || (typeof insideSolidWall === 'function' && insideSolidWall(x, z)))
+  );
+  e.position.set(x, terrainHeight(x, z), z);
+  e.userData.gunKey = gunKey;
+  e.userData.gunProfile = ENEMY_GUN_PROFILES[gunKey];
+  e.userData.magSize = e.userData.gunProfile.magSize;
+  e.userData.reloadTime = e.userData.gunProfile.reloadTime;
+  e.userData.magShots = 0;
+  swapEnemyGunSkin(e, gunKey, { isBoss: type === 'boss' || type === 'king', isKing: type === 'king' });
+  scene.add(e);
+  enemies.push(e);
+}
+
+// ---- Per-frame sandbox tick (fly physics, freeze AI, coords HUD) ----
+function sandboxTick(dt) {
+  if (!sandboxActive) return;
+  if (sxShowCoords) {
+    document.getElementById('sxCoords').textContent =
+      `x: ${camera.position.x.toFixed(1)}  y: ${camera.position.y.toFixed(1)}  z: ${camera.position.z.toFixed(1)}`;
+  }
+  if (sxFly) {
+    // Cancel gravity & vertical landing — directly drive Y
+    const sprinting = keys[keyBind.sprint] || keys['ShiftRight'];
+    const speed = sxFlySpeed * (sprinting ? 2.5 : 1) * dt;
+    if (keys[keyBind.jump]) camera.position.y += speed;
+    if (keys[keyBind.crouch] || keys['ControlRight']) camera.position.y -= speed;
+    player.vy = 0;
+    player.onGround = true;
+    player.jumpsUsed = 0;
+  }
+  if (sxFreezeAI) {
+    // Already-spawned enemies: stop their movement by setting reloading=true OR easier:
+    // re-set shootCd high to prevent firing, and skip movement here in updateEnemies via flag.
+    // Simpler: rely on the freezeBoostT global (set high)
+    freezeBoostT = 1; // keeps frozen as long as we keep refreshing
+  }
+}
+
+const _origLoop = loop;
+// (The main loop already runs every frame; we just hook our tick into it via safeCall in updatePlayer area.)
+// We add the sandbox tick at the end of every frame by wrapping loop to also call sandboxTick.
+// To do that cleanly without double-wrapping, just attach to the same animation cadence.
+// The simplest: piggyback on the existing frame using requestAnimationFrame
+let _sxFrameStart = performance.now();
+function _sxFrameLoop() {
+  const now = performance.now();
+  const dt = Math.min((now - _sxFrameStart) / 1000, 0.05);
+  _sxFrameStart = now;
+  sandboxTick(dt);
+  requestAnimationFrame(_sxFrameLoop);
+}
+requestAnimationFrame(_sxFrameLoop);
+
+// ---- Allow noclip to skip wall collision ----
+const _origMpActiveCheck = mpActive;
+// (We can't easily monkey-patch the inner collision loop, so we rely on flying mode to bypass.)
 
 loop();
 </script>
