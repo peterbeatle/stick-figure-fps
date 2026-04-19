@@ -439,7 +439,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v2.12</div>
+  <div>v2.13</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -4598,18 +4598,35 @@ function updatePlayer(dt) {
       if (wh.length && wh[0].distance < dist - 0.1) continue;
       if (dist < bestD) { bestD = dist; best = headPos; bestEnemy = e; }
     }
-    if (best) {
-      // Lead projectile weapons: aim where the target will be when the shot arrives
+    if (best && bestEnemy) {
       const g = GUNS[currentGun];
       let projSpeed = 0;
       if (g && g.rocket) projSpeed = 30;
       else if (g && g.plasma) projSpeed = 55;
       else if (g && g.grenadeArrow) projSpeed = 60;
-      if (projSpeed && bestEnemy && bestEnemy.userData._aimbotVel) {
-        const t = bestD / projSpeed;
-        best = best.clone().add(bestEnemy.userData._aimbotVel.clone().multiplyScalar(t));
+      const s = bestEnemy.scale.x || 1;
+      // For projectiles, aim at BODY CENTER — that's where the collision sphere is (radius 0.8*s).
+      // Head is above the hitbox, so projectile aim drifts over the target; body center lands.
+      const aimY = projSpeed ? (1.0 * s) : (1.75 * s);
+      const aimBase = bestEnemy.position.clone().add(new THREE.Vector3(0, aimY, 0));
+      // For Stick King, use his actual physics state directly — his EMA velocity lags his leap spikes.
+      let vel = bestEnemy.userData._aimbotVel || new THREE.Vector3();
+      if (bestEnemy.userData.isStickKing) {
+        vel = new THREE.Vector3(
+          bestEnemy.userData._leapVx || 0,
+          bestEnemy.userData._jumpVy || 0,
+          bestEnemy.userData._leapVz || 0,
+        );
       }
-      const dx = best.x - eye.x, dy = best.y - eye.y, dz = best.z - eye.z;
+      // Iteratively refine the intercept point (3 passes is enough to converge)
+      let leadPos = aimBase.clone();
+      if (projSpeed) {
+        for (let i = 0; i < 3; i++) {
+          const t = eye.distanceTo(leadPos) / projSpeed;
+          leadPos = aimBase.clone().add(vel.clone().multiplyScalar(t));
+        }
+      }
+      const dx = leadPos.x - eye.x, dy = leadPos.y - eye.y, dz = leadPos.z - eye.z;
       player.yaw   = Math.atan2(-dx, -dz);
       player.pitch = Math.atan2(dy, Math.sqrt(dx*dx + dz*dz));
     }
