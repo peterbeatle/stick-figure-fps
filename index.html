@@ -473,7 +473,7 @@
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;pointer-events:none;line-height:1.4;white-space:nowrap">
-  <span style="font-weight:bold;color:#eee">v2.37</span>
+  <span style="font-weight:bold;color:#eee">v2.38</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
@@ -2643,6 +2643,7 @@ function saveSens() { localStorage.setItem('sens', JSON.stringify(sens)); }
 
 document.addEventListener('mousemove', e => {
   if (!pointerLocked) return;
+  if (_awaitingAbilityContinue) return; // lock camera while the ability banner is up
   const k = 0.0025 * sens.look * (adsActive ? sens.ads : 1);
   player.yaw   -= e.movementX * k;
   player.pitch -= e.movementY * k;
@@ -4335,6 +4336,21 @@ function openChestLocal() {
             scene.remove(orb);
           }
         }, 30);
+        // Before showing the banner: snap the player's aim onto the chest so they
+        // watch the orb reveal. Camera stays locked while the banner is up.
+        if (_chestPodium) {
+          const target = _chestPodium.position.clone().add(new THREE.Vector3(0, 2.0, 0));
+          const dx = target.x - camera.position.x;
+          const dy = target.y - camera.position.y;
+          const dz = target.z - camera.position.z;
+          player.yaw = Math.atan2(-dx, -dz);
+          player.pitch = Math.atan2(dy, Math.sqrt(dx * dx + dz * dz));
+          player.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, player.pitch));
+          // Apply immediately — updatePlayer is about to be gated by _awaitingAbilityContinue
+          camera.rotation.order = 'YXZ';
+          camera.rotation.y = player.yaw;
+          camera.rotation.x = player.pitch;
+        }
         // Grant the ability for this round + show the "NEW ABILITY" banner
         grantAbilityForRound(_pendingChestRound);
         playItemGetFanfare();
