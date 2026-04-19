@@ -343,6 +343,11 @@
 
     <h3 style="margin:16px 0 6px;color:#ffcc33">Display</h3>
     <button type="button" id="fullscreenBtn" style="background:#2864c2;color:white;border:0;border-radius:4px;padding:8px 16px;cursor:pointer;font-family:monospace">Toggle Fullscreen (F)</button>
+    <div style="margin-top:8px;display:flex;gap:14px;flex-wrap:wrap">
+      <label><input type="checkbox" id="showFpsChk"> Show FPS</label>
+      <label><input type="checkbox" id="showPingChk"> Show Ping (MP only)</label>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:6px">Max FPS <input type="range" id="maxFpsSlider" min="30" max="241" step="1" value="241" style="flex:1"> <span id="maxFpsVal">Unlimited</span></label>
 
     <h3 style="margin:16px 0 6px;color:#ffcc33">Sensitivity</h3>
     <label style="display:flex;align-items:center;gap:8px;margin:6px 0">
@@ -439,7 +444,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v2.16</div>
+  <div>v2.18</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -545,8 +550,12 @@
   <h3 style="margin:14px 0 6px;color:#ffcc33">Cheats (no passcode in sandbox)</h3>
   <div id="sxCheats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:4px 14px"></div>
 </div>
+<div id="perfHud" style="position:fixed;top:96px;right:170px;z-index:6;background:rgba(0,0,0,0.5);color:#bbb;font-family:monospace;font-size:11px;padding:4px 8px;border-radius:4px;display:none;pointer-events:none;text-align:right;line-height:1.4;min-width:90px">
+  <div id="perfFps" style="display:none">FPS: <span id="perfFpsVal">—</span></div>
+  <div id="perfPing" style="display:none">Ping: <span id="perfPingVal">—</span></div>
+</div>
 <div id="sxFlyIndicator" style="position:fixed;top:48%;left:12px;transform:translateY(-50%);z-index:6;font-family:monospace;font-weight:900;font-size:18px;letter-spacing:4px;color:#6bbcff;text-shadow:0 0 12px #4aa3ff,0 0 22px #4aa3ff,0 0 2px #000;display:none;pointer-events:none">✈ FLY MODE</div>
-<div id="sxCoords" style="position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:6;background:rgba(0,0,0,0.5);color:#bbb;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;display:none;pointer-events:none">x: 0 y: 0 z: 0</div>
+<div id="sxCoords" style="position:fixed;top:48px;left:50%;transform:translateX(-50%);z-index:6;background:rgba(0,0,0,0.5);color:#bbb;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;display:none;pointer-events:none">x: 0 y: 0 z: 0</div>
 <div id="hud">
   <span id="hp" style="display:none">100</span>
   <span id="money" style="display:none">0</span>
@@ -5316,9 +5325,54 @@ function updateHUD() {
 // ---------- Main loop ----------
 let prev = performance.now();
 function safeCall(fn, dt) { try { fn(dt); } catch (e) { console.error(fn.name + ' error:', e); } }
+// Perf HUD state
+let perfShowFps = false;
+let perfShowPing = false;
+let perfMaxFps = 0; // 0 = unlimited
+const _fpsSamples = [];
+function updatePerfHud(fpsNow) {
+  const wrap = document.getElementById('perfHud');
+  if (!wrap) return;
+  const fpsRow = document.getElementById('perfFps');
+  const pingRow = document.getElementById('perfPing');
+  fpsRow.style.display = perfShowFps ? 'block' : 'none';
+  pingRow.style.display = (perfShowPing && mpActive()) ? 'block' : 'none';
+  wrap.style.display = (fpsRow.style.display === 'block' || pingRow.style.display === 'block') ? 'block' : 'none';
+  if (perfShowFps) document.getElementById('perfFpsVal').textContent = String(Math.round(fpsNow));
+  if (perfShowPing && mpActive()) {
+    document.getElementById('perfPingVal').textContent = (window._mpPingMs != null) ? (window._mpPingMs + 'ms') : '—';
+  }
+}
+// Cheap MP ping: piggyback on Playroom state — measure last broadcast→receive lag
+let _lastPingProbe = 0;
+setInterval(() => {
+  if (!mpActive() || !window.Playroom) return;
+  try {
+    const me = Playroom.myPlayer && Playroom.myPlayer();
+    if (!me) return;
+    me.setState('pingT', performance.now(), true);
+    if (mpHostPlayer && mpHostPlayer !== me) {
+      const t = mpHostPlayer.getState('pingT');
+      if (t) window._mpPingMs = Math.max(1, Math.round(performance.now() - t));
+    }
+  } catch {}
+}, 1000);
+
 function loop() {
   const now = performance.now();
+  // Frame cap (slider 30..240, 241 = Unlimited)
+  if (perfMaxFps > 0) {
+    const minDelta = 1000 / perfMaxFps;
+    if (now - prev < minDelta) { requestAnimationFrame(loop); return; }
+  }
   const dt = Math.min((now - prev) / 1000, 0.05);
+  // FPS rolling sample (last 30 frames)
+  if (dt > 0) {
+    _fpsSamples.push(1 / dt);
+    if (_fpsSamples.length > 30) _fpsSamples.shift();
+    const avg = _fpsSamples.reduce((a,b)=>a+b,0) / _fpsSamples.length;
+    updatePerfHud(avg);
+  }
   prev = now;
 
   // Always sync multiplayer state, even when a round isn't active locally,
@@ -5345,6 +5399,7 @@ function loop() {
     safeCall(updateBoosterTimers, dt);
     safeCall(updateMinimap, dt);
     safeCall(updateNukePodiumHint, dt);
+    safeCall(updateCoordsHUD, dt);
     // Rockets/plasma/arrows run on both sides: host's do real damage; client's are visual-only
     // because the client's enemies array is empty, so collision finds nothing to hurt.
     safeCall(updateRockets, dt);
@@ -5853,6 +5908,14 @@ function toggleFullscreen() {
   } catch (e) { console.warn('[fullscreen] failed:', e); }
 }
 document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+// Perf HUD wiring
+document.getElementById('showFpsChk').addEventListener('change', e => { perfShowFps = e.target.checked; });
+document.getElementById('showPingChk').addEventListener('change', e => { perfShowPing = e.target.checked; });
+document.getElementById('maxFpsSlider').addEventListener('input', e => {
+  const v = +e.target.value;
+  perfMaxFps = (v >= 241) ? 0 : v;
+  document.getElementById('maxFpsVal').textContent = perfMaxFps === 0 ? 'Unlimited' : (perfMaxFps + ' FPS');
+});
 
 // ---- Controls rebind UI ----
 const CONTROL_LABELS = [
@@ -6769,6 +6832,9 @@ function enterSandbox() {
   // Coords on by default for sandbox
   sxShowCoords = true;
   document.getElementById('sxCoords').style.display = 'block';
+  // Hide the campaign round/enemies banner while in sandbox
+  const topbar = document.getElementById('topbar');
+  if (topbar) topbar.style.display = 'none';
   buildSandboxMenu();
   const showCoordsCb = document.getElementById('sxShowCoords');
   if (showCoordsCb) showCoordsCb.checked = true;
@@ -6781,10 +6847,12 @@ function enterSandbox() {
 }
 function exitSandbox() {
   sandboxActive = false;
-  sxFly = false; sxNoclip = false; sxFreezeAI = false; sxShowCoords = false; sxBuildPreset = null;
+  sxFly = false; sxNoclip = false; sxFreezeAI = false; sxBuildPreset = null;
   document.getElementById('sandboxHints').style.display = 'none';
   document.getElementById('sandboxMenu').style.display = 'none';
-  document.getElementById('sxCoords').style.display = 'none';
+  // Restore campaign topbar
+  const topbar = document.getElementById('topbar');
+  if (topbar) topbar.style.display = '';
   const fi = document.getElementById('sxFlyIndicator');
   if (fi) fi.style.display = 'none';
   // Remove sandbox-only wands
@@ -7157,6 +7225,14 @@ function sandboxSpawnEnemy(type, gunKey, atPoint = null) {
 }
 
 // ---- Per-frame sandbox tick (fly physics, freeze AI, coords HUD) ----
+function updateCoordsHUD() {
+  const el = document.getElementById('sxCoords');
+  if (!el) return;
+  // Only show while actually playing (round, sandbox) — not on the home/shop overlay
+  const show = sandboxActive || (roundActive && !paused);
+  el.style.display = show ? 'block' : 'none';
+  if (show) el.textContent = `x: ${camera.position.x.toFixed(1)}  y: ${camera.position.y.toFixed(1)}  z: ${camera.position.z.toFixed(1)}`;
+}
 function sandboxTick(dt) {
   if (!sandboxActive) {
     const fi = document.getElementById('sxFlyIndicator');
@@ -7172,10 +7248,7 @@ function sandboxTick(dt) {
     camera.position.set(sp.x, y0, sp.z);
     player.vy = 0;
   }
-  if (sxShowCoords) {
-    document.getElementById('sxCoords').textContent =
-      `x: ${camera.position.x.toFixed(1)}  y: ${camera.position.y.toFixed(1)}  z: ${camera.position.z.toFixed(1)}`;
-  }
+  // Coords HUD is updated centrally in updateCoordsHUD() so it works in campaign too
   if (sxFly) {
     // Cancel gravity & vertical landing — directly drive Y
     const sprinting = keys[keyBind.sprint] || keys['ShiftRight'];
