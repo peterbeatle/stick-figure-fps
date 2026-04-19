@@ -439,7 +439,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v2.13</div>
+  <div>v2.14</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -4611,19 +4611,27 @@ function updatePlayer(dt) {
       const aimBase = bestEnemy.position.clone().add(new THREE.Vector3(0, aimY, 0));
       // For Stick King, use his actual physics state directly — his EMA velocity lags his leap spikes.
       let vel = bestEnemy.userData._aimbotVel || new THREE.Vector3();
-      if (bestEnemy.userData.isStickKing) {
+      const isKing = !!bestEnemy.userData.isStickKing;
+      let gravity = 0;
+      let groundY = null;
+      if (isKing) {
         vel = new THREE.Vector3(
           bestEnemy.userData._leapVx || 0,
           bestEnemy.userData._jumpVy || 0,
           bestEnemy.userData._leapVz || 0,
         );
+        gravity = 24; // Stick King gravity (matches updateEnemies)
+        // Ground-clamped floor for the king's body center — never predict below terrain
+        groundY = terrainHeight(bestEnemy.position.x, bestEnemy.position.z) + (1.0 * s);
       }
-      // Iteratively refine the intercept point (3 passes is enough to converge)
+      // Iteratively refine intercept: account for projectile travel time AND enemy gravity.
       let leadPos = aimBase.clone();
       if (projSpeed) {
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 5; i++) {
           const t = eye.distanceTo(leadPos) / projSpeed;
           leadPos = aimBase.clone().add(vel.clone().multiplyScalar(t));
+          if (gravity) leadPos.y -= 0.5 * gravity * t * t;
+          if (groundY != null && leadPos.y < groundY) leadPos.y = groundY;
         }
       }
       const dx = leadPos.x - eye.x, dy = leadPos.y - eye.y, dz = leadPos.z - eye.z;
@@ -6661,9 +6669,10 @@ document.getElementById('mpLeaveBtn').addEventListener('click', leaveLobby);
 // =====================================================================
 // sandboxActive declared earlier so TDZ-sensitive call sites (getSlotOrder, etc.) don't break
 let sxFly = false;
+// Sandbox defaults
 let sxNoclip = false;
 let sxFreezeAI = false;
-let sxShowCoords = false;
+let sxShowCoords = true;
 let sxFlySpeed = 14;
 let sxBuildPreset = null;     // 'block-s' | 'wall' | 'ramp' | 'tree' | 'building' | etc
 let sxBlockColor = 0x888888;
@@ -6716,7 +6725,12 @@ function enterSandbox() {
   // Hide overlay & show in-game UI
   overlay.classList.add('hidden');
   document.getElementById('sandboxHints').style.display = 'block';
+  // Coords on by default for sandbox
+  sxShowCoords = true;
+  document.getElementById('sxCoords').style.display = 'block';
   buildSandboxMenu();
+  const showCoordsCb = document.getElementById('sxShowCoords');
+  if (showCoordsCb) showCoordsCb.checked = true;
   document.getElementById('sandboxMenu').style.display = 'block';
   document.getElementById('retryBtn').style.display = 'none';
   document.getElementById('bossBanner').style.display = 'none';
