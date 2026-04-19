@@ -473,7 +473,7 @@
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;pointer-events:none;line-height:1.4;white-space:nowrap">
-  <span style="font-weight:bold;color:#eee">v2.42</span>
+  <span style="font-weight:bold;color:#eee">v2.44</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
@@ -5107,16 +5107,17 @@ function updateScoreboard() {
   const body = document.getElementById('scoreboardBody');
   // Build row list
   const rows = [];
-  const myName = getPlayerName() || 'You';
+  const titleCase = (n) => (n || '').replace(/\b\w/g, c => c.toUpperCase());
+  const myName = titleCase(getPlayerName() || 'You');
   const acc = stats.shotsFired > 0 ? Math.round(stats.shotsHit / stats.shotsFired * 100) : 0;
-  rows.push({ name: myName + ' (you)', kR: stats.killsRound, kS: stats.killsSession, acc, dR: stats.damageRound, dS: stats.damageSession, dth: stats.deaths });
+  rows.push({ name: myName, kR: stats.killsRound, kS: stats.killsSession, acc, dR: stats.damageRound, dS: stats.damageSession, dth: stats.deaths });
   if (mpActive() && window.Playroom) {
     for (const p of mpAllPlayers.values()) {
       const myId = Playroom.myPlayer() && Playroom.myPlayer().id;
       if (p.id === myId) continue;
       try {
         const s = p.getState('stats') || {};
-        const name = p.getState('playerName') || 'P2';
+        const name = titleCase(p.getState('playerName') || 'P2');
         const a = (s.sF || 0) > 0 ? Math.round((s.sH || 0) / s.sF * 100) : 0;
         rows.push({ name, kR: s.kR || 0, kS: s.kS || 0, acc: a, dR: s.dR || 0, dS: s.dS || 0, dth: s.dth || 0 });
       } catch {}
@@ -5128,11 +5129,11 @@ function updateScoreboard() {
     <thead>
       <tr style="color:#ffcc33;text-align:left;border-bottom:1px solid #445">
         <th style="padding:6px 8px">Player</th>
-        <th style="padding:6px 8px;text-align:right">Kills (round)</th>
-        <th style="padding:6px 8px;text-align:right">Kills (session)</th>
+        <th style="padding:6px 8px;text-align:right">Kills (Round)</th>
+        <th style="padding:6px 8px;text-align:right">Kills (Session)</th>
         <th style="padding:6px 8px;text-align:right">Accuracy</th>
-        <th style="padding:6px 8px;text-align:right">Dmg (round)</th>
-        <th style="padding:6px 8px;text-align:right">Dmg (session)</th>
+        <th style="padding:6px 8px;text-align:right">Dmg (Round)</th>
+        <th style="padding:6px 8px;text-align:right">Dmg (Session)</th>
         <th style="padding:6px 8px;text-align:right">Deaths</th>
       </tr>
     </thead><tbody>`;
