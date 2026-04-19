@@ -439,7 +439,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v2.10</div>
+  <div>v2.12</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -463,7 +463,7 @@
 <div id="sandboxHints" style="position:fixed;top:200px;right:12px;z-index:6;background:rgba(0,0,0,0.45);color:#bbb;font-family:monospace;font-size:11px;padding:6px 10px;border-radius:6px;line-height:1.5;display:none;pointer-events:none;text-align:right">
   <div><span style="color:#ffcc33">B</span> · Toggle Menu</div>
   <div><span style="color:#ffcc33">Space×2</span> · Toggle Fly</div>
-  <div><span style="color:#ffcc33">Space</span> / <span style="color:#ffcc33">Ctrl</span> · Up / Down (fly)</div>
+  <div><span style="color:#ffcc33">Space</span> / <span style="color:#ffcc33">C</span> · Up / Down (fly)</div>
   <div><span style="color:#ffcc33">Shift</span> · Sprint / Fast Fly</div>
   <div><span style="color:#ffcc33">V</span> · Toggle Noclip</div>
   <div><span style="color:#ffcc33">N</span> · Quick-spawn Enemy</div>
@@ -610,7 +610,7 @@
       <b style="color:#ffcc33">WASD</b><span>Move</span>                   <b style="color:#ffcc33">LMB</b><span>Shoot (hold to keep firing)</span>
       <b style="color:#ffcc33">Mouse</b><span>Look</span>                   <b style="color:#ffcc33">RMB</b><span>Aim Down Sights / Scope</span>
       <b style="color:#ffcc33">Shift</b><span>Sprint</span>                 <b style="color:#ffcc33">R</b><span>Reload</span>
-      <b style="color:#ffcc33">Ctrl</b><span>Crouch</span>                  <b style="color:#ffcc33">` 1-9 0 - =</b><span>Switch weapon (top row)</span>
+      <b style="color:#ffcc33">C</b><span>Crouch</span>                  <b style="color:#ffcc33">` 1-9 0 - =</b><span>Switch weapon (top row)</span>
       <b style="color:#ffcc33">Space</b><span>Jump (press twice to double-jump)</span>
       <b style="color:#ffcc33">Scroll</b><span>Cycle through owned guns</span>
       <b style="color:#ffcc33">P</b><span>Pause menu</span>
@@ -2458,7 +2458,9 @@ const keyBind = {
   right:      'KeyD',
   jump:       'Space',
   sprint:     'ShiftLeft',
-  crouch:     'ControlLeft',
+  // Default moved off Ctrl because Chrome/Edge/Firefox reserve Ctrl+letter shortcuts
+  // (Ctrl+W closes tab, Ctrl+T opens tab, etc.) — you can still rebind in Settings.
+  crouch:     'KeyC',
   reload:     'KeyR',
   interact:   'KeyE',
   pause:      'KeyP',
@@ -2470,6 +2472,11 @@ function keyLabel(code) {
 }
 addEventListener('keydown', e => {
   keys[e.code] = true;
+  // While pointer is locked, stop any overridable key combos from triggering browser actions
+  // (e.g. if the user rebinds crouch back to Ctrl, Ctrl+W won't close the tab while playing)
+  if (pointerLocked && (e.ctrlKey || e.code === 'ControlLeft' || e.code === 'ControlRight')) {
+    e.preventDefault();
+  }
   if (e.code === keyBind.reload) tryReload();
   if (e.code === keyBind.interact && pointerLocked) tryNukeInteract();
   if (e.code === keyBind.jump && pointerLocked) { tryJump(); e.preventDefault(); }
@@ -4565,22 +4572,26 @@ function updatePlayer(dt) {
     const eye = camera.position;
     for (const e of targets) {
       if (!e || (e.userData && e.userData.dead)) continue;
-      // Track velocity for lead prediction
+      // Track velocity with an exponential-moving-average so leap spikes (Stick King) don't whip the lead
       const now = performance.now();
       const prev = e.userData._aimbotPrev;
       if (prev && now - prev.t > 0 && now - prev.t < 500) {
         const sec = (now - prev.t) / 1000;
-        e.userData._aimbotVel = new THREE.Vector3(
-          (e.position.x - prev.x) / sec,
-          (e.position.y - prev.y) / sec,
-          (e.position.z - prev.z) / sec,
-        );
+        const instVx = (e.position.x - prev.x) / sec;
+        const instVy = (e.position.y - prev.y) / sec;
+        const instVz = (e.position.z - prev.z) / sec;
+        const cur = e.userData._aimbotVel || new THREE.Vector3();
+        cur.x = cur.x * 0.55 + instVx * 0.45;
+        cur.y = cur.y * 0.55 + instVy * 0.45;
+        cur.z = cur.z * 0.55 + instVz * 0.45;
+        e.userData._aimbotVel = cur;
       }
       e.userData._aimbotPrev = { x: e.position.x, y: e.position.y, z: e.position.z, t: now };
       const s = e.scale.x || 1;
       const headPos = e.position.clone().add(new THREE.Vector3(0, 1.75 * s, 0));
       const dist = eye.distanceTo(headPos);
-      if (dist > 80) continue;
+      // Allow engagement from the air in sandbox — cap raised well above normal map diagonal
+      if (dist > 160) continue;
       const dir = headPos.clone().sub(eye).normalize();
       raycaster.set(eye, dir);
       const wh = raycaster.intersectObjects(wallMeshes);
@@ -4616,7 +4627,7 @@ function updatePlayer(dt) {
   if (keys[keyBind.left])    move.sub(right);
   if (move.lengthSq() > 0) move.normalize();
 
-  const crouching = keys[keyBind.crouch] || keys['ControlRight'];
+  const crouching = keys[keyBind.crouch];
   const sprinting = (keys[keyBind.sprint] || keys['ShiftRight']) && !crouching;
   const speedMul = speedBoostT > 0 ? 1.85 : 1;
   let speed = (crouching ? 2.5 : sprinting ? 8 : 5) * speedMul;
@@ -7098,7 +7109,7 @@ function sandboxTick(dt) {
     const sprinting = keys[keyBind.sprint] || keys['ShiftRight'];
     const speed = sxFlySpeed * (sprinting ? 2.5 : 1) * dt;
     if (keys[keyBind.jump]) camera.position.y += speed;
-    if (keys[keyBind.crouch] || keys['ControlRight']) camera.position.y -= speed;
+    if (keys[keyBind.crouch]) camera.position.y -= speed;
     player.vy = 0;
     player.onGround = true;
     player.jumpsUsed = 0;
