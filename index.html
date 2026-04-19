@@ -439,7 +439,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v2.08</div>
+  <div>v2.09</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -2701,7 +2701,8 @@ function tryShoot(now) {
   if (reloading && !cheats.mag || !player.alive) return;
   const g = GUNS[currentGun];
   const dmgMul = (boostActive ? 2 : 1) * (cheats.heavy ? 5 : 1) * (berserkBoostT > 0 ? 3 : 1);
-  const adsAccuracy = (adsActive && g.scopeFov) ? 0.5 : 1;
+  // Aimbot active + ADS → perfect accuracy (spread 0)
+  const adsAccuracy = (cheats.aimbot && adsActive) ? 0 : ((adsActive && g.scopeFov) ? 0.5 : 1);
   let rateMul = 1;
   if (boostActive) rateMul *= 2;
   if (cheats.rate) rateMul *= 3;
@@ -2712,11 +2713,23 @@ function tryShoot(now) {
   if (now - lastShot > interval * 3) lastShot = now - interval * 3;
   lastShot += interval;
 
-  // Enemy Wand (sandbox only): spawn an enemy of the currently-selected type at the menu-picked gun
+  // Enemy Wand (sandbox only): spawn an enemy where the crosshair is aiming
   if (g.enemyWand) {
     if (!sandboxActive) return;
     const gunKey = document.getElementById('sxEnemyGun')?.value || 'pistol';
-    sandboxSpawnEnemy(enemyWandType, gunKey);
+    // Raycast forward, land the enemy on the first surface (wall or ground)
+    const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+    raycaster.set(camera.position, dir);
+    const hit = raycaster.intersectObjects([...wallMeshes, ground], false)[0];
+    let target = null;
+    if (hit) {
+      target = hit.point.clone();
+    } else {
+      // fallback: project 12m ahead at ground level
+      target = camera.position.clone().add(dir.multiplyScalar(12));
+      target.y = terrainHeight(target.x, target.z);
+    }
+    sandboxSpawnEnemy(enemyWandType, gunKey, target);
     try { SFX.buy(); } catch {}
     flash.intensity = 2; flash._off = performance.now() + 80;
     playerSwingT = 0.001;
@@ -4462,6 +4475,16 @@ function updateBullets(dt) {
 function damagePlayer(amt) {
   if (cheats.invuln) return; // invincibility
   if (shieldBoostT > 0) return; // shield booster active
+  // Sandbox: taking damage is OK but you never "die" — health just floors at 1 so nothing triggers game-over
+  if (sandboxActive) {
+    player.hp = Math.max(1, player.hp - amt);
+    killStreak = 0;
+    updateStreakUI();
+    const d = document.getElementById('damage');
+    if (d) { d.style.opacity = 1; setTimeout(() => d.style.opacity = 0, 150); }
+    updateHUD();
+    return;
+  }
   player.hp -= amt;
   SFX.damage();
   // reset streak on damage
@@ -4527,24 +4550,46 @@ function tryJump() {
 function updatePlayer(dt) {
   if (!player.alive || spectating) return;
   // Aimbot cheat: while ADS, snap aim to the nearest alive enemy's head hitbox if visible.
+  // Track each enemy's velocity so we can lead projectile weapons (bazooka/plasma/arrow).
   if (cheats.aimbot && adsActive) {
     const targets = mpIsClient() ? Array.from(ghostEnemies.values()) : enemies;
-    let best = null, bestD = Infinity;
+    let best = null, bestEnemy = null, bestD = Infinity;
     const eye = camera.position;
     for (const e of targets) {
       if (!e || (e.userData && e.userData.dead)) continue;
+      // Track velocity for lead prediction
+      const now = performance.now();
+      const prev = e.userData._aimbotPrev;
+      if (prev && now - prev.t > 0 && now - prev.t < 500) {
+        const sec = (now - prev.t) / 1000;
+        e.userData._aimbotVel = new THREE.Vector3(
+          (e.position.x - prev.x) / sec,
+          (e.position.y - prev.y) / sec,
+          (e.position.z - prev.z) / sec,
+        );
+      }
+      e.userData._aimbotPrev = { x: e.position.x, y: e.position.y, z: e.position.z, t: now };
       const s = e.scale.x || 1;
       const headPos = e.position.clone().add(new THREE.Vector3(0, 1.75 * s, 0));
       const dist = eye.distanceTo(headPos);
       if (dist > 80) continue;
-      // wall LOS check
       const dir = headPos.clone().sub(eye).normalize();
       raycaster.set(eye, dir);
       const wh = raycaster.intersectObjects(wallMeshes);
       if (wh.length && wh[0].distance < dist - 0.1) continue;
-      if (dist < bestD) { bestD = dist; best = headPos; }
+      if (dist < bestD) { bestD = dist; best = headPos; bestEnemy = e; }
     }
     if (best) {
+      // Lead projectile weapons: aim where the target will be when the shot arrives
+      const g = GUNS[currentGun];
+      let projSpeed = 0;
+      if (g && g.rocket) projSpeed = 30;
+      else if (g && g.plasma) projSpeed = 55;
+      else if (g && g.grenadeArrow) projSpeed = 60;
+      if (projSpeed && bestEnemy && bestEnemy.userData._aimbotVel) {
+        const t = bestD / projSpeed;
+        best = best.clone().add(bestEnemy.userData._aimbotVel.clone().multiplyScalar(t));
+      }
       const dx = best.x - eye.x, dy = best.y - eye.y, dz = best.z - eye.z;
       player.yaw   = Math.atan2(-dx, -dz);
       player.pitch = Math.atan2(dy, Math.sqrt(dx*dx + dz*dz));
@@ -4990,9 +5035,10 @@ function restartGame() {
   owned.knife = true;
   owned.pistol = true;
   for (const k of Object.keys(weaponState)) delete weaponState[k];
-  currentGun = 'pistol';
   mag = GUNS.pistol.magSize;
   reserve = GUNS.pistol.reserve;
+  // Call equipGun so the visible weapon mesh actually swaps back to the pistol model
+  equipGun('pistol');
   round = 1;
   killCounter = 0;
   bossSpawned = false; stickKingSpawned = false;
@@ -6987,21 +7033,28 @@ addEventListener('keydown', e => {
   }
 });
 
-function sandboxSpawnEnemy(type, gunKey) {
+function sandboxSpawnEnemy(type, gunKey, atPoint = null) {
   let e;
   if (type === 'king') e = makeStickKing();
   else if (type === 'boss') e = makeBoss();
   else e = makeStickFigure();
-  let x, z, tries = 0;
-  do {
-    x = (Math.random() - 0.5) * (MAP_SIZE - 6);
-    z = (Math.random() - 0.5) * (MAP_SIZE - 6);
-    tries++;
-  } while (
-    tries < 30 &&
-    (Math.hypot(x - camera.position.x, z - camera.position.z) < 8 || (typeof insideSolidWall === 'function' && insideSolidWall(x, z)))
-  );
-  e.position.set(x, terrainHeight(x, z), z);
+  let x, z, y;
+  if (atPoint) {
+    x = atPoint.x; z = atPoint.z;
+    y = Math.max(terrainHeight(x, z), atPoint.y);
+  } else {
+    let tries = 0;
+    do {
+      x = (Math.random() - 0.5) * (MAP_SIZE - 6);
+      z = (Math.random() - 0.5) * (MAP_SIZE - 6);
+      tries++;
+    } while (
+      tries < 30 &&
+      (Math.hypot(x - camera.position.x, z - camera.position.z) < 8 || (typeof insideSolidWall === 'function' && insideSolidWall(x, z)))
+    );
+    y = terrainHeight(x, z);
+  }
+  e.position.set(x, y, z);
   e.userData.gunKey = gunKey;
   e.userData.gunProfile = ENEMY_GUN_PROFILES[gunKey];
   e.userData.magSize = e.userData.gunProfile.magSize;
