@@ -425,7 +425,7 @@
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
   <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v2.00</div>
+  <div>v2.01</div>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -4422,7 +4422,9 @@ function updatePlayer(dt) {
   const crouching = keys[keyBind.crouch] || keys['ControlRight'];
   const sprinting = (keys[keyBind.sprint] || keys['ShiftRight']) && !crouching;
   const speedMul = speedBoostT > 0 ? 1.85 : 1;
-  const speed = (crouching ? 2.5 : sprinting ? 8 : 5) * speedMul;
+  let speed = (crouching ? 2.5 : sprinting ? 8 : 5) * speedMul;
+  // Sandbox fly: horizontal movement uses the fly-speed slider (Shift = 2.5× faster)
+  if (sandboxActive && sxFly) speed = sxFlySpeed * (sprinting ? 2.5 : 1);
   const eyeH = crouching ? CROUCH_Y : STANDING_Y;
   const feetY = camera.position.y - eyeH;
   const headY = camera.position.y + 0.1; // roughly top of head
