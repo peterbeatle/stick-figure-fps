@@ -334,7 +334,8 @@
   </div>
 </div>
 <div id="settingsModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:20;display:none;align-items:center;justify-content:center;flex-direction:column;padding:20px;color:#eee;font-family:monospace;">
-  <div style="background:#1a1a1a;border:1px solid #444;border-radius:8px;padding:20px;max-width:520px;width:100%;max-height:86vh;overflow:auto">
+  <div style="background:#1a1a1a;border:1px solid #444;border-radius:8px;padding:20px;max-width:520px;width:100%;max-height:86vh;overflow:auto;position:relative">
+    <button type="button" id="settingsCornerClose" style="position:absolute;top:10px;right:12px;background:#444;color:#fff;border:0;border-radius:4px;width:28px;height:28px;cursor:pointer;font-family:monospace;font-size:16px;line-height:1">×</button>
     <h2 style="margin:0 0 12px">Settings</h2>
 
     <h3 style="margin:16px 0 6px;color:#ffcc33">Controls</h3>
@@ -444,9 +445,9 @@
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;bottom:110px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:30;pointer-events:none;text-align:right;line-height:1.4">
-  <div style="opacity:0.75;font-size:11px">Last Updated 4.18.26</div>
-  <div>v2.20</div>
+<div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;pointer-events:none;line-height:1.4;white-space:nowrap">
+  <span style="font-weight:bold;color:#eee">v2.21</span>
+  <span style="opacity:0.75;font-size:11px">— Last Updated 4.18.26</span>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
@@ -4412,16 +4413,16 @@ function updateEnemies(dt) {
       const accuracyBoost = Math.min(0.05, round * 0.005);
       let spread = Math.max(0.01, profile.spread - accuracyBoost) + Math.min(0.05, dist * 0.002);
       if (e.userData.isStickKing) spread *= 0.18; // sharply more accurate per request
-      // Bazooka tactic: aim for the player's FEET (splash hits the ground) and tighten spread so
-      // the rocket actually lands where intended. Only applied for this weapon/round.
-      const isBazooka = e.userData.gunKey === 'bazooka';
-      if (isBazooka) spread *= 0.35;
+      // Projectile weapons (bazooka/plasma/crossbow) fire slow arcing rounds the player
+      // can strafe away from — tighten spread AND aim for the feet so splash hits reliably.
+      const isProjectile = profile.kind === 'rocket' || profile.kind === 'plasma' || profile.kind === 'arrow';
+      if (isProjectile) spread *= 0.4;
       const dmgMul = e.userData.isStickKing ? 3.6 : (e.userData.isBoss ? 1.8 : 1.0);
       const dmg = Math.max(1, Math.floor(profile.dmg * dmgMul));
       const gunWorld = new THREE.Vector3();
       e.userData.gunMesh.getWorldPosition(gunWorld);
-      // Aim point: usually the player's body center, but bazookas target the feet
-      const aimPos = isBazooka
+      // Aim point: body center for bullets; feet for projectiles (splash hits the ground)
+      const aimPos = isProjectile
         ? new THREE.Vector3(targetPos.x, 0.15, targetPos.z)
         : targetPos;
       // per-shot LOS safety check from the gun's actual position (toward picked target)
@@ -5907,6 +5908,7 @@ document.getElementById('pauseSettingsBtn').addEventListener('click', openSettin
 document.getElementById('shopSettingsBtn').addEventListener('click', openSettings);
 document.getElementById('settingsGear').addEventListener('click', openSettings);
 document.getElementById('settingsCloseBtn').addEventListener('click', closeSettings);
+document.getElementById('settingsCornerClose').addEventListener('click', closeSettings);
 function toggleFullscreen() {
   try {
     if (!document.fullscreenElement) {
