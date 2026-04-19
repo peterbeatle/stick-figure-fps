@@ -477,7 +477,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;pointer-events:none;line-height:1.4;white-space:nowrap">
-  <span style="font-weight:bold;color:#eee">v2.45</span>
+  <span style="font-weight:bold;color:#eee">v2.46</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
@@ -2555,7 +2555,7 @@ flash.position.set(0.25, -0.15, -0.8);
 // Cheats
 const cheats = { money: false, mag: false, rate: false, invuln: false, skip: false, heavy: false, aimbot: false, wand: false };
 const CHEAT_CODE = '1211999';
-let cheatsUnlocked = false;
+let cheatsUnlocked = localStorage.getItem('cheatsUnlocked') === 'true';
 // Sniper aim-down-sights state
 let adsActive = false;
 const baseFov = 75;
@@ -2579,6 +2579,14 @@ const keyBind = {
   fullscreen: 'KeyF',
   bigMap:     'KeyM',
 };
+// Restore saved keybinds from localStorage (only override known keys)
+try {
+  const saved = JSON.parse(localStorage.getItem('keyBind') || '{}');
+  for (const k of Object.keys(keyBind)) if (saved[k]) keyBind[k] = saved[k];
+} catch {}
+function saveKeyBinds() {
+  try { localStorage.setItem('keyBind', JSON.stringify(keyBind)); } catch {}
+}
 function keyLabel(code) {
   if (!code) return '—';
   return code.replace(/^Key/, '').replace(/^Digit/, '').replace(/Left$/, ' L').replace(/Right$/, ' R');
@@ -3805,9 +3813,10 @@ function drawRadar(cv) {
     ctx.arc(cx + _nukePodium.position.x * scale, cy + _nukePodium.position.z * scale, 3, 0, Math.PI * 2);
     ctx.fill();
   }
-  // Remote player (blue arrow)
-  if (remotePlayer && remotePlayer.pose) {
-    const p = remotePlayer.pose;
+  // Remote players (blue arrows) — one per remote in the lobby
+  for (const entry of remotePlayers.values()) {
+    const p = entry.pose;
+    if (!p) continue;
     drawMinimapArrow(ctx, cx + p.x * scale, cy + p.z * scale, p.yaw, '#44aaff', 5);
   }
   // Local player (yellow arrow)
@@ -5941,10 +5950,10 @@ function updateHUD() {
 // ---------- Main loop ----------
 let prev = performance.now();
 function safeCall(fn, dt) { try { fn(dt); } catch (e) { console.error(fn.name + ' error:', e); } }
-// Perf HUD state
-let perfShowFps = false;
-let perfShowPing = false;
-let perfMaxFps = 0; // 0 = unlimited
+// Perf HUD state (persisted)
+let perfShowFps = localStorage.getItem('perfShowFps') === 'true';
+let perfShowPing = localStorage.getItem('perfShowPing') === 'true';
+let perfMaxFps = parseInt(localStorage.getItem('perfMaxFps') || '0', 10) || 0;
 const _fpsSamples = [];
 function updatePerfHud(fpsNow) {
   const wrap = document.getElementById('perfHud');
@@ -6108,8 +6117,8 @@ function loop() {
   for (const [id, g] of ghostEnemies) {
     if (g.userData.hpBar) g.userData.hpBar.group.lookAt(camera.position);
   }
-  if (remotePlayer && remotePlayer.mesh.userData.hpBarGroup) {
-    remotePlayer.mesh.userData.hpBarGroup.lookAt(camera.position);
+  for (const entry of remotePlayers.values()) {
+    if (entry.mesh.userData.hpBarGroup) entry.mesh.userData.hpBarGroup.lookAt(camera.position);
   }
 
   // hitmarker fade
@@ -6303,6 +6312,8 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   const err = document.getElementById('cheatsErr');
   const list = document.getElementById('cheatsList');
   const submit = document.getElementById('cheatsSubmit');
+  // If saved state says cheats were already unlocked this browser, reflect that
+  if (cheatsUnlocked) btn.textContent = 'Cheats (unlocked)';
   btn.addEventListener('click', () => {
     if (cheatsUnlocked) {
       list.style.display = list.style.display === 'none' ? 'block' : 'none';
@@ -6315,6 +6326,7 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   function tryUnlock() {
     if (code.value === CHEAT_CODE) {
       cheatsUnlocked = true;
+      try { localStorage.setItem('cheatsUnlocked', 'true'); } catch {}
       passBox.style.display = 'none';
       list.style.display = 'block';
       btn.textContent = 'Cheats (unlocked)';
@@ -6402,6 +6414,7 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   function pTryUnlock() {
     if (pCode.value === CHEAT_CODE) {
       cheatsUnlocked = true;
+      try { localStorage.setItem('cheatsUnlocked', 'true'); } catch {}
       pPass.style.display = 'none';
       pList.style.display = 'block';
       pBtn.textContent = 'Cheats (unlocked)';
@@ -6540,19 +6553,44 @@ function toggleFullscreen() {
   } catch (e) { console.warn('[fullscreen] failed:', e); }
 }
 document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
-// Perf HUD wiring
-document.getElementById('showFpsChk').addEventListener('change', e => { perfShowFps = e.target.checked; });
-document.getElementById('showPingChk').addEventListener('change', e => { perfShowPing = e.target.checked; });
+// Perf HUD wiring + persistence
+(function initPerfUi() {
+  const fpsCb = document.getElementById('showFpsChk');
+  const pingCb = document.getElementById('showPingChk');
+  const maxFpsSl = document.getElementById('maxFpsSlider');
+  const maxFpsVal = document.getElementById('maxFpsVal');
+  const rsSl = document.getElementById('renderScaleSlider');
+  const rsVal = document.getElementById('renderScaleVal');
+  if (fpsCb) fpsCb.checked = perfShowFps;
+  if (pingCb) pingCb.checked = perfShowPing;
+  if (maxFpsSl) {
+    maxFpsSl.value = (perfMaxFps === 0 ? 241 : perfMaxFps);
+    if (maxFpsVal) maxFpsVal.textContent = perfMaxFps === 0 ? 'Unlimited' : (perfMaxFps + ' FPS');
+  }
+  const savedRs = parseFloat(localStorage.getItem('renderScale') || '1.0') || 1.0;
+  if (rsSl) { rsSl.value = savedRs; if (rsVal) rsVal.textContent = savedRs.toFixed(1) + '×'; }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5) * savedRs);
+})();
+document.getElementById('showFpsChk').addEventListener('change', e => {
+  perfShowFps = e.target.checked;
+  try { localStorage.setItem('perfShowFps', String(perfShowFps)); } catch {}
+});
+document.getElementById('showPingChk').addEventListener('change', e => {
+  perfShowPing = e.target.checked;
+  try { localStorage.setItem('perfShowPing', String(perfShowPing)); } catch {}
+});
 document.getElementById('maxFpsSlider').addEventListener('input', e => {
   const v = +e.target.value;
   perfMaxFps = (v >= 241) ? 0 : v;
   document.getElementById('maxFpsVal').textContent = perfMaxFps === 0 ? 'Unlimited' : (perfMaxFps + ' FPS');
+  try { localStorage.setItem('perfMaxFps', String(perfMaxFps)); } catch {}
 });
 document.getElementById('renderScaleSlider').addEventListener('input', e => {
   const v = +e.target.value;
   document.getElementById('renderScaleVal').textContent = v.toFixed(1) + '×';
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5) * v);
   renderer.setSize(window.innerWidth, window.innerHeight);
+  try { localStorage.setItem('renderScale', String(v)); } catch {}
 });
 
 // ---- Controls rebind UI ----
@@ -6601,12 +6639,14 @@ window.addEventListener('keydown', (e) => {
   }
   keyBind[_rebindingAction] = e.code;
   _rebindingAction = null;
+  saveKeyBinds();
   renderRebindUI();
   e.preventDefault();
 }, true);
 document.getElementById('controlsReset').addEventListener('click', () => {
   Object.assign(keyBind, DEFAULT_BINDS);
   _rebindingAction = null;
+  saveKeyBinds();
   renderRebindUI();
 });
 renderRebindUI();
@@ -6635,7 +6675,11 @@ const PEER_CONFIG = {
 let peer = null;
 let conn = null;
 let mpRole = 'none'; // 'host' or 'client' or 'none'
-let remotePlayer = null; // { pose: {x,y,z,yaw,pitch,gun}, mesh }
+// Map of remote player id → { playroomPlayer, pose, mesh }. With 4-player lobbies you
+// may have up to 3 remotes at once. `remotePlayer` is kept as a compatibility pointer
+// to the first remote (used by spectate-camera logic).
+const remotePlayers = new Map();
+let remotePlayer = null;
 let mpPoseTimer = null;
 
 function drawPlayerNameOntoCanvas(canvas, name) {
@@ -7139,7 +7183,7 @@ async function startMultiplayer() {
     // skipLobby: true bypasses Playroom's built-in avatar/room UI entirely.
     // Playroom picks a room code automatically and encodes it in the URL.
     // Share the URL with your friend; they open it and join automatically.
-    await Playroom.insertCoin({ skipLobby: true, maxPlayersPerRoom: 2 });
+    await Playroom.insertCoin({ skipLobby: true, maxPlayersPerRoom: 4 });
     mpRole = Playroom.isHost() ? 'host' : 'client';
     // If we're the host, show the shareable URL; if we're the client, we joined an existing room
     const currentUrl = window.location.href;
@@ -7261,20 +7305,29 @@ async function startMultiplayer() {
     Playroom.onPlayerJoin((p) => {
       mpAllPlayers.set(p.id, p);
       const myId = Playroom.myPlayer().id;
-      if (p.id !== myId) {
+      if (p.id !== myId && !remotePlayers.has(p.id)) {
         console.log('[mp] remote player joined:', p.id);
-        remotePlayer = {
+        const entry = {
           playroomPlayer: p,
           pose: { x: 0, y: 1.7, z: 0, yaw: 0, pitch: 0 },
           mesh: makeRemotePlayerMesh(),
         };
-        scene.add(remotePlayer.mesh);
+        scene.add(entry.mesh);
+        remotePlayers.set(p.id, entry);
+        // First remote becomes the spectate-camera pointer for backwards-compat
+        if (!remotePlayer) remotePlayer = entry;
       }
       p.onQuit(() => {
         mpAllPlayers.delete(p.id);
         if (mpHostPlayer && mpHostPlayer.id === p.id) mpHostPlayer = null;
-        if (remotePlayer && remotePlayer.playroomPlayer.id === p.id) {
-          scene.remove(remotePlayer.mesh); remotePlayer = null;
+        const entry = remotePlayers.get(p.id);
+        if (entry) {
+          scene.remove(entry.mesh);
+          remotePlayers.delete(p.id);
+        }
+        if (remotePlayer && remotePlayer.playroomPlayer && remotePlayer.playroomPlayer.id === p.id) {
+          // Repoint the spectate pointer to whoever's left (or null if none)
+          remotePlayer = remotePlayers.values().next().value || null;
         }
       });
     });
@@ -7302,7 +7355,9 @@ async function startMultiplayer() {
 
 function leaveLobby() {
   if (mpPoseTimer) { clearInterval(mpPoseTimer); mpPoseTimer = null; }
-  if (remotePlayer) { scene.remove(remotePlayer.mesh); remotePlayer = null; }
+  for (const [id, entry] of remotePlayers) scene.remove(entry.mesh);
+  remotePlayers.clear();
+  remotePlayer = null;
   for (const [id, ghost] of ghostEnemies) scene.remove(ghost);
   ghostEnemies.clear();
   for (const m of ghostBulletMeshes) scene.remove(m);
@@ -7367,44 +7422,47 @@ function makeRemoteGunMesh(gunKey) {
 }
 
 function updateRemotePlayer() {
-  if (!remotePlayer || !remotePlayer.playroomPlayer) return;
-  const p = remotePlayer.playroomPlayer;
-  const pose = p.getState('pose');
-  if (!pose) return;
-  remotePlayer.mesh.position.set(pose.x, pose.y - 1.7, pose.z);
-  remotePlayer.mesh.rotation.y = pose.yaw;
-  const hp = p.getState('hp');
-  const fg = remotePlayer.mesh.userData.hpBarFg;
-  if (fg && typeof hp === 'number') {
-    const ratio = Math.max(0, Math.min(1, hp / 100));
-    fg.scale.x = ratio || 0.001;
-    fg.position.x = -1.0 * (1 - ratio) / 2;
-  }
-  // Refresh the floating name label if the remote player published one
-  const remoteName = p.getState('playerName');
-  if (remoteName && remotePlayer.mesh.userData.currentName !== remoteName) {
-    drawPlayerNameOntoCanvas(remotePlayer.mesh.userData.nameCanvas, remoteName);
-    remotePlayer.mesh.userData.nameTex.needsUpdate = true;
-    remotePlayer.mesh.userData.currentName = remoteName;
-  }
-  // Swap in the remote's actual weapon when it changes
-  const remoteGun = p.getState('gun');
-  if (remoteGun && remoteGun !== remotePlayer.mesh.userData.currentRemoteGun) {
-    // remove placeholder and any previous real gun mesh
-    const ph = remotePlayer.mesh.userData.gunPlaceholder;
-    if (ph && ph.parent === remotePlayer.mesh) remotePlayer.mesh.remove(ph);
-    if (remotePlayer.mesh.userData.activeGunMesh) {
-      remotePlayer.mesh.remove(remotePlayer.mesh.userData.activeGunMesh);
-      remotePlayer.mesh.userData.activeGunMesh = null;
+  for (const entry of remotePlayers.values()) {
+    const p = entry.playroomPlayer;
+    if (!p) continue;
+    const pose = p.getState('pose');
+    if (!pose) continue;
+    entry.mesh.position.set(pose.x, pose.y - 1.7, pose.z);
+    entry.mesh.rotation.y = pose.yaw;
+    const hp = p.getState('hp');
+    const fg = entry.mesh.userData.hpBarFg;
+    if (fg && typeof hp === 'number') {
+      const ratio = Math.max(0, Math.min(1, hp / 100));
+      fg.scale.x = ratio || 0.001;
+      fg.position.x = -1.0 * (1 - ratio) / 2;
     }
-    const m = makeRemoteGunMesh(remoteGun);
-    if (m) {
-      remotePlayer.mesh.add(m);
-      remotePlayer.mesh.userData.activeGunMesh = m;
+    const remoteName = p.getState('playerName');
+    if (remoteName && entry.mesh.userData.currentName !== remoteName) {
+      drawPlayerNameOntoCanvas(entry.mesh.userData.nameCanvas, remoteName);
+      entry.mesh.userData.nameTex.needsUpdate = true;
+      entry.mesh.userData.currentName = remoteName;
     }
-    remotePlayer.mesh.userData.currentRemoteGun = remoteGun;
+    const remoteGun = p.getState('gun');
+    if (remoteGun && remoteGun !== entry.mesh.userData.currentRemoteGun) {
+      const ph = entry.mesh.userData.gunPlaceholder;
+      if (ph && ph.parent === entry.mesh) entry.mesh.remove(ph);
+      if (entry.mesh.userData.activeGunMesh) {
+        entry.mesh.remove(entry.mesh.userData.activeGunMesh);
+        entry.mesh.userData.activeGunMesh = null;
+      }
+      const m = makeRemoteGunMesh(remoteGun);
+      if (m) {
+        entry.mesh.add(m);
+        entry.mesh.userData.activeGunMesh = m;
+      }
+      entry.mesh.userData.currentRemoteGun = remoteGun;
+    }
+    entry.pose = pose;
   }
-  remotePlayer.pose = pose;
+  // Keep `remotePlayer` pointed at some alive remote for spectate logic
+  if (!remotePlayer || !remotePlayers.has(remotePlayer.playroomPlayer?.id)) {
+    remotePlayer = remotePlayers.values().next().value || null;
+  }
 }
 
 document.getElementById('mpStartBtn').addEventListener('click', startMultiplayer);
