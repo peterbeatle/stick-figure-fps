@@ -473,7 +473,7 @@
 <div id="hostPausedBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(40,60,120,0.9);color:#fff;padding:10px 22px;border-radius:6px;font-family:monospace;font-weight:bold;font-size:18px;z-index:9;display:none">Game paused by host</div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;pointer-events:none;line-height:1.4;white-space:nowrap">
-  <span style="font-weight:bold;color:#eee">v2.38</span>
+  <span style="font-weight:bold;color:#eee">v2.42</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
 </div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
@@ -611,6 +611,14 @@
 </div>
 <div id="lookUpBanner" style="position:fixed;top:35%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;font-size:110px;color:#ff2222;letter-spacing:10px;z-index:15;display:none;pointer-events:none;text-shadow:0 4px 18px #000,0 0 30px #ff0000">LOOK UP!</div>
 <canvas id="minimap" width="200" height="200" style="position:fixed;left:12px;top:12px;z-index:7;border-radius:50%;background:rgba(0,0,0,0.55);box-shadow:0 0 8px rgba(0,0,0,0.6);pointer-events:none"></canvas>
+<canvas id="bigmap" width="640" height="640" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:18;border-radius:50%;background:rgba(0,0,0,0.78);box-shadow:0 0 40px rgba(0,0,0,0.9),0 0 80px rgba(0,255,255,0.15);display:none;pointer-events:none"></canvas>
+<div id="scoreboard" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:18;background:rgba(15,18,28,0.82);border:1px solid #445;border-radius:10px;padding:18px 24px;min-width:560px;max-width:90vw;color:#eee;font-family:monospace;font-size:13px;display:none;pointer-events:none;box-shadow:0 8px 30px rgba(0,0,0,0.7)">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+    <h2 style="margin:0;color:#ffcc33;letter-spacing:3px">SCOREBOARD</h2>
+    <span style="opacity:0.7;font-size:11px">Tab to close · live</span>
+  </div>
+  <div id="scoreboardBody"></div>
+</div>
 <div id="boosterHud" style="position:fixed;top:160px;right:12px;z-index:6;background:rgba(0,0,0,0.6);padding:6px 10px;border-radius:6px;font-family:monospace;font-size:12px;color:#eee;display:none;min-width:170px">
   <div id="boosterSpeedRow" style="display:none;align-items:center;gap:8px;margin:2px 0">
     <span style="color:#ffee33;font-weight:bold;min-width:60px">SPEED</span>
@@ -666,6 +674,8 @@
       <b style="color:#ffcc33">Space</b><span>Jump (press twice to double-jump)</span>
       <b style="color:#ffcc33">Scroll</b><span>Cycle through owned guns</span>
       <b style="color:#ffcc33">P</b><span>Pause menu</span>
+      <b style="color:#ffcc33">M</b><span>Toggle large radar/map</span>
+      <b style="color:#ffcc33">Tab</b><span>Toggle scoreboard</span>
       <b style="color:#ffcc33">Esc</b><span>Resume from pause</span>
     </div>
   </details>
@@ -2563,6 +2573,7 @@ const keyBind = {
   interact:   'KeyE',
   pause:      'KeyP',
   fullscreen: 'KeyF',
+  bigMap:     'KeyM',
 };
 function keyLabel(code) {
   if (!code) return '—';
@@ -2576,6 +2587,8 @@ addEventListener('keydown', e => {
     e.preventDefault();
   }
   if (e.code === 'Enter' && _awaitingAbilityContinue) { dismissAbilityBanner(); return; }
+  if (e.code === keyBind.bigMap && !e.repeat) toggleBigMap();
+  if (e.code === 'Tab' && !e.repeat) { toggleScoreboard(); e.preventDefault(); }
   if (e.code === keyBind.reload) tryReload();
   if (e.code === keyBind.interact && pointerLocked) { tryNukeInteract(); tryChestInteract(); }
   if (e.code === keyBind.jump && pointerLocked) { tryJump(); e.preventDefault(); }
@@ -2817,7 +2830,11 @@ function applyDamage(enemy, amount, isHead) {
   enemy.userData.hp -= dmg;
   const died = enemy.userData.hp <= 0;
   showHitmarker(died, isHead);
-  if (died) killEnemy(enemy);
+  // Stats: local damage + hit
+  stats.damageRound += dmg;
+  stats.damageSession += dmg;
+  stats.shotsHit++;
+  if (died) { stats.killsRound++; stats.killsSession++; killEnemy(enemy); }
   else {
     if (enemy.userData.hpBar) enemy.userData.hpBar.update(enemy.userData.hp, enemy.userData.maxHp);
     SFX.hit();
@@ -2930,6 +2947,8 @@ function tryShoot(now) {
     if (mag <= 0) { SFX.empty(); tryReload(); return; }
     mag--;
   }
+  // Stats: count every shot actually fired (regardless of whether it hit)
+  stats.shotsFired++;
   // throttle sfx during rampage to avoid piling up web audio nodes
   if (!boostActive || (now - (tryShoot._lastSfx || 0)) > 0.06) {
     SFX.shoot(currentGun);
@@ -3706,8 +3725,7 @@ function drawMinimapArrow(ctx, x, y, yaw, color, size = 6) {
   ctx.stroke();
   ctx.restore();
 }
-function updateMinimap() {
-  const cv = document.getElementById('minimap');
+function drawRadar(cv) {
   if (!cv) return;
   const ctx = cv.getContext('2d');
   const W = cv.width, H = cv.height;
@@ -3798,6 +3816,25 @@ function updateMinimap() {
   ctx.font = 'bold 11px monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.fillText('N', cx, 4);
+}
+
+function updateMinimap() {
+  drawRadar(document.getElementById('minimap'));
+}
+let _bigMapOn = false;
+function toggleBigMap() { _bigMapOn = !_bigMapOn; }
+function updateBigMap() {
+  const cv = document.getElementById('bigmap');
+  if (!cv) return;
+  // Auto-close when round isn't active (round clear / shop / win / lost / chest sequence)
+  const canShow = _bigMapOn && (roundActive || sandboxActive) && !_awaitingAbilityContinue && !paused;
+  if (canShow) {
+    cv.style.display = 'block';
+    drawRadar(cv);
+  } else {
+    cv.style.display = 'none';
+    if (!canShow && _bigMapOn && !(roundActive || sandboxActive)) _bigMapOn = false;
+  }
 }
 
 function updateTornadoVisual() {
@@ -4969,6 +5006,7 @@ function damagePlayer(amt) {
   if (player.hp <= 0) {
     player.hp = 0;
     player.alive = false;
+    stats.deaths++;
     SFX.death();
     if (mpActive()) {
       // Enter spectate — survivor can finish the round. Host also remains in-simulation (host logic still runs).
@@ -5019,6 +5057,102 @@ function tryJump() {
   player.vy = 11.5;
   player.onGround = false;
   player.jumpsUsed++;
+}
+
+// Per-session + per-round stats for scoreboard
+const stats = {
+  killsRound: 0, killsSession: 0,
+  shotsFired: 0, shotsHit: 0,
+  damageRound: 0, damageSession: 0,
+  deaths: 0,
+  startedAt: performance.now(),
+};
+function resetStatsRun() {
+  stats.killsRound = 0; stats.killsSession = 0;
+  stats.shotsFired = 0; stats.shotsHit = 0;
+  stats.damageRound = 0; stats.damageSession = 0;
+  stats.deaths = 0;
+  stats.startedAt = performance.now();
+}
+function resetStatsRound() {
+  stats.killsRound = 0;
+  stats.damageRound = 0;
+}
+function broadcastStats() {
+  try {
+    if (mpActive() && window.Playroom) {
+      Playroom.myPlayer().setState('stats', {
+        kR: stats.killsRound, kS: stats.killsSession,
+        sF: stats.shotsFired, sH: stats.shotsHit,
+        dR: stats.damageRound, dS: stats.damageSession,
+        dth: stats.deaths,
+      }, false);
+    }
+  } catch {}
+}
+
+let _scoreboardOn = false;
+function toggleScoreboard() { _scoreboardOn = !_scoreboardOn; }
+function updateScoreboard() {
+  const el = document.getElementById('scoreboard');
+  if (!el) return;
+  // Auto-close on transitions — match big map rules
+  const canShow = _scoreboardOn && (roundActive || sandboxActive) && !_awaitingAbilityContinue && !paused;
+  if (!canShow) {
+    el.style.display = 'none';
+    if (_scoreboardOn && !(roundActive || sandboxActive)) _scoreboardOn = false;
+    return;
+  }
+  el.style.display = 'block';
+  const body = document.getElementById('scoreboardBody');
+  // Build row list
+  const rows = [];
+  const myName = getPlayerName() || 'You';
+  const acc = stats.shotsFired > 0 ? Math.round(stats.shotsHit / stats.shotsFired * 100) : 0;
+  rows.push({ name: myName + ' (you)', kR: stats.killsRound, kS: stats.killsSession, acc, dR: stats.damageRound, dS: stats.damageSession, dth: stats.deaths });
+  if (mpActive() && window.Playroom) {
+    for (const p of mpAllPlayers.values()) {
+      const myId = Playroom.myPlayer() && Playroom.myPlayer().id;
+      if (p.id === myId) continue;
+      try {
+        const s = p.getState('stats') || {};
+        const name = p.getState('playerName') || 'P2';
+        const a = (s.sF || 0) > 0 ? Math.round((s.sH || 0) / s.sF * 100) : 0;
+        rows.push({ name, kR: s.kR || 0, kS: s.kS || 0, acc: a, dR: s.dR || 0, dS: s.dS || 0, dth: s.dth || 0 });
+      } catch {}
+    }
+  }
+  // Sort by session kills desc
+  rows.sort((a, b) => b.kS - a.kS);
+  let html = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead>
+      <tr style="color:#ffcc33;text-align:left;border-bottom:1px solid #445">
+        <th style="padding:6px 8px">Player</th>
+        <th style="padding:6px 8px;text-align:right">Kills (round)</th>
+        <th style="padding:6px 8px;text-align:right">Kills (session)</th>
+        <th style="padding:6px 8px;text-align:right">Accuracy</th>
+        <th style="padding:6px 8px;text-align:right">Dmg (round)</th>
+        <th style="padding:6px 8px;text-align:right">Dmg (session)</th>
+        <th style="padding:6px 8px;text-align:right">Deaths</th>
+      </tr>
+    </thead><tbody>`;
+  for (const r of rows) {
+    html += `<tr style="border-bottom:1px solid #2a2d3a">
+      <td style="padding:6px 8px;color:#fff">${r.name}</td>
+      <td style="padding:6px 8px;text-align:right">${r.kR}</td>
+      <td style="padding:6px 8px;text-align:right">${r.kS}</td>
+      <td style="padding:6px 8px;text-align:right">${r.acc}%</td>
+      <td style="padding:6px 8px;text-align:right">${Math.round(r.dR)}</td>
+      <td style="padding:6px 8px;text-align:right">${Math.round(r.dS)}</td>
+      <td style="padding:6px 8px;text-align:right">${r.dth}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  // Session time
+  const sec = Math.floor((performance.now() - stats.startedAt) / 1000);
+  const mm = Math.floor(sec / 60), ss = sec % 60;
+  html += `<div style="margin-top:10px;opacity:0.7;font-size:11px;text-align:right">Session time: ${mm}:${String(ss).padStart(2,'0')}</div>`;
+  body.innerHTML = html;
 }
 
 let aimbotLockedEnemy = null;
@@ -5406,6 +5540,7 @@ function mapForRound(r) {
 }
 
 function startRound() {
+  resetStatsRound();
   overlay.classList.add('hidden');
   roundActive = true;
   bossSpawned = false; stickKingSpawned = false;
@@ -5600,6 +5735,7 @@ function restartGame() {
   // reset guns
   for (const k of Object.keys(owned)) delete owned[k];
   for (const k of Object.keys(gunLevels)) delete gunLevels[k];
+  resetStatsRun();
   owned.knife = true;
   owned.pistol = true;
   for (const k of Object.keys(weaponState)) delete weaponState[k];
@@ -5878,6 +6014,7 @@ function loop() {
     }
     safeCall(updateBoosterTimers, dt);
     safeCall(updateMinimap, dt);
+    safeCall(broadcastStats, dt);
     safeCall(updateNukePodiumHint, dt);
     safeCall(updateChestHint, dt);
     safeCall(updateCoordsHUD, dt);
@@ -5914,6 +6051,10 @@ function loop() {
   }
   // Track edge of fire press regardless of round state
   wasShooting = mouseDown;
+  // These must run every frame (even during round-clear/shop/animations) so they can
+  // auto-hide themselves when the round ends.
+  safeCall(updateBigMap, dt);
+  safeCall(updateScoreboard, dt);
 
   // Multiplayer: update remote player's visual position
   if (typeof updateRemotePlayer === 'function') updateRemotePlayer();
@@ -6082,6 +6223,7 @@ function goHome() {
   camera.position.set(0, 1.7, 0);
   for (const k of Object.keys(owned)) delete owned[k];
   for (const k of Object.keys(gunLevels)) delete gunLevels[k];
+  resetStatsRun();
   owned.knife = true; owned.pistol = true;
   for (const k of Object.keys(weaponState)) delete weaponState[k];
   currentGun = 'pistol';
@@ -6421,6 +6563,7 @@ const CONTROL_LABELS = [
   ['interact','Interact'],
   ['pause',   'Pause'],
   ['fullscreen','Fullscreen'],
+  ['bigMap',  'Toggle Map'],
 ];
 const DEFAULT_BINDS = Object.assign({}, keyBind);
 let _rebindingAction = null;
@@ -7022,6 +7165,8 @@ async function startMultiplayer() {
         if (!me || data.playerId !== me.id) return;
         player.money += data.amount;
         killStreak++;
+        stats.killsRound++;
+        stats.killsSession++;
         if (!boostActive && killStreak >= BOOST_THRESHOLD) activateBoost();
         updateStreakUI();
         updateHUD();
