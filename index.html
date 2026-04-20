@@ -486,8 +486,8 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.89</span>
-  <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
+  <span style="font-weight:bold;color:#eee">v2.90</span>
+  <span style="opacity:0.75;font-size:11px">— Last Updated 4.20.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
 <div id="changelogPanel" style="position:fixed;top:52px;right:300px;background:rgba(15,18,28,0.94);border:1px solid #445;border-radius:6px;padding:14px 18px;font-family:monospace;font-size:12px;color:#ddd;z-index:30;display:none;max-width:420px;max-height:60vh;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.7);line-height:1.5"></div>
@@ -737,7 +737,8 @@
     <div style="background:#1a1a1a;border:1px solid #444;border-radius:10px;padding:24px 28px;width:min(420px,92vw);color:#eee">
       <h2 style="margin:0 0 16px;color:#c8a0ff;font-size:22px">Log In</h2>
       <label style="display:block;margin-bottom:12px;font-size:13px">Email<input type="email" id="loginEmail" autocomplete="email" style="width:100%;box-sizing:border-box;background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:8px;margin-top:4px;font-family:monospace"></label>
-      <label style="display:block;margin-bottom:14px;font-size:13px">Password<input type="password" id="loginPassword" autocomplete="current-password" style="width:100%;box-sizing:border-box;background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:8px;margin-top:4px;font-family:monospace"></label>
+      <label style="display:block;margin-bottom:10px;font-size:13px">Password<input type="password" id="loginPassword" autocomplete="current-password" style="width:100%;box-sizing:border-box;background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:8px;margin-top:4px;font-family:monospace"></label>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;cursor:pointer;user-select:none"><input type="checkbox" id="loginStayLoggedIn" checked style="cursor:pointer"> Stay logged in</label>
       <div id="loginErr" style="color:#ff5050;margin-bottom:10px;min-height:18px;font-size:12px"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button type="button" id="loginCancel" style="background:#444;color:#eee;border:0;border-radius:4px;padding:8px 14px;cursor:pointer;font-family:monospace">Cancel</button>
@@ -924,6 +925,19 @@
     return null;
   }
 
+  // "Stay Logged In" honoring: if user unchecked the box at login, clear session on tab close.
+  window.addEventListener('beforeunload', () => {
+    try {
+      const stay = localStorage.getItem('stickFigureFpsStayLoggedIn');
+      if (stay === '0') {
+        // Purge the Supabase session storage so next visit starts logged-out.
+        for (const k of Object.keys(localStorage)) {
+          if (/^sb-.*-auth-token$/.test(k)) localStorage.removeItem(k);
+        }
+      }
+    } catch {}
+  });
+
   // Listen for auth-token changes in other tabs so this tab auto-picks-up a login
   // completed via the email confirmation link (which opens in a new tab).
   // Supabase's localStorage key is `sb-<project-ref>-auth-token`.
@@ -1046,12 +1060,17 @@
       try {
         const email = $('loginEmail').value.trim();
         const password = $('loginPassword').value;
+        const stayLoggedIn = $('loginStayLoggedIn').checked;
+        try { localStorage.setItem('stickFigureFpsStayLoggedIn', stayLoggedIn ? '1' : '0'); } catch {}
         const err = $('loginErr'); err.textContent = '';
         if (!email || !password) { err.textContent = 'Email and password required.'; return; }
-        console.log('[auth] calling signInWithPassword…');
-        const { data, error } = await client.auth.signInWithPassword({ email, password });
+        console.log('[auth] calling signInWithPassword… stayLoggedIn=' + stayLoggedIn);
+        // Race the call against a 15s timeout so the UI doesn't hang forever if Supabase stalls.
+        const signInCall = client.auth.signInWithPassword({ email, password });
+        const timeout = new Promise((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Request timed out after 15 seconds — possible network block. Try disabling any VPN or extension that might interfere with supabase.co.') }), 15000));
+        const { data, error } = await Promise.race([signInCall, timeout]);
         console.log('[auth] signIn result', { hasSession: !!(data && data.session), error });
-        if (error) { err.textContent = error.message; return; }
+        if (error) { err.textContent = error.message || String(error); return; }
         hideModal('loginModal');
         $('loginPassword').value = '';
       } catch (e) {
@@ -1349,6 +1368,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.90', 'Updated version-tag date to 4.20.26. Added a "Stay logged in" checkbox (checked by default) to the login modal — when unchecked, the Supabase auth-token is purged from localStorage on tab close so the next visit starts logged-out. Also added a 15-second timeout to signInWithPassword so we at least get an error back instead of the UI hanging forever when the call stalls.'],
   ['v2.89', 'Fix for hanging auth calls: supplied a no-op `lock` option to the Supabase client. The default implementation uses navigator.locks, which deadlocks indefinitely if a previous tab crashed or is still open holding the auth-token lock (what was making signInWithPassword and earlier .maybeSingle() hang forever with no response). Also explains why the "Lock was stolen" error was appearing on cross-tab sync.'],
   ['v2.88', 'Password reset flow: tabs opened by the reset-password email link (hash contains type=recovery) now show a dedicated "Set New Password" modal with new + confirm password fields, instead of the generic "Email Confirmed" overlay. Submitting calls client.auth.updateUser({password}). Also added diagnostic logging to submitLogin and refreshAuth to help debug the "login does nothing" + "not logged in after revisit" issues.'],
   ['v2.87', 'Confirmation-tab lock overlay now appears instantly (detected from the URL hash at script load + shown on DOMContentLoaded) instead of waiting for auth state to finish loading. Username text is filled in by applyAuthState when profile arrives, but the lock itself is already there.'],
