@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.68</span>
+  <span style="font-weight:bold;color:#eee">v2.69</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -815,6 +815,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.69', 'Fix for MP chest flow: after moving continueAfterChest out of the client\'s dismiss path in v2.66 (for ready-up), _pendingChestRound never got cleared on the client, so chestBusy stayed true forever and the round-clear gate in mpClientSync never fired. chestAllReady RPC now clears _pendingChestRound on clients so they advance to the gun shop once the host broadcasts chestRound:0.'],
   ['v2.68', 'Diagnostic: added console logs to the chest ready-up check (logs once/sec on host with each player\'s chestReady state) and to dismissAbilityBanner. Also hardened the ready-check to count self even if mpAllPlayers happens to not include the local player. Share the host\'s console to see why the ready-up isn\'t triggering.'],
   ['v2.67', 'Fixed a ReferenceError in mpClientSync (stale _chestCompletedForRound reference left over from v2.65 — now uses _chestOpenedForRound) that was throwing every frame and preventing the client from ever reaching the round-clear gate after the chest flow.'],
   ['v2.66', 'MP chest ready-up: first player to open the chest triggers the full animation + ability grant for everyone. The chest can no longer be re-opened (guarded by _chestOpenedForRound on tryChestInteract + chestOpen/chestSpawn RPCs). After pressing Enter, each player sees a "WAITING FOR OTHER PLAYERS…" banner; the host\'s broadcast loop checks every player\'s chestReady state and only calls continueAfterChest (clearing chestRound and firing round-clear → gun shop for everyone) once all are ready.'],
@@ -7770,6 +7771,12 @@ async function startMultiplayer(joinCode) {
       Playroom.RPC.register('chestAllReady', (data) => {
         hideChestWaitBanner();
         try { Playroom.myPlayer().setState('chestReady', 0, true); } catch {}
+        // On clients, clear _pendingChestRound so chestBusy flips false and
+        // mpClientSync's round-clear gate can fire on the next host broadcast.
+        if (mpIsClient()) {
+          console.log('[mp] chestAllReady received on client — clearing pendingChestRound');
+          _pendingChestRound = 0;
+        }
       });
       Playroom.RPC.register('chestOpen', (data) => {
         // Someone hit E near the chest — everyone opens it and gets the ability
