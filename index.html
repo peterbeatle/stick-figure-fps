@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.79</span>
+  <span style="font-weight:bold;color:#eee">v2.80</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -947,34 +947,46 @@
     });
     $('signupCancel').addEventListener('click', () => hideModal('signupModal'));
     const submitSignup = async () => {
-      const username = $('signupUsername').value.trim();
-      const email = $('signupEmail').value.trim();
-      const password = $('signupPassword').value;
-      const confirm = $('signupConfirm').value;
-      const err = $('signupErr'); err.textContent = '';
-      if (username.length < 3 || username.length > 20) { err.textContent = 'Username must be 3–20 characters.'; return; }
-      if (!/^[a-zA-Z0-9_]+$/.test(username)) { err.textContent = 'Username can only contain letters, numbers, and underscores.'; return; }
-      if (!email) { err.textContent = 'Email required.'; return; }
-      if (password.length < 6) { err.textContent = 'Password must be at least 6 characters.'; return; }
-      if (password !== confirm) { err.textContent = "Passwords don't match."; return; }
-      // Case-insensitive availability check (escape LIKE wildcards in username)
-      const safePat = username.replace(/([\\%_])/g, '\\$1');
-      const { data: existing } = await client.from('profiles').select('id').ilike('username', safePat).maybeSingle();
-      if (existing) { err.textContent = 'Username already taken.'; return; }
-      const { data, error } = await client.auth.signUp({
-        email, password,
-        options: { emailRedirectTo: 'https://stickfigurefps.com', data: { username } }
-      });
-      if (error) { err.textContent = error.message; return; }
-      // Profile row is created by a DB trigger on auth.users insert, so no client-side insert needed.
-      hideModal('signupModal');
-      $('signupPassword').value = ''; $('signupConfirm').value = '';
-      setStatus('Check your email to confirm your account!', '#ffcc33');
-      // Persist pending-confirmation state so we can block the game on reload until they confirm or cancel.
-      try { localStorage.setItem('pendingSignupEmail', email); } catch {}
-      showEmailPendingModal(email);
+      console.log('[auth] submitSignup fired');
+      try {
+        const username = $('signupUsername').value.trim();
+        const email = $('signupEmail').value.trim();
+        const password = $('signupPassword').value;
+        const confirmPw = $('signupConfirm').value;
+        const err = $('signupErr'); err.textContent = '';
+        console.log('[auth] values', { username, email, pwLen: password.length });
+        if (username.length < 3 || username.length > 20) { err.textContent = 'Username must be 3–20 characters.'; return; }
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) { err.textContent = 'Username can only contain letters, numbers, and underscores.'; return; }
+        if (!email) { err.textContent = 'Email required.'; return; }
+        if (password.length < 6) { err.textContent = 'Password must be at least 6 characters.'; return; }
+        if (password !== confirmPw) { err.textContent = "Passwords don't match."; return; }
+        // Case-insensitive availability check (escape LIKE wildcards in username)
+        const safePat = username.replace(/([\\%_])/g, '\\$1');
+        console.log('[auth] checking username availability…');
+        const { data: existing, error: chkErr } = await client.from('profiles').select('id').ilike('username', safePat).maybeSingle();
+        console.log('[auth] availability check result', { existing, chkErr });
+        if (chkErr) { err.textContent = 'Check failed: ' + chkErr.message; return; }
+        if (existing) { err.textContent = 'Username already taken.'; return; }
+        console.log('[auth] calling signUp…');
+        const { data, error } = await client.auth.signUp({
+          email, password,
+          options: { emailRedirectTo: 'https://stickfigurefps.com', data: { username } }
+        });
+        console.log('[auth] signUp result', { data, error });
+        if (error) { err.textContent = error.message; return; }
+        hideModal('signupModal');
+        $('signupPassword').value = ''; $('signupConfirm').value = '';
+        setStatus('Check your email to confirm your account!', '#ffcc33');
+        try { localStorage.setItem('pendingSignupEmail', email); } catch {}
+        showEmailPendingModal(email);
+      } catch (e) {
+        console.error('[auth] submitSignup threw', e);
+        const err = $('signupErr');
+        if (err) err.textContent = 'Unexpected error: ' + (e && e.message || e);
+      }
     };
     $('signupSubmit').addEventListener('click', submitSignup);
+    console.log('[auth] signup click handler attached');
 
     // Forgot password
     $('forgotPwLink').addEventListener('click', (e) => {
@@ -1185,6 +1197,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.80', 'Diagnostic: wrapped signup submit in try/catch + heavy console logging ("[auth] submitSignup fired", shows validation values, availability check result, signUp result). Also renamed the local `confirm` variable to `confirmPw` to rule out any shadowing of window.confirm.'],
   ['v2.79', 'After signup, a blocking "Confirm your email" modal now covers the game until the user either clicks the confirmation link in their inbox or explicitly cancels the signup (→ play as guest). State is persisted in localStorage so the block survives page reloads. Modal has Resend, "I confirmed — log me in", and Cancel options.'],
   ['v2.78', 'Moved the version tag + changelog dropdown from right:260px to right:300px. The account panel\'s content width is 220px, but its padding (14px × 2) + border makes its total rendered width closer to 250px — so 260px wasn\'t enough clearance.'],
   ['v2.77', 'Account panel has a fixed 220px width and the status message now wraps inside the panel instead of expanding it sideways (which was overlapping the version tag when messages like "Check your email to confirm…" appeared).'],
