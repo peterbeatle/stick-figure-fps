@@ -485,12 +485,12 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.53</span>
+  <span style="font-weight:bold;color:#eee">v2.54</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
 <div id="changelogPanel" style="position:fixed;top:52px;right:12px;background:rgba(15,18,28,0.94);border:1px solid #445;border-radius:6px;padding:14px 18px;font-family:monospace;font-size:12px;color:#ddd;z-index:30;display:none;max-width:420px;max-height:60vh;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.7);line-height:1.5"></div>
-<div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span></div>
+<div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span><span id="cornerRoundMax" style="opacity:0.7;font-weight:normal">/12</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
 <div id="bossHud" style="position:fixed;top:100px;left:50%;transform:translateX(-50%);z-index:6;"></div>
@@ -808,6 +808,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.54', 'Corner round tag now reads "Round X/12" during campaign; the /12 suffix hides once you cross into Survivor Mode.'],
   ['v2.53', 'Sandbox/Tutorial buttons moved down (clear of the expanded MP lobby). Host-left animation in MP: if host returns to home, clients see "HOST LEFT GAME" banner and auto-return to home after 3s.'],
   ['v2.52', 'Tutorial steps redesigned: each action must be done 2× then press ENTER to advance. Info screens just require ENTER. Removed abilities/chest info from tutorial.'],
   ['v2.51', 'MP Lobby panel (shows connected players + ready state on home + shop screens). Tutorial mode — step-by-step walkthrough of movement, shooting, ADS, weapon switching, shop, boosters, rounds.'],
@@ -6173,6 +6174,9 @@ function updateHUD() {
   HUD.reserve.textContent = (cheats.mag || reserve === Infinity) ? '∞' : reserve;
   HUD.round.textContent = round;
   HUD.cornerRound.textContent = round;
+  // Hide the "/12" suffix once we're past round 12 (Survivor Mode has no fixed end)
+  const maxEl = document.getElementById('cornerRoundMax');
+  if (maxEl) maxEl.style.display = (survivorMode || round > 12) ? 'none' : 'inline';
   // On the client, the local `enemies` array is empty; use the ghost copies.
   const enemySrc = mpIsClient() ? Array.from(ghostEnemies.values()) : enemies;
   HUD.remaining.textContent = enemySrc.length;
