@@ -485,12 +485,12 @@
   <div style="font-size:14px;letter-spacing:3px;color:#8fa8ff;margin-top:30px;opacity:0.85">Waiting for host to resume…</div>
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
-<div id="versionTag" style="position:fixed;top:14px;right:260px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.77</span>
+<div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
+  <span style="font-weight:bold;color:#eee">v2.78</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
-<div id="changelogPanel" style="position:fixed;top:52px;right:260px;background:rgba(15,18,28,0.94);border:1px solid #445;border-radius:6px;padding:14px 18px;font-family:monospace;font-size:12px;color:#ddd;z-index:30;display:none;max-width:420px;max-height:60vh;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.7);line-height:1.5"></div>
+<div id="changelogPanel" style="position:fixed;top:52px;right:300px;background:rgba(15,18,28,0.94);border:1px solid #445;border-radius:6px;padding:14px 18px;font-family:monospace;font-size:12px;color:#ddd;z-index:30;display:none;max-width:420px;max-height:60vh;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.7);line-height:1.5"></div>
 <div id="cornerRound" style="position:fixed;top:10px;right:12px;background:rgba(0,0,0,0.55);padding:10px 14px;border-radius:6px;z-index:5;font-size:16px;font-weight:bold;">Round <span id="cornerRoundNum">1</span><span id="cornerRoundMax" style="opacity:0.7;font-weight:normal">/12</span></div>
 <div id="cornerMoney" style="position:fixed;top:54px;right:12px;background:rgba(0,0,0,0.55);padding:8px 14px;border-radius:6px;z-index:5;font-size:15px;font-weight:bold;color:#4caf50">$<span id="cornerMoneyAmt">0</span></div>
 <div id="bossBanner" style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(180,0,0,0.85);color:#fff;padding:12px 24px;border-radius:6px;font-size:22px;font-weight:bold;letter-spacing:2px;z-index:6;display:none;">BOSS INCOMING</div>
@@ -1119,6 +1119,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.78', 'Moved the version tag + changelog dropdown from right:260px to right:300px. The account panel\'s content width is 220px, but its padding (14px × 2) + border makes its total rendered width closer to 250px — so 260px wasn\'t enough clearance.'],
   ['v2.77', 'Account panel has a fixed 220px width and the status message now wraps inside the panel instead of expanding it sideways (which was overlapping the version tag when messages like "Check your email to confirm…" appeared).'],
   ['v2.76', 'Player name is now driven by auth state: guests always show "Playing as Guest" (both on the home screen and in MP), logged-in users show their account username. Removed the initial "enter a name" prompt — new visitors land straight on the home screen and can just hit Play.'],
   ['v2.75', 'Layout tweak: version tag + changelog dropdown moved from center to right:260px so they sit in the gap between the title and the account panel. Account panel nudged away from the edge (right:28px) so it doesn\'t feel cut off.'],
