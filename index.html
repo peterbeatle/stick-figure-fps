@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:260px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.75</span>
+  <span style="font-weight:bold;color:#eee">v2.76</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -855,16 +855,20 @@
     const loggedOut = $('acctLoggedOut');
     const loggedIn = $('acctLoggedIn');
     const changeLink = $('changeNameLink');
+    const nameShow = $('playerNameShow');
     if (user && profile) {
       loggedOut.style.display = 'none';
       loggedIn.style.display = 'block';
       $('acctUsername').textContent = profile.username;
       if (typeof window.setPlayerName === 'function') window.setPlayerName(profile.username);
+      if (nameShow) nameShow.textContent = profile.username;
       if (changeLink) changeLink.style.display = 'none';
     } else {
       loggedOut.style.display = 'flex';
       loggedIn.style.display = 'none';
-      if (changeLink) changeLink.style.display = '';
+      // Guest mode: display "Guest" regardless of any local name. Hide change link since it doesn't matter.
+      if (nameShow) nameShow.textContent = 'Guest';
+      if (changeLink) changeLink.style.display = 'none';
     }
   }
 
@@ -1061,7 +1065,12 @@ import * as THREE from 'three';
 // ---------- Player name (stored locally) ----------
 const PLAYER_NAME_KEY = 'stickFigureFpsName';
 function getPlayerName() {
-  try { return localStorage.getItem(PLAYER_NAME_KEY) || ''; } catch { return ''; }
+  // Logged-in users always use their account username; everyone else is "Guest".
+  try {
+    const p = window.gameAuth && window.gameAuth.profile;
+    if (p && p.username) return p.username;
+  } catch {}
+  return 'Guest';
 }
 window.setPlayerName = setPlayerName;
 function setPlayerName(name) {
@@ -1101,19 +1110,16 @@ function hideUsernameGate() {
     e.preventDefault();
     showUsernameGate(true);
   });
-  // Initialize label + gate visibility on first load
-  const existing = getPlayerName();
-  if (existing) {
-    const show = document.getElementById('playerNameShow');
-    if (show) show.textContent = existing;
-    try { if (typeof window.clarity === 'function') window.clarity('identify', existing); } catch {}
-  } else {
-    showUsernameGate();
-  }
+  // Default display to "Guest". Auth state will overwrite with the logged-in username once loaded.
+  const show = document.getElementById('playerNameShow');
+  if (show) show.textContent = 'Guest';
+  const changeLink = document.getElementById('changeNameLink');
+  if (changeLink) changeLink.style.display = 'none';
 })();
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.76', 'Player name is now driven by auth state: guests always show "Playing as Guest" (both on the home screen and in MP), logged-in users show their account username. Removed the initial "enter a name" prompt — new visitors land straight on the home screen and can just hit Play.'],
   ['v2.75', 'Layout tweak: version tag + changelog dropdown moved from center to right:260px so they sit in the gap between the title and the account panel. Account panel nudged away from the edge (right:28px) so it doesn\'t feel cut off.'],
   ['v2.74', 'Usernames are now case-insensitive: "Peter" and "peter" are treated as the same name. DB has a unique index on lower(username) to enforce it; client-side availability check uses ILIKE with escaped LIKE wildcards so underscores in usernames don\'t cause false positives.'],
   ['v2.73', 'Signup fix: profile row is now created server-side by a database trigger (SECURITY DEFINER) so RLS no longer blocks it. Client-side insert removed. Also moved the version tag + changelog dropdown to top-center so they no longer overlap the account panel in the top-right.'],
