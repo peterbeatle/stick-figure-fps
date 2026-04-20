@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.78</span>
+  <span style="font-weight:bold;color:#eee">v2.79</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -773,6 +773,20 @@
       </div>
     </div>
   </div>
+  <div id="emailPendingModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:150;align-items:center;justify-content:center;font-family:monospace">
+    <div style="background:#1a1228;border:1px solid #5a3a8e;border-radius:10px;padding:28px 32px;width:min(480px,92vw);color:#eee;text-align:center">
+      <div style="font-size:48px;margin-bottom:8px">📧</div>
+      <h2 style="margin:0 0 12px;color:#ffcc33;font-size:22px;letter-spacing:2px">CONFIRM YOUR EMAIL</h2>
+      <p style="margin:0 0 14px;font-size:14px;line-height:1.5">We sent a confirmation link to <b id="emailPendingAddr" style="color:#c8a0ff"></b>. Click it to activate your account and start playing.</p>
+      <p style="margin:0 0 18px;font-size:12px;opacity:0.7">Don't see it? Check your spam folder.</p>
+      <div id="emailPendingMsg" style="min-height:18px;font-size:12px;margin-bottom:10px"></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button type="button" id="emailPendingResend" style="background:#4c8af0;color:white;border:0;border-radius:4px;padding:10px;cursor:pointer;font-family:monospace;font-weight:bold">Resend confirmation email</button>
+        <button type="button" id="emailPendingCheck" style="background:#4caf50;color:white;border:0;border-radius:4px;padding:10px;cursor:pointer;font-family:monospace;font-weight:bold">I already confirmed — log me in</button>
+        <button type="button" id="emailPendingCancel" style="background:#666;color:white;border:0;border-radius:4px;padding:8px;cursor:pointer;font-family:monospace;font-size:12px;margin-top:6px">Cancel signup (play as guest)</button>
+      </div>
+    </div>
+  </div>
   <div id="leaderboardModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100;align-items:center;justify-content:center;font-family:monospace">
     <div style="background:#1a1a1a;border:1px solid #444;border-radius:10px;padding:20px 24px;width:min(520px,94vw);color:#eee">
       <h2 style="margin:0 0 14px;color:#c8a0ff;font-size:22px">🏆 Leaderboard</h2>
@@ -877,8 +891,17 @@
     if (session && session.user) {
       const profile = await fetchProfile(session.user.id);
       applyAuthState(session.user, profile);
+      try { localStorage.removeItem('pendingSignupEmail'); } catch {}
     } else {
       applyAuthState(null, null);
+      // No session — if we have a pending signup on record, block the game until they confirm or cancel.
+      const pending = (() => { try { return localStorage.getItem('pendingSignupEmail'); } catch { return null; } })();
+      if (pending) {
+        const addr = document.getElementById('emailPendingAddr');
+        if (addr) addr.textContent = pending;
+        const el = document.getElementById('emailPendingModal');
+        if (el) el.style.display = 'flex';
+      }
     }
   }
 
@@ -947,6 +970,9 @@
       hideModal('signupModal');
       $('signupPassword').value = ''; $('signupConfirm').value = '';
       setStatus('Check your email to confirm your account!', '#ffcc33');
+      // Persist pending-confirmation state so we can block the game on reload until they confirm or cancel.
+      try { localStorage.setItem('pendingSignupEmail', email); } catch {}
+      showEmailPendingModal(email);
     };
     $('signupSubmit').addEventListener('click', submitSignup);
 
@@ -1022,12 +1048,52 @@
       updateTabStyles(); loadLeaderboard();
     }));
 
-    // Click-outside-to-close for all modals
+    // Click-outside-to-close for dismissible modals (NOT emailPendingModal — that one is intentionally blocking)
     ['loginModal', 'signupModal', 'forgotModal', 'leaderboardModal'].forEach(id => {
       const el = $(id);
       if (el) el.addEventListener('click', (e) => { if (e.target === el) hideModal(id); });
     });
+
+    // Email-pending modal buttons
+    $('emailPendingResend').addEventListener('click', async () => {
+      const msg = $('emailPendingMsg'); msg.textContent = ''; msg.style.color = '#ddd';
+      const email = (localStorage.getItem('pendingSignupEmail') || '').trim();
+      if (!email) { msg.style.color = '#ff5050'; msg.textContent = 'No pending email found.'; return; }
+      const { error } = await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: 'https://stickfigurefps.com' } });
+      if (error) { msg.style.color = '#ff5050'; msg.textContent = error.message; return; }
+      msg.style.color = '#5aff8a'; msg.textContent = 'Sent! Check your inbox.';
+    });
+    $('emailPendingCheck').addEventListener('click', async () => {
+      const msg = $('emailPendingMsg'); msg.textContent = 'Checking…'; msg.style.color = '#ddd';
+      const { data: { session } } = await client.auth.getSession();
+      if (session && session.user) {
+        clearPendingEmail();
+        hideEmailPendingModal();
+        await refreshAuth();
+      } else {
+        msg.style.color = '#ffcc33'; msg.textContent = "Not confirmed yet. Click the link in your email, then try again.";
+      }
+    });
+    $('emailPendingCancel').addEventListener('click', () => {
+      if (!confirm('Cancel signup and play as guest? You can sign up again later.')) return;
+      clearPendingEmail();
+      hideEmailPendingModal();
+      setStatus('Signup cancelled.', '#ddd');
+    });
   }
+
+  function showEmailPendingModal(email) {
+    const addr = $('emailPendingAddr');
+    if (addr) addr.textContent = email || '(your email)';
+    const msg = $('emailPendingMsg'); if (msg) msg.textContent = '';
+    showModal('emailPendingModal');
+  }
+  function hideEmailPendingModal() { hideModal('emailPendingModal'); }
+  function clearPendingEmail() { try { localStorage.removeItem('pendingSignupEmail'); } catch {} }
+  // On any successful sign-in, the pending flag is no longer relevant.
+  client.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' && session) { clearPendingEmail(); hideEmailPendingModal(); }
+  });
 
   // Run stat submission — called from game code at end of a run
   window.gameAuth.submitRunStats = async function(kills, round, isMP, isSandbox) {
@@ -1119,6 +1185,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.79', 'After signup, a blocking "Confirm your email" modal now covers the game until the user either clicks the confirmation link in their inbox or explicitly cancels the signup (→ play as guest). State is persisted in localStorage so the block survives page reloads. Modal has Resend, "I confirmed — log me in", and Cancel options.'],
   ['v2.78', 'Moved the version tag + changelog dropdown from right:260px to right:300px. The account panel\'s content width is 220px, but its padding (14px × 2) + border makes its total rendered width closer to 250px — so 260px wasn\'t enough clearance.'],
   ['v2.77', 'Account panel has a fixed 220px width and the status message now wraps inside the panel instead of expanding it sideways (which was overlapping the version tag when messages like "Check your email to confirm…" appeared).'],
   ['v2.76', 'Player name is now driven by auth state: guests always show "Playing as Guest" (both on the home screen and in MP), logged-in users show their account username. Removed the initial "enter a name" prompt — new visitors land straight on the home screen and can just hit Play.'],
