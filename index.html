@@ -474,6 +474,10 @@
   <p style="opacity:0.7;font-size:12px;margin-top:8px">Press P to toggle • Esc also resumes</p>
 </div>
 <div id="topbar">Round <span id="round">1</span> — Enemies left: <span id="remaining">0</span></div>
+<div id="hostLeftBanner" style="position:fixed;inset:0;background:rgba(40,0,10,0.88);color:#fff;z-index:13;display:none;align-items:center;justify-content:center;flex-direction:column;font-family:monospace;font-weight:900;pointer-events:none;text-align:center">
+  <div style="font-size:74px;letter-spacing:8px;color:#ff6666;text-shadow:0 0 20px #ff0000,0 0 40px #ff2020,0 4px 12px #000">HOST LEFT GAME</div>
+  <div style="font-size:24px;letter-spacing:4px;color:#ffcccc;margin-top:16px;text-shadow:0 2px 8px #000">Returning to home screen…</div>
+</div>
 <div id="hostPausedBanner" style="position:fixed;inset:0;background:rgba(10,20,50,0.82);color:#fff;z-index:12;display:none;align-items:center;justify-content:center;flex-direction:column;font-family:monospace;font-weight:900;pointer-events:none;text-align:center">
   <div style="font-size:84px;letter-spacing:10px;color:#ffcc33;text-shadow:0 0 24px #4a78ff,0 0 40px #4a78ff,0 4px 12px #000">GAME PAUSED</div>
   <div style="font-size:28px;letter-spacing:6px;color:#cfd8ff;margin-top:16px;text-shadow:0 2px 8px #000">Host has paused the game</div>
@@ -481,7 +485,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.51</span>
+  <span style="font-weight:bold;color:#eee">v2.53</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -708,7 +712,7 @@
       <div id="mpLobbyList" style="display:flex;flex-direction:column;gap:4px;font-size:12px"></div>
     </div>
   </div>
-  <div id="sandboxLaunch" style="position:fixed;top:200px;left:14px;z-index:11;display:flex;flex-direction:column;gap:8px">
+  <div id="sandboxLaunch" style="position:fixed;top:480px;left:14px;z-index:11;display:flex;flex-direction:column;gap:8px">
     <button type="button" id="sandboxBtn" style="background:#2864c2;color:white;border:0;border-radius:4px;padding:8px 18px;cursor:pointer;font-family:monospace">Sandbox Mode</button>
     <button type="button" id="tutorialBtn" style="background:#4caf50;color:white;border:0;border-radius:4px;padding:8px 18px;cursor:pointer;font-family:monospace">Tutorial</button>
   </div>
@@ -804,7 +808,9 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
-  ['v2.51', 'MP Lobby panel (shows connected players + ready state on home + shop screens). Tutorial mode — step-by-step walkthrough of movement, shooting, ADS, weapon switching, shop, boosters, rounds, abilities; cannot die (HP floors at 1).'],
+  ['v2.53', 'Sandbox/Tutorial buttons moved down (clear of the expanded MP lobby). Host-left animation in MP: if host returns to home, clients see "HOST LEFT GAME" banner and auto-return to home after 3s.'],
+  ['v2.52', 'Tutorial steps redesigned: each action must be done 2× then press ENTER to advance. Info screens just require ENTER. Removed abilities/chest info from tutorial.'],
+  ['v2.51', 'MP Lobby panel (shows connected players + ready state on home + shop screens). Tutorial mode — step-by-step walkthrough of movement, shooting, ADS, weapon switching, shop, boosters, rounds.'],
   ['v2.50', 'Pulsing "Best experience in FULLSCREEN — press F" hint on the home screen (auto-hides when you are in fullscreen).'],
   ['v2.49', 'More prominent dropdown arrow + gold border glow on the version tag to show it is clickable.'],
   ['v2.48', 'Version panel dropdown — click the version on home screen for per-update summaries.'],
@@ -2707,9 +2713,11 @@ addEventListener('keydown', e => {
   }
   if (e.code === 'Enter' && _awaitingAbilityContinue) { dismissAbilityBanner(); return; }
   if (tutorialActive) {
-    if (e.code === keyBind.forward || e.code === keyBind.back || e.code === keyBind.left || e.code === keyBind.right) _tutState.movedWASD = true;
-    if (e.code === keyBind.jump) _tutState.jumped = true;
-    if (e.code === 'Enter') _tutState.enterPressed = true;
+    if (!e.repeat) {
+      if (e.code === keyBind.forward || e.code === keyBind.back || e.code === keyBind.left || e.code === keyBind.right) tutorialBumpCount('move');
+      if (e.code === keyBind.jump) tutorialBumpCount('jump');
+      if (e.code === 'Enter') { tutorialAdvanceOnEnter(); return; }
+    }
     if (e.code === 'Escape') exitTutorial();
   }
   if (e.code === keyBind.bigMap && !e.repeat) toggleBigMap();
@@ -2871,7 +2879,7 @@ addEventListener('mousedown', e => {
     }
     // right click: ADS only for scoped weapons
     const g = GUNS[currentGun];
-    if (g.scopeFov) { setADS(true); if (tutorialActive) _tutState.adsed = true; }
+    if (g.scopeFov) { setADS(true); if (tutorialActive) tutorialBumpCount('ads'); }
   }
 });
 addEventListener('mouseup',   e => {
@@ -3074,7 +3082,7 @@ function tryShoot(now) {
   }
   // Stats: count every shot actually fired (regardless of whether it hit)
   stats.shotsFired++;
-  if (tutorialActive) _tutState.shot = true;
+  if (tutorialActive) tutorialBumpCount('shot');
   // throttle sfx during rampage to avoid piling up web audio nodes
   if (!boostActive || (now - (tryShoot._lastSfx || 0)) > 0.06) {
     SFX.shoot(currentGun);
@@ -4567,23 +4575,22 @@ function continueAfterChest() {
 // =========================================================================
 let tutorialActive = false;
 let _tutStep = 0;
-let _tutState = {}; // per-step tracking: movedWASD, jumped, shot, killed, adsed, switched, advanceAt
+// Counters per action so each step requires 2 reps before Enter advances.
+let _tutCounts = { move: 0, jump: 0, shot: 0, kill: 0, ads: 0, switch: 0 };
 const TUTORIAL_STEPS = [
-  { text: 'Welcome! Use W A S D to move.',               hint: 'Move in any direction to continue',  check: () => _tutState.movedWASD },
-  { text: 'Press SPACE to jump. You can double-jump too.', hint: 'Jump to continue',                    check: () => _tutState.jumped },
-  { text: 'Left-click (LMB) to shoot your pistol.',       hint: 'Fire a shot',                         check: () => _tutState.shot },
-  { text: 'Kill the target enemy.',                        hint: 'Shoot the enemy until it dies',
-    setup: () => { sandboxSpawnEnemyInFront('grunt', 'pistol'); },
-    check: () => _tutState.killed },
-  { text: 'Right-click (RMB) to Aim Down Sights for better accuracy.', hint: 'Hold RMB',              check: () => _tutState.adsed },
-  { text: 'Use the scroll wheel (or number keys) to switch weapons.',  hint: 'Switch to another gun',
-    setup: () => { owned.smg = true; updateHotbar(); }, check: () => _tutState.switched },
-  { text: 'After each round you reach the gun shop:\nleft-click to buy/equip, right-click to sell,\nclick "Upgrade" to spend money leveling guns (1→4, each tier boosts dmg/RPS/mag).', hint: 'Continue in 5s…', wait: 5000 },
-  { text: 'Boosters randomly spawn during rounds:\nSpeed, Shield, Berserk, Regen, Freeze, Tornado, Jetpack, and a rare Bomb.\nLook for glowing shapes on the map and walk into them.', hint: 'Continue in 5s…', wait: 5000 },
-  { text: 'Rounds: kill every enemy to clear a round.\nBosses (larger, more HP) spawn at the end of each round.\nRound 12 is the final — beat the Stick King to win.', hint: 'Continue in 5s…', wait: 5000 },
-  { text: 'On rounds 3, 6, 9 you get a reward chest with a new ability:\n• Dash (double-tap WASD)\n• Triple Jump\n• Power Slam (double-tap Crouch mid-air)', hint: 'Continue in 5s…', wait: 5000 },
-  { text: 'WARNING: If you die mid-run, all your progression, guns,\nmoney, upgrades and abilities reset. Be careful.', hint: 'Continue in 4s…', wait: 4000 },
-  { text: 'TUTORIAL COMPLETE!\nPress ENTER to return to the home screen.',  hint: '', check: () => _tutState.enterPressed },
+  { text: 'Welcome! Use W A S D to move.',                                   action: 'move',   required: 2, actionLabel: 'move' },
+  { text: 'Press SPACE to jump. You can double-jump too.',                   action: 'jump',   required: 2, actionLabel: 'jump' },
+  { text: 'Left-click (LMB) to shoot your pistol.',                          action: 'shot',   required: 2, actionLabel: 'shot' },
+  { text: 'Kill the target enemies.',                                        action: 'kill',   required: 2, actionLabel: 'kill',
+    setup: () => { sandboxSpawnEnemyInFront('grunt', 'pistol'); sandboxSpawnEnemyInFront('grunt', 'pistol'); } },
+  { text: 'Right-click (RMB) to Aim Down Sights for better accuracy.',       action: 'ads',    required: 2, actionLabel: 'ADS' },
+  { text: 'Scroll the mouse wheel (or press a number key) to switch weapons.', action: 'switch', required: 2, actionLabel: 'swap',
+    setup: () => { owned.smg = true; owned.shotgun = true; updateHotbar(); } },
+  { text: 'After each round you reach the gun shop:\nleft-click to buy/equip, right-click to sell,\nclick "Upgrade" to spend money leveling guns (1→4, each tier boosts dmg/RPS/mag).', info: true },
+  { text: 'Boosters randomly spawn during rounds:\nSpeed, Shield, Berserk, Regen, Freeze, Tornado, Jetpack, and a rare Bomb.\nLook for glowing shapes on the map and walk into them.', info: true },
+  { text: 'Rounds: kill every enemy to clear a round.\nBosses (larger, more HP) spawn at the end of each round.\nRound 12 is the final — beat the Stick King to win.', info: true },
+  { text: 'WARNING: If you die mid-run, all your progression, guns,\nmoney and upgrades reset. Be careful.', info: true },
+  { text: 'TUTORIAL COMPLETE!\nPress ENTER to return to the home screen.',   finish: true },
 ];
 
 function sandboxSpawnEnemyInFront(type, gunKey) {
@@ -4599,7 +4606,7 @@ function enterTutorial() {
   if (mpActive()) { alert('Exit multiplayer first to play the tutorial'); return; }
   tutorialActive = true;
   _tutStep = 0;
-  _tutState = {};
+  _tutCounts = { move: 0, jump: 0, shot: 0, kill: 0, ads: 0, switch: 0 };
   // Clear world similar to sandbox
   gameOver = false; roundActive = false; survivorMode = false;
   bossSpawned = false; stickKingSpawned = false;
@@ -4649,33 +4656,54 @@ function showTutorialStep(i) {
   _tutStep = i;
   const step = TUTORIAL_STEPS[i];
   if (!step) { exitTutorial(); return; }
+  // Reset counters for the step's action
+  if (step.action) _tutCounts[step.action] = 0;
   const txt = document.getElementById('tutorialStepText');
-  const hint = document.getElementById('tutorialStepHint');
   if (txt) txt.innerHTML = step.text.replace(/\n/g, '<br>');
-  if (hint) hint.textContent = step.hint || '';
   if (typeof step.setup === 'function') { try { step.setup(); } catch (e) { console.warn(e); } }
-  if (step.wait) {
-    _tutState.advanceAt = performance.now() + step.wait;
-  } else {
-    _tutState.advanceAt = 0;
+  updateTutorialHint();
+}
+function updateTutorialHint() {
+  const step = TUTORIAL_STEPS[_tutStep];
+  if (!step) return;
+  const hint = document.getElementById('tutorialStepHint');
+  if (!hint) return;
+  if (step.info || step.finish) {
+    hint.innerHTML = '<span style="color:#ffcc33">Press ENTER to continue</span>';
+    return;
+  }
+  if (step.action) {
+    const done = _tutCounts[step.action] || 0;
+    const need = step.required || 2;
+    if (done >= need) {
+      hint.innerHTML = `<span style="color:#7fff8d">✓ ${step.actionLabel} x${need}</span> &nbsp;·&nbsp; <span style="color:#ffcc33">Press ENTER to continue</span>`;
+    } else {
+      hint.innerHTML = `${step.actionLabel} x${done}/${need}`;
+    }
   }
 }
 function tutorialTick() {
   if (!tutorialActive) return;
+  updateTutorialHint();
+}
+function tutorialBumpCount(action) {
+  if (!tutorialActive) return;
   const step = TUTORIAL_STEPS[_tutStep];
-  if (!step) return;
-  // Wait-based advance
-  if (step.wait && _tutState.advanceAt && performance.now() >= _tutState.advanceAt) {
-    showTutorialStep(_tutStep + 1);
-    return;
+  if (!step || step.action !== action) return;
+  _tutCounts[action] = (_tutCounts[action] || 0) + 1;
+}
+function tutorialAdvanceOnEnter() {
+  if (!tutorialActive) return false;
+  const step = TUTORIAL_STEPS[_tutStep];
+  if (!step) return false;
+  if (step.finish) { exitTutorial(); return true; }
+  if (step.info) { showTutorialStep(_tutStep + 1); return true; }
+  if (step.action) {
+    const done = _tutCounts[step.action] || 0;
+    const need = step.required || 2;
+    if (done >= need) { showTutorialStep(_tutStep + 1); return true; }
   }
-  // Check-based advance
-  if (step.check && step.check()) {
-    // Tiny delay so the user sees the confirmation
-    setTimeout(() => showTutorialStep(_tutStep + 1), 300);
-    // Clear state flags so next step starts fresh if it reuses one
-    _tutState.movedWASD = _tutState.jumped = _tutState.shot = _tutState.killed = _tutState.adsed = _tutState.switched = _tutState.enterPressed = false;
-  }
+  return false;
 }
 
 function triggerNuke() {
@@ -4846,7 +4874,7 @@ let killCounter = 0;
 function killEnemy(e, shooterId = null) {
   if (e.userData.dead) return;
   e.userData.dead = true;
-  if (tutorialActive) _tutState.killed = true;
+  if (tutorialActive) tutorialBumpCount('kill');
   if (e.userData.isBoss) {
     spawnAmmoBox(e.position, 60);
     spawnHPBox({ x: e.position.x + 1, z: e.position.z }, 50);
@@ -5629,7 +5657,7 @@ function equipGun(key) {
   // any state-sync bug where a purchase didn't persist.
   owned[key] = true;
   syncWeaponState();
-  if (tutorialActive && currentGun !== key) _tutState.switched = true;
+  if (tutorialActive && currentGun !== key) tutorialBumpCount('switch');
   currentGun = key;
   const g = GUNS[key];
   // reset reload + ADS
@@ -6456,6 +6484,13 @@ document.getElementById('homeBtn').addEventListener('click', () => {
   goHome();
 });
 function goHome() {
+  // If the host is leaving an active MP session, signal clients so they can display
+  // a banner and follow us back to the home screen instead of getting stranded.
+  try {
+    if (mpActive() && mpIsHost() && window.Playroom) {
+      Playroom.myPlayer().setState('hostLeft', true, true);
+    }
+  } catch {}
   // clear world
   for (const e of enemies) scene.remove(e);
   enemies.length = 0;
@@ -7244,6 +7279,7 @@ function mpBroadcastWorld(dt) {
   } catch (e) { console.warn('[mp] broadcast failed', e); }
 }
 
+let _hostLeftHandled = false;
 function mpClientSync(dt) {
   if (!mpIsClient() || !window.Playroom) return;
   // Find the host player if we haven't yet
@@ -7254,6 +7290,21 @@ function mpClientSync(dt) {
     if (!mpHostPlayer) return; // host hasn't broadcasted yet
   }
   const hp = mpHostPlayer;
+  // Host signaled they left — show banner, then follow them home
+  try {
+    if (!_hostLeftHandled && hp.getState('hostLeft')) {
+      _hostLeftHandled = true;
+      document.getElementById('hostLeftBanner').style.display = 'flex';
+      document.exitPointerLock?.();
+      setTimeout(() => {
+        document.getElementById('hostLeftBanner').style.display = 'none';
+        try { leaveLobby(); } catch {}
+        try { goHome(); } catch {}
+        _hostLeftHandled = false;
+      }, 3000);
+      return;
+    }
+  } catch {}
   const roundState = (() => { try { return hp.getState('round'); } catch { return null; } })();
   if (roundState && roundState.map && roundState.map !== currentMap) {
     currentMap = roundState.map;
