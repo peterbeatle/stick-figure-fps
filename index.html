@@ -167,7 +167,7 @@
   }
 
   #mpPanel.expanded { width: 240px !important; max-width: 240px !important; }
-  #mpPanel.expanded #mpStatus { word-break: break-word; overflow-wrap: anywhere; }
+  #mpPanel.expanded #mpStatus { word-break: normal; overflow-wrap: break-word; }
   #mpPanel .mpUrl { display: block; margin-top: 6px; font-family: monospace; word-break: break-all; overflow-wrap: anywhere; }
   /* Ability orb HUD (left side, stacks earned abilities top-to-bottom) */
   #abilityHud {
@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.63</span>
+  <span style="font-weight:bold;color:#eee">v2.64</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -814,6 +814,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.64', 'Removed the "Wait for the host…" instruction the client sees after joining. Fixed "lobby" word splitting across lines in the client panel (swapped overflow-wrap: anywhere → break-word so only overly long tokens wrap).'],
   ['v2.63', 'Fixed lobby code generation: pass roomCode explicitly to Playroom insertCoin so the 4-digit code actually takes effect (previously Playroom generated its own letters-and-numbers code, ignoring our hash). Display the passed code directly.'],
   ['v2.62', 'Lobby codes are now 4-digit numbers (e.g., 3742) — easier to say and type. Removed the "Share this code..." instruction block from the host lobby panel. Join input is numeric-only, 4 char max.'],
   ['v2.61', 'Home subtitle replaced with "Kill stick figures to earn money. Buy better guns between rounds." Duplicate body line removed. FPS and Ping HUD toggles now default ON (can still be disabled in Settings).'],
@@ -7602,8 +7603,7 @@ async function startMultiplayer(joinCode) {
            <button type="button" id="mpCopyCode" style="margin-top:4px;background:#2864c2;color:white;border:0;border-radius:4px;padding:3px 12px;cursor:pointer;font-family:monospace;font-size:11px;pointer-events:auto">Copy</button>
          </div>
          `
-      : `<div style="color:#7fff8d">Connected ✓ — You joined lobby <b style="color:#ffcc33;letter-spacing:3px">${code}</b></div>
-         <div style="margin-top:8px;padding:6px 10px;background:rgba(76,175,80,0.15);border:1px dashed #4caf50;border-radius:4px;font-size:12px;color:#c8ffcc">Wait for the host, then click the green <b>Ready Up</b> button below when you're ready to start.</div>`;
+      : `<div style="color:#7fff8d">Connected ✓ — You joined lobby <b style="color:#ffcc33;letter-spacing:3px">${code}</b></div>`;
     mpStatus(shareMsg, '#7fff8d', true);
     // Hide join/host buttons, hide join input
     document.getElementById('mpJoinRow').style.display = 'none';
