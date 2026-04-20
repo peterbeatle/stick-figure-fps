@@ -166,7 +166,7 @@
     100% { opacity: 0; }
   }
 
-  #mpPanel.expanded { width: 320px; }
+  #mpPanel.expanded { width: 240px; }
   #mpPanel .mpUrl { display: block; margin-top: 6px; font-family: monospace; word-break: break-all; overflow-wrap: anywhere; }
   /* Ability orb HUD (left side, stacks earned abilities top-to-bottom) */
   #abilityHud {
@@ -485,7 +485,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.57</span>
+  <span style="font-weight:bold;color:#eee">v2.58</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -814,6 +814,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.58', 'MP panel slimmed further to 240px; lobby code box tightened (padding + smaller font) so it no longer covers the middle of the screen.'],
   ['v2.57', 'MP panel slimmed down: expanded width 520→320px, lobby code box stacks label/code/button vertically so it stays compact and the panel grows down instead of stretching sideways.'],
   ['v2.56', 'Multiplayer: "Host Lobby" + "Join Lobby" buttons replace URL sharing. Host sees a big lobby code with a Copy button; clients enter the 4–10 char code. Fixed the "Round 0 cleared" ghost animation when host leaves (round-clear path now requires cleared >= 1).'],
   ['v2.55', 'MP onboarding clarified: status now includes a dashed green "Ready Up" hint for both host and client. Host cannot start the round alone — button reads "Waiting for players…" until a second player joins. Ready Up button is bright green + relabeled. Chest flow hardened: explicit chestSpawn RPC + chestOpen payload with round number, and receivers now spawn the chest locally on demand if it is missing.'],
@@ -7577,10 +7578,10 @@ async function startMultiplayer(joinCode) {
     const isHost = mpRole === 'host';
     const shareMsg = isHost
       ? `<div style="color:#7fff8d">Connected ✓ — You're the <b>HOST</b></div>
-         <div style="margin-top:10px;padding:10px 14px;background:rgba(76,175,80,0.12);border:2px solid #4caf50;border-radius:6px;text-align:center">
-           <div style="color:#cfe;font-size:11px;letter-spacing:2px;margin-bottom:4px">LOBBY CODE</div>
-           <div style="font-size:28px;font-weight:900;color:#ffcc33;letter-spacing:8px;text-shadow:0 0 10px rgba(255,200,50,0.5)">${code}</div>
-           <button type="button" id="mpCopyCode" style="margin-top:6px;background:#2864c2;color:white;border:0;border-radius:4px;padding:4px 14px;cursor:pointer;font-family:monospace;font-size:11px;pointer-events:auto">Copy</button>
+         <div style="margin-top:8px;padding:8px 10px;background:rgba(76,175,80,0.12);border:2px solid #4caf50;border-radius:6px;text-align:center">
+           <div style="color:#cfe;font-size:10px;letter-spacing:2px;margin-bottom:2px">LOBBY CODE</div>
+           <div style="font-size:22px;font-weight:900;color:#ffcc33;letter-spacing:5px;text-shadow:0 0 8px rgba(255,200,50,0.5)">${code}</div>
+           <button type="button" id="mpCopyCode" style="margin-top:4px;background:#2864c2;color:white;border:0;border-radius:4px;padding:3px 12px;cursor:pointer;font-family:monospace;font-size:11px;pointer-events:auto">Copy</button>
          </div>
          <div style="margin-top:8px;padding:6px 10px;background:rgba(76,175,80,0.15);border:1px dashed #4caf50;border-radius:4px;font-size:12px;color:#c8ffcc">Share this code with friends (they click <b>Join Lobby</b> on the home screen). When everyone's in, click <b>Ready Up</b> below.</div>`
       : `<div style="color:#7fff8d">Connected ✓ — You joined lobby <b style="color:#ffcc33;letter-spacing:3px">${code}</b></div>
