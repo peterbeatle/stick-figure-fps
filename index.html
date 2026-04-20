@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.71</span>
+  <span style="font-weight:bold;color:#eee">v2.72</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -719,6 +719,77 @@
       <div id="mpLobbyList" style="display:flex;flex-direction:column;gap:4px;font-size:12px"></div>
     </div>
   </div>
+  <div id="acctPanel" style="position:fixed;top:14px;right:14px;max-width:calc(100vw - 28px);background:#1a1228;border:1px solid #5a3a8e;border-radius:8px;padding:10px 14px;text-align:left;font-size:13px;z-index:11;font-family:monospace;color:#eee">
+    <div style="font-weight:bold;color:#c8a0ff;margin-bottom:6px">Account</div>
+    <div id="acctLoggedOut" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button id="acctLoginBtn" type="button" style="background:#4c8af0;color:white;border:0;border-radius:4px;padding:8px 14px;cursor:pointer;font-family:monospace">Log In</button>
+      <button id="acctSignupBtn" type="button" style="background:#4caf50;color:white;border:0;border-radius:4px;padding:8px 14px;cursor:pointer;font-family:monospace">Sign Up</button>
+    </div>
+    <div id="acctLoggedIn" style="display:none">
+      <div style="margin-bottom:6px;font-size:12px">Signed in as <b id="acctUsername" style="color:#ffcc33"></b></div>
+      <button id="acctLogoutBtn" type="button" style="background:#666;color:white;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Log Out</button>
+    </div>
+    <button id="acctLeaderboardBtn" type="button" style="background:#c8a0ff;color:#1a1228;border:0;border-radius:4px;padding:8px 14px;cursor:pointer;font-family:monospace;margin-top:8px;font-weight:bold;display:block;width:100%">🏆 Leaderboard</button>
+    <div id="acctStatus" style="margin-top:6px;opacity:0.85;font-size:12px;min-height:14px"></div>
+  </div>
+  <!-- Auth modals -->
+  <div id="loginModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100;align-items:center;justify-content:center;font-family:monospace">
+    <div style="background:#1a1a1a;border:1px solid #444;border-radius:10px;padding:24px 28px;width:min(420px,92vw);color:#eee">
+      <h2 style="margin:0 0 16px;color:#c8a0ff;font-size:22px">Log In</h2>
+      <label style="display:block;margin-bottom:12px;font-size:13px">Email<input type="email" id="loginEmail" autocomplete="email" style="width:100%;box-sizing:border-box;background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:8px;margin-top:4px;font-family:monospace"></label>
+      <label style="display:block;margin-bottom:14px;font-size:13px">Password<input type="password" id="loginPassword" autocomplete="current-password" style="width:100%;box-sizing:border-box;background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:8px;margin-top:4px;font-family:monospace"></label>
+      <div id="loginErr" style="color:#ff5050;margin-bottom:10px;min-height:18px;font-size:12px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" id="loginCancel" style="background:#444;color:#eee;border:0;border-radius:4px;padding:8px 14px;cursor:pointer;font-family:monospace">Cancel</button>
+        <button type="button" id="loginSubmit" style="background:#4c8af0;color:white;border:0;border-radius:4px;padding:8px 18px;cursor:pointer;font-family:monospace">Log In</button>
+      </div>
+      <div style="margin-top:14px;font-size:12px;opacity:0.85;text-align:center"><a href="#" id="forgotPwLink" style="color:#c8a0ff">Forgot password?</a></div>
+    </div>
+  </div>
+  <div id="signupModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100;align-items:center;justify-content:center;font-family:monospace">
+    <div style="background:#1a1a1a;border:1px solid #444;border-radius:10px;padding:24px 28px;width:min(420px,92vw);color:#eee">
+      <h2 style="margin:0 0 16px;color:#c8a0ff;font-size:22px">Sign Up</h2>
+      <label style="display:block;margin-bottom:10px;font-size:13px">Username (3–20, letters/numbers/_)<input type="text" id="signupUsername" maxlength="20" autocomplete="username" style="width:100%;box-sizing:border-box;background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:8px;margin-top:4px;font-family:monospace"></label>
+      <label style="display:block;margin-bottom:10px;font-size:13px">Email<input type="email" id="signupEmail" autocomplete="email" style="width:100%;box-sizing:border-box;background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:8px;margin-top:4px;font-family:monospace"></label>
+      <label style="display:block;margin-bottom:10px;font-size:13px">Password (6+ chars)<input type="password" id="signupPassword" autocomplete="new-password" style="width:100%;box-sizing:border-box;background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:8px;margin-top:4px;font-family:monospace"></label>
+      <label style="display:block;margin-bottom:14px;font-size:13px">Confirm password<input type="password" id="signupConfirm" autocomplete="new-password" style="width:100%;box-sizing:border-box;background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:8px;margin-top:4px;font-family:monospace"></label>
+      <div id="signupErr" style="color:#ff5050;margin-bottom:10px;min-height:18px;font-size:12px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" id="signupCancel" style="background:#444;color:#eee;border:0;border-radius:4px;padding:8px 14px;cursor:pointer;font-family:monospace">Cancel</button>
+        <button type="button" id="signupSubmit" style="background:#4caf50;color:white;border:0;border-radius:4px;padding:8px 18px;cursor:pointer;font-family:monospace">Sign Up</button>
+      </div>
+    </div>
+  </div>
+  <div id="forgotModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100;align-items:center;justify-content:center;font-family:monospace">
+    <div style="background:#1a1a1a;border:1px solid #444;border-radius:10px;padding:24px 28px;width:min(420px,92vw);color:#eee">
+      <h2 style="margin:0 0 12px;color:#c8a0ff;font-size:22px">Reset Password</h2>
+      <p style="margin:0 0 14px;font-size:13px;opacity:0.85">Enter your account email and we'll send you a reset link.</p>
+      <label style="display:block;margin-bottom:14px;font-size:13px">Email<input type="email" id="forgotEmail" autocomplete="email" style="width:100%;box-sizing:border-box;background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:8px;margin-top:4px;font-family:monospace"></label>
+      <div id="forgotErr" style="color:#ff5050;margin-bottom:6px;min-height:16px;font-size:12px"></div>
+      <div id="forgotSuccess" style="color:#5aff8a;margin-bottom:10px;min-height:16px;font-size:12px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" id="forgotCancel" style="background:#444;color:#eee;border:0;border-radius:4px;padding:8px 14px;cursor:pointer;font-family:monospace">Cancel</button>
+        <button type="button" id="forgotSubmit" style="background:#c8a0ff;color:#1a1228;border:0;border-radius:4px;padding:8px 18px;cursor:pointer;font-family:monospace;font-weight:bold">Send Reset Link</button>
+      </div>
+    </div>
+  </div>
+  <div id="leaderboardModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100;align-items:center;justify-content:center;font-family:monospace">
+    <div style="background:#1a1a1a;border:1px solid #444;border-radius:10px;padding:20px 24px;width:min(520px,94vw);color:#eee">
+      <h2 style="margin:0 0 14px;color:#c8a0ff;font-size:22px">🏆 Leaderboard</h2>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button type="button" class="lbTab" data-mode="sp" style="flex:1;background:#2864c2;color:white;border:0;border-radius:4px;padding:8px;cursor:pointer;font-family:monospace;font-weight:bold">Single Player</button>
+        <button type="button" class="lbTab" data-mode="mp" style="flex:1;background:#333;color:#ccc;border:0;border-radius:4px;padding:8px;cursor:pointer;font-family:monospace">Multiplayer</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <button type="button" class="lbSubTab" data-stat="round" style="flex:1;background:#4caf50;color:white;border:0;border-radius:3px;padding:6px;cursor:pointer;font-family:monospace;font-size:12px;font-weight:bold">Highest Round</button>
+        <button type="button" class="lbSubTab" data-stat="kills" style="flex:1;background:#333;color:#ccc;border:0;border-radius:3px;padding:6px;cursor:pointer;font-family:monospace;font-size:12px">Most Kills</button>
+      </div>
+      <div id="lbList" style="max-height:400px;overflow-y:auto;background:#0d0d0d;border:1px solid #333;border-radius:6px;font-size:13px"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:14px">
+        <button type="button" id="lbClose" style="background:#444;color:#eee;border:0;border-radius:4px;padding:8px 18px;cursor:pointer;font-family:monospace">Close</button>
+      </div>
+    </div>
+  </div>
   <div id="sandboxLaunch" style="position:fixed;top:480px;left:14px;z-index:11;display:flex;flex-direction:column;gap:8px">
     <button type="button" id="sandboxBtn" style="background:#2864c2;color:white;border:0;border-radius:4px;padding:8px 18px;cursor:pointer;font-family:monospace">Sandbox Mode</button>
     <button type="button" id="tutorialBtn" style="background:#4caf50;color:white;border:0;border-radius:4px;padding:8px 18px;cursor:pointer;font-family:monospace">Tutorial</button>
@@ -752,6 +823,234 @@
   <div class="shop" id="shop"></div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ======================================================================
+// Supabase Auth + Leaderboard
+// Exposes window.gameAuth = { user, profile, submitRunStats(...) }
+// ======================================================================
+(function() {
+  const SUPABASE_URL = 'https://moxskpnopwvhljccxawn.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_xwasHnK1qtEXp1pabiZECw_b0bBTkza';
+  if (!window.supabase || !window.supabase.createClient) { console.warn('[auth] supabase-js not loaded'); return; }
+  const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
+  window.gameAuth = { client, user: null, profile: null, submitRunStats: async () => {} };
+
+  const $ = (id) => document.getElementById(id);
+  const showModal = (id) => { const el = $(id); if (el) el.style.display = 'flex'; };
+  const hideModal = (id) => { const el = $(id); if (el) el.style.display = 'none'; };
+  const setStatus = (msg, color) => { const el = $('acctStatus'); if (el) { el.textContent = msg || ''; el.style.color = color || '#ddd'; } };
+
+  async function fetchProfile(userId) {
+    const { data, error } = await client.from('profiles').select('*').eq('id', userId).maybeSingle();
+    if (error) { console.warn('[auth] fetchProfile error', error); return null; }
+    return data;
+  }
+
+  function applyAuthState(user, profile) {
+    window.gameAuth.user = user;
+    window.gameAuth.profile = profile;
+    const loggedOut = $('acctLoggedOut');
+    const loggedIn = $('acctLoggedIn');
+    const changeLink = $('changeNameLink');
+    if (user && profile) {
+      loggedOut.style.display = 'none';
+      loggedIn.style.display = 'block';
+      $('acctUsername').textContent = profile.username;
+      if (typeof window.setPlayerName === 'function') window.setPlayerName(profile.username);
+      if (changeLink) changeLink.style.display = 'none';
+    } else {
+      loggedOut.style.display = 'flex';
+      loggedIn.style.display = 'none';
+      if (changeLink) changeLink.style.display = '';
+    }
+  }
+
+  async function refreshAuth() {
+    const { data: { session } } = await client.auth.getSession();
+    if (session && session.user) {
+      const profile = await fetchProfile(session.user.id);
+      applyAuthState(session.user, profile);
+    } else {
+      applyAuthState(null, null);
+    }
+  }
+
+  client.auth.onAuthStateChange(async (event, session) => {
+    if (session && session.user) {
+      const profile = await fetchProfile(session.user.id);
+      applyAuthState(session.user, profile);
+      if (event === 'SIGNED_IN') setStatus('Signed in ✓', '#5aff8a');
+      if (event === 'PASSWORD_RECOVERY') setStatus('Password recovery — set a new password in Sign Up or contact support.', '#ffcc33');
+    } else {
+      applyAuthState(null, null);
+      if (event === 'SIGNED_OUT') setStatus('Signed out.', '#ddd');
+    }
+  });
+
+  function wire() {
+    // Login
+    $('acctLoginBtn').addEventListener('click', () => {
+      $('loginErr').textContent = '';
+      showModal('loginModal');
+      setTimeout(() => $('loginEmail').focus(), 20);
+    });
+    $('loginCancel').addEventListener('click', () => hideModal('loginModal'));
+    const submitLogin = async () => {
+      const email = $('loginEmail').value.trim();
+      const password = $('loginPassword').value;
+      const err = $('loginErr'); err.textContent = '';
+      if (!email || !password) { err.textContent = 'Email and password required.'; return; }
+      const { error } = await client.auth.signInWithPassword({ email, password });
+      if (error) { err.textContent = error.message; return; }
+      hideModal('loginModal');
+      $('loginPassword').value = '';
+    };
+    $('loginSubmit').addEventListener('click', submitLogin);
+    $('loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitLogin(); });
+    $('loginEmail').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitLogin(); });
+
+    // Signup
+    $('acctSignupBtn').addEventListener('click', () => {
+      $('signupErr').textContent = '';
+      showModal('signupModal');
+      setTimeout(() => $('signupUsername').focus(), 20);
+    });
+    $('signupCancel').addEventListener('click', () => hideModal('signupModal'));
+    const submitSignup = async () => {
+      const username = $('signupUsername').value.trim();
+      const email = $('signupEmail').value.trim();
+      const password = $('signupPassword').value;
+      const confirm = $('signupConfirm').value;
+      const err = $('signupErr'); err.textContent = '';
+      if (username.length < 3 || username.length > 20) { err.textContent = 'Username must be 3–20 characters.'; return; }
+      if (!/^[a-zA-Z0-9_]+$/.test(username)) { err.textContent = 'Username can only contain letters, numbers, and underscores.'; return; }
+      if (!email) { err.textContent = 'Email required.'; return; }
+      if (password.length < 6) { err.textContent = 'Password must be at least 6 characters.'; return; }
+      if (password !== confirm) { err.textContent = "Passwords don't match."; return; }
+      const { data: existing } = await client.from('profiles').select('id').eq('username', username).maybeSingle();
+      if (existing) { err.textContent = 'Username already taken.'; return; }
+      const { data, error } = await client.auth.signUp({
+        email, password,
+        options: { emailRedirectTo: 'https://stickfigurefps.com', data: { username } }
+      });
+      if (error) { err.textContent = error.message; return; }
+      if (data.user) {
+        const { error: pErr } = await client.from('profiles').insert({ id: data.user.id, username });
+        if (pErr && pErr.code !== '23505') { err.textContent = 'Account created but profile save failed: ' + pErr.message; return; }
+      }
+      hideModal('signupModal');
+      $('signupPassword').value = ''; $('signupConfirm').value = '';
+      setStatus('Check your email to confirm your account!', '#ffcc33');
+    };
+    $('signupSubmit').addEventListener('click', submitSignup);
+
+    // Forgot password
+    $('forgotPwLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      hideModal('loginModal');
+      $('forgotErr').textContent = ''; $('forgotSuccess').textContent = '';
+      $('forgotEmail').value = $('loginEmail').value;
+      showModal('forgotModal');
+      setTimeout(() => $('forgotEmail').focus(), 20);
+    });
+    $('forgotCancel').addEventListener('click', () => hideModal('forgotModal'));
+    $('forgotSubmit').addEventListener('click', async () => {
+      const email = $('forgotEmail').value.trim();
+      const err = $('forgotErr'); const succ = $('forgotSuccess');
+      err.textContent = ''; succ.textContent = '';
+      if (!email) { err.textContent = 'Email required.'; return; }
+      const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: 'https://stickfigurefps.com' });
+      if (error) { err.textContent = error.message; return; }
+      succ.textContent = 'Reset link sent! Check your email.';
+    });
+
+    // Logout
+    $('acctLogoutBtn').addEventListener('click', async () => {
+      await client.auth.signOut();
+    });
+
+    // Leaderboard
+    let _lbMode = 'sp';
+    let _lbStat = 'round';
+    async function loadLeaderboard() {
+      const col = _lbStat === 'kills' ? `best_kills_${_lbMode}` : `best_round_${_lbMode}`;
+      const list = $('lbList');
+      list.innerHTML = '<div style="padding:14px;opacity:0.6">Loading…</div>';
+      const { data, error } = await client.from('profiles').select(`username, ${col}`).order(col, { ascending: false }).limit(50);
+      if (error) { list.innerHTML = `<div style="padding:14px;color:#ff8080">Error: ${error.message}</div>`; return; }
+      const rows = (data || []).filter(r => (r[col] || 0) > 0);
+      if (!rows.length) { list.innerHTML = '<div style="padding:14px;opacity:0.6">No scores yet. Be the first!</div>'; return; }
+      list.innerHTML = rows.map((row, i) => {
+        const val = row[col] || 0;
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #222"><span style="color:#ddd">${medal} ${row.username.replace(/</g, '&lt;')}</span><span style="color:#ffcc33;font-weight:bold">${val}</span></div>`;
+      }).join('');
+    }
+    function updateTabStyles() {
+      document.querySelectorAll('.lbTab').forEach(b => {
+        const active = b.dataset.mode === _lbMode;
+        b.style.background = active ? '#2864c2' : '#333';
+        b.style.color = active ? 'white' : '#ccc';
+        b.style.fontWeight = active ? 'bold' : 'normal';
+      });
+      document.querySelectorAll('.lbSubTab').forEach(b => {
+        const active = b.dataset.stat === _lbStat;
+        b.style.background = active ? '#4caf50' : '#333';
+        b.style.color = active ? 'white' : '#ccc';
+        b.style.fontWeight = active ? 'bold' : 'normal';
+      });
+    }
+    $('acctLeaderboardBtn').addEventListener('click', () => {
+      _lbMode = 'sp'; _lbStat = 'round';
+      updateTabStyles();
+      loadLeaderboard();
+      showModal('leaderboardModal');
+    });
+    $('lbClose').addEventListener('click', () => hideModal('leaderboardModal'));
+    document.querySelectorAll('.lbTab').forEach(btn => btn.addEventListener('click', () => {
+      _lbMode = btn.dataset.mode;
+      updateTabStyles(); loadLeaderboard();
+    }));
+    document.querySelectorAll('.lbSubTab').forEach(btn => btn.addEventListener('click', () => {
+      _lbStat = btn.dataset.stat;
+      updateTabStyles(); loadLeaderboard();
+    }));
+
+    // Click-outside-to-close for all modals
+    ['loginModal', 'signupModal', 'forgotModal', 'leaderboardModal'].forEach(id => {
+      const el = $(id);
+      if (el) el.addEventListener('click', (e) => { if (e.target === el) hideModal(id); });
+    });
+  }
+
+  // Run stat submission — called from game code at end of a run
+  window.gameAuth.submitRunStats = async function(kills, round, isMP, isSandbox) {
+    if (isSandbox) return;
+    const { user, profile } = window.gameAuth;
+    if (!user || !profile) return; // guests don't count
+    const killsCol = isMP ? 'best_kills_mp' : 'best_kills_sp';
+    const roundCol = isMP ? 'best_round_mp' : 'best_round_sp';
+    const updates = {};
+    if ((kills || 0) > (profile[killsCol] || 0)) updates[killsCol] = kills;
+    if ((round || 0) > (profile[roundCol] || 0)) updates[roundCol] = round;
+    if (!Object.keys(updates).length) return;
+    const { error } = await client.from('profiles').update(updates).eq('id', user.id);
+    if (error) { console.warn('[auth] submit stats error', error); return; }
+    Object.assign(profile, updates);
+    console.log('[auth] new personal best!', updates);
+    setStatus('New personal best saved! 🏆', '#ffcc33');
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => { wire(); refreshAuth(); });
+  } else {
+    wire(); refreshAuth();
+  }
+})();
+</script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://unpkg.com/playroomkit/multiplayer.full.umd.js" crossorigin="anonymous"></script>
 <script type="importmap">
@@ -765,6 +1064,7 @@ const PLAYER_NAME_KEY = 'stickFigureFpsName';
 function getPlayerName() {
   try { return localStorage.getItem(PLAYER_NAME_KEY) || ''; } catch { return ''; }
 }
+window.setPlayerName = setPlayerName;
 function setPlayerName(name) {
   name = (name || '').trim().slice(0, 20);
   if (!name) return false;
@@ -815,6 +1115,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.72', 'Accounts + leaderboard (Supabase). Guests can still play; signing up unlocks persistent stats and puts you on the leaderboard. Top-right account panel has Log In / Sign Up / Log Out / 🏆 Leaderboard. Sign up with username + email + password (6+ chars) and email confirmation; forgot-password sends a reset email. Leaderboard modal has two tabs (Single Player / Multiplayer) × two sub-tabs (Highest Round / Most Kills), top 50. End of every run (death or win) submits kills + round reached to the right SP/MP bucket; only improves your personal best. Sandbox runs don\'t count.'],
   ['v2.71', 'Fixed a visual glitch: after clicking Host Lobby and then Leave, the main start button still read "Waiting for players…" because leaveLobby never reset it. Now the button label + colors snap back to "Start Round N" when you leave.'],
   ['v2.70', 'Added a favicon — yellow stick figure holding a red pistol on a dark rounded background — so the site shows an icon in the browser tab and bookmarks bar instead of the default blank globe.'],
   ['v2.69', 'Fix for MP chest flow: after moving continueAfterChest out of the client\'s dismiss path in v2.66 (for ready-up), _pendingChestRound never got cleared on the client, so chestBusy stayed true forever and the round-clear gate in mpClientSync never fired. chestAllReady RPC now clears _pendingChestRound on clients so they advance to the gun shop once the host broadcasts chestRound:0.'],
@@ -6007,6 +6308,7 @@ function endGame() {
   gameOver = true;
   roundActive = false;
   document.exitPointerLock?.();
+  try { window.gameAuth?.submitRunStats?.(killCounter, round, mpActive(), sandboxActive); } catch (e) { console.warn('[auth] submit failed', e); }
   showLostAnim(() => {
     openShop('You Lost', `You reached round ${round}. Restart the game or head back home.`);
     startBtn.textContent = 'Restart Game';
@@ -6178,6 +6480,7 @@ function showWinScreen() {
   document.getElementById('winScreen').style.display = 'flex';
   document.exitPointerLock?.();
   mouseDown = false;
+  try { window.gameAuth?.submitRunStats?.(killCounter, 12, mpActive(), sandboxActive); } catch (e) { console.warn('[auth] submit failed', e); }
 }
 function hideWinScreen() {
   document.getElementById('winScreen').style.display = 'none';
