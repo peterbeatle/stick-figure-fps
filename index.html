@@ -222,7 +222,7 @@
   }
   /* Mode toggles: home vs round-end */
   #overlay[data-mode="home"] #shopHomeBtn { display: none !important; }
-  #overlay[data-mode="roundend"] #mpPanel { display: none !important; }
+  /* mpPanel visible on both home + roundend so the lobby is always in view between rounds */
   /* Cheats stay visible on the round-end shop screen too */
   /* Boss HUD layout: multiple bars in a row */
   #bossHud { width: auto; max-width: 80vw; display: none; }
@@ -481,7 +481,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.50</span>
+  <span style="font-weight:bold;color:#eee">v2.51</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -492,6 +492,11 @@
 <div id="bossHud" style="position:fixed;top:100px;left:50%;transform:translateX(-50%);z-index:6;"></div>
 <div id="roundClearAnim"><div class="rcBg"></div><div class="rcText">Round 1 Cleared!</div><div class="rcSub">next wave incoming…</div></div>
 <div id="lostAnim"><div class="lostText">YOU LOST</div></div>
+<div id="tutorialHud" style="position:fixed;top:22%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.82);color:#ffcc33;font-family:monospace;font-weight:bold;font-size:22px;padding:14px 22px;border-radius:8px;border:2px solid #ffcc33;box-shadow:0 0 24px rgba(255,200,50,0.5);z-index:16;display:none;pointer-events:none;text-align:center;max-width:760px;line-height:1.45">
+  <div id="tutorialStepText">…</div>
+  <div id="tutorialStepHint" style="font-size:13px;color:#aaf;opacity:0.85;margin-top:10px;letter-spacing:2px"></div>
+</div>
+<div id="tutorialExitHint" style="position:fixed;bottom:14px;right:12px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:11px;padding:4px 10px;border-radius:4px;z-index:6;display:none;pointer-events:none">ESC to exit tutorial</div>
 
 <!-- Username gate: shown on first visit. Name is stored in localStorage and tied to Clarity sessions. -->
 <div id="usernameModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:99;display:none;align-items:center;justify-content:center;flex-direction:column;color:#eee;font-family:monospace;text-align:center;padding:20px">
@@ -698,9 +703,14 @@
       <button type="button" id="mpLeaveBtn" style="background:#666;color:white;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace;display:none">Leave</button>
     </div>
     <div id="mpStatus" style="margin-top:6px;opacity:0.85;word-break:break-all;overflow-wrap:anywhere"></div>
+    <div id="mpLobby" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #2a4070">
+      <div style="font-weight:bold;color:#7fc8ff;margin-bottom:6px;font-size:12px;letter-spacing:2px">LOBBY</div>
+      <div id="mpLobbyList" style="display:flex;flex-direction:column;gap:4px;font-size:12px"></div>
+    </div>
   </div>
-  <div id="sandboxLaunch" style="position:fixed;top:200px;left:14px;z-index:11">
+  <div id="sandboxLaunch" style="position:fixed;top:200px;left:14px;z-index:11;display:flex;flex-direction:column;gap:8px">
     <button type="button" id="sandboxBtn" style="background:#2864c2;color:white;border:0;border-radius:4px;padding:8px 18px;cursor:pointer;font-family:monospace">Sandbox Mode</button>
+    <button type="button" id="tutorialBtn" style="background:#4caf50;color:white;border:0;border-radius:4px;padding:8px 18px;cursor:pointer;font-family:monospace">Tutorial</button>
   </div>
   <div id="cheatsBlock" style="margin-top:10px">
     <button type="button" id="cheatsBtn" style="background:#444;color:#ccc;border:1px solid #666;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Cheats</button>
@@ -794,6 +804,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.51', 'MP Lobby panel (shows connected players + ready state on home + shop screens). Tutorial mode — step-by-step walkthrough of movement, shooting, ADS, weapon switching, shop, boosters, rounds, abilities; cannot die (HP floors at 1).'],
   ['v2.50', 'Pulsing "Best experience in FULLSCREEN — press F" hint on the home screen (auto-hides when you are in fullscreen).'],
   ['v2.49', 'More prominent dropdown arrow + gold border glow on the version tag to show it is clickable.'],
   ['v2.48', 'Version panel dropdown — click the version on home screen for per-update summaries.'],
@@ -2695,6 +2706,12 @@ addEventListener('keydown', e => {
     e.preventDefault();
   }
   if (e.code === 'Enter' && _awaitingAbilityContinue) { dismissAbilityBanner(); return; }
+  if (tutorialActive) {
+    if (e.code === keyBind.forward || e.code === keyBind.back || e.code === keyBind.left || e.code === keyBind.right) _tutState.movedWASD = true;
+    if (e.code === keyBind.jump) _tutState.jumped = true;
+    if (e.code === 'Enter') _tutState.enterPressed = true;
+    if (e.code === 'Escape') exitTutorial();
+  }
   if (e.code === keyBind.bigMap && !e.repeat) toggleBigMap();
   if (e.code === 'Tab' && !e.repeat) { toggleScoreboard(); e.preventDefault(); }
   if (e.code === keyBind.reload) tryReload();
@@ -2854,7 +2871,7 @@ addEventListener('mousedown', e => {
     }
     // right click: ADS only for scoped weapons
     const g = GUNS[currentGun];
-    if (g.scopeFov) setADS(true);
+    if (g.scopeFov) { setADS(true); if (tutorialActive) _tutState.adsed = true; }
   }
 });
 addEventListener('mouseup',   e => {
@@ -3057,6 +3074,7 @@ function tryShoot(now) {
   }
   // Stats: count every shot actually fired (regardless of whether it hit)
   stats.shotsFired++;
+  if (tutorialActive) _tutState.shot = true;
   // throttle sfx during rampage to avoid piling up web audio nodes
   if (!boostActive || (now - (tryShoot._lastSfx || 0)) > 0.06) {
     SFX.shoot(currentGun);
@@ -4544,6 +4562,122 @@ function continueAfterChest() {
   }
 }
 
+// =========================================================================
+// TUTORIAL MODE
+// =========================================================================
+let tutorialActive = false;
+let _tutStep = 0;
+let _tutState = {}; // per-step tracking: movedWASD, jumped, shot, killed, adsed, switched, advanceAt
+const TUTORIAL_STEPS = [
+  { text: 'Welcome! Use W A S D to move.',               hint: 'Move in any direction to continue',  check: () => _tutState.movedWASD },
+  { text: 'Press SPACE to jump. You can double-jump too.', hint: 'Jump to continue',                    check: () => _tutState.jumped },
+  { text: 'Left-click (LMB) to shoot your pistol.',       hint: 'Fire a shot',                         check: () => _tutState.shot },
+  { text: 'Kill the target enemy.',                        hint: 'Shoot the enemy until it dies',
+    setup: () => { sandboxSpawnEnemyInFront('grunt', 'pistol'); },
+    check: () => _tutState.killed },
+  { text: 'Right-click (RMB) to Aim Down Sights for better accuracy.', hint: 'Hold RMB',              check: () => _tutState.adsed },
+  { text: 'Use the scroll wheel (or number keys) to switch weapons.',  hint: 'Switch to another gun',
+    setup: () => { owned.smg = true; updateHotbar(); }, check: () => _tutState.switched },
+  { text: 'After each round you reach the gun shop:\nleft-click to buy/equip, right-click to sell,\nclick "Upgrade" to spend money leveling guns (1→4, each tier boosts dmg/RPS/mag).', hint: 'Continue in 5s…', wait: 5000 },
+  { text: 'Boosters randomly spawn during rounds:\nSpeed, Shield, Berserk, Regen, Freeze, Tornado, Jetpack, and a rare Bomb.\nLook for glowing shapes on the map and walk into them.', hint: 'Continue in 5s…', wait: 5000 },
+  { text: 'Rounds: kill every enemy to clear a round.\nBosses (larger, more HP) spawn at the end of each round.\nRound 12 is the final — beat the Stick King to win.', hint: 'Continue in 5s…', wait: 5000 },
+  { text: 'On rounds 3, 6, 9 you get a reward chest with a new ability:\n• Dash (double-tap WASD)\n• Triple Jump\n• Power Slam (double-tap Crouch mid-air)', hint: 'Continue in 5s…', wait: 5000 },
+  { text: 'WARNING: If you die mid-run, all your progression, guns,\nmoney, upgrades and abilities reset. Be careful.', hint: 'Continue in 4s…', wait: 4000 },
+  { text: 'TUTORIAL COMPLETE!\nPress ENTER to return to the home screen.',  hint: '', check: () => _tutState.enterPressed },
+];
+
+function sandboxSpawnEnemyInFront(type, gunKey) {
+  // Reused helper similar to sandbox wand logic
+  const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+  const px = camera.position.x + dir.x * 10;
+  const pz = camera.position.z + dir.z * 10;
+  const y = terrainHeight(px, pz);
+  sandboxSpawnEnemy(type, gunKey, new THREE.Vector3(px, y, pz));
+}
+
+function enterTutorial() {
+  if (mpActive()) { alert('Exit multiplayer first to play the tutorial'); return; }
+  tutorialActive = true;
+  _tutStep = 0;
+  _tutState = {};
+  // Clear world similar to sandbox
+  gameOver = false; roundActive = false; survivorMode = false;
+  bossSpawned = false; stickKingSpawned = false;
+  resetAbilities(); clearChestPodium();
+  killCounter = 0; killStreak = 0;
+  if (boostActive) endBoost();
+  for (const e of enemies) scene.remove(e); enemies.length = 0;
+  for (const b of enemyBullets) scene.remove(b.mesh); enemyBullets.length = 0;
+  for (const b of ammoBoxes) scene.remove(b.mesh); ammoBoxes.length = 0;
+  for (const r of rockets) scene.remove(r.mesh); rockets.length = 0;
+  for (const x of explosions) scene.remove(x.mesh); explosions.length = 0;
+  clearBoosters();
+  speedBoostT = 0; shieldBoostT = 0; berserkBoostT = 0; healBoostT = 0;
+  freezeBoostT = 0; tornadoBoostT = 0; jetpackBoostT = 0;
+  updateBoosterHUD();
+  // Give a pistol + knife, full HP + money
+  for (const k of Object.keys(owned)) delete owned[k];
+  for (const k of Object.keys(weaponState)) delete weaponState[k];
+  for (const k of Object.keys(gunLevels)) delete gunLevels[k];
+  owned.knife = true; owned.pistol = true;
+  equipGun('pistol');
+  player.hp = 100; player.alive = true;
+  player.vy = 0; player.onGround = true; player.jumpsUsed = 0;
+  player.yaw = 0; player.pitch = 0;
+  camera.position.set(0, 1.7, 0);
+  // Build arena map
+  currentMap = 'arena';
+  buildMap('arena');
+  // Hide overlay + show tutorial HUD
+  overlay.classList.add('hidden');
+  roundActive = true; // so main loop updates run
+  document.getElementById('tutorialHud').style.display = 'block';
+  document.getElementById('tutorialExitHint').style.display = 'block';
+  updateHUD();
+  canvas.requestPointerLock?.();
+  showTutorialStep(0);
+}
+function exitTutorial() {
+  tutorialActive = false;
+  roundActive = false;
+  document.getElementById('tutorialHud').style.display = 'none';
+  document.getElementById('tutorialExitHint').style.display = 'none';
+  for (const e of enemies) scene.remove(e); enemies.length = 0;
+  goHome();
+}
+function showTutorialStep(i) {
+  _tutStep = i;
+  const step = TUTORIAL_STEPS[i];
+  if (!step) { exitTutorial(); return; }
+  const txt = document.getElementById('tutorialStepText');
+  const hint = document.getElementById('tutorialStepHint');
+  if (txt) txt.innerHTML = step.text.replace(/\n/g, '<br>');
+  if (hint) hint.textContent = step.hint || '';
+  if (typeof step.setup === 'function') { try { step.setup(); } catch (e) { console.warn(e); } }
+  if (step.wait) {
+    _tutState.advanceAt = performance.now() + step.wait;
+  } else {
+    _tutState.advanceAt = 0;
+  }
+}
+function tutorialTick() {
+  if (!tutorialActive) return;
+  const step = TUTORIAL_STEPS[_tutStep];
+  if (!step) return;
+  // Wait-based advance
+  if (step.wait && _tutState.advanceAt && performance.now() >= _tutState.advanceAt) {
+    showTutorialStep(_tutStep + 1);
+    return;
+  }
+  // Check-based advance
+  if (step.check && step.check()) {
+    // Tiny delay so the user sees the confirmation
+    setTimeout(() => showTutorialStep(_tutStep + 1), 300);
+    // Clear state flags so next step starts fresh if it reuses one
+    _tutState.movedWASD = _tutState.jumped = _tutState.shot = _tutState.killed = _tutState.adsed = _tutState.switched = _tutState.enterPressed = false;
+  }
+}
+
 function triggerNuke() {
   if (_nukeInProgress) return;
   _nukeInProgress = true;
@@ -4712,6 +4846,7 @@ let killCounter = 0;
 function killEnemy(e, shooterId = null) {
   if (e.userData.dead) return;
   e.userData.dead = true;
+  if (tutorialActive) _tutState.killed = true;
   if (e.userData.isBoss) {
     spawnAmmoBox(e.position, 60);
     spawnHPBox({ x: e.position.x + 1, z: e.position.z }, 50);
@@ -5086,6 +5221,14 @@ function updateBullets(dt) {
 function damagePlayer(amt) {
   if (cheats.invuln) return; // invincibility
   if (shieldBoostT > 0) return; // shield booster active
+  // Tutorial: take damage but never die — HP floors at 1
+  if (tutorialActive) {
+    player.hp = Math.max(1, player.hp - amt);
+    const d = document.getElementById('damage');
+    if (d) { d.style.opacity = 1; setTimeout(() => d.style.opacity = 0, 150); }
+    updateHUD();
+    return;
+  }
   // Sandbox: take damage normally, but dying just teleports you back to spawn with full HP
   if (sandboxActive) {
     player.hp -= amt;
@@ -5486,6 +5629,7 @@ function equipGun(key) {
   // any state-sync bug where a purchase didn't persist.
   owned[key] = true;
   syncWeaponState();
+  if (tutorialActive && currentGun !== key) _tutState.switched = true;
   currentGun = key;
   const g = GUNS[key];
   // reset reload + ADS
@@ -6149,7 +6293,7 @@ function loop() {
         if (lastShot === prev) break;
       }
     }
-    if ((!mpActive() || mpIsHost()) && enemies.length === 0 && roundActive && !gameOver && !_nukeInProgress) {
+    if ((!mpActive() || mpIsHost()) && enemies.length === 0 && roundActive && !gameOver && !_nukeInProgress && !tutorialActive) {
       if (!bossSpawned) {
         bossSpawned = true;
         const count = bossCountForRound(round);
@@ -6167,6 +6311,8 @@ function loop() {
   // auto-hide themselves when the round ends.
   safeCall(updateBigMap, dt);
   safeCall(updateScoreboard, dt);
+  safeCall(updateLobbyPanel, dt);
+  safeCall(tutorialTick, dt);
 
   // Multiplayer: update remote player's visual position
   if (typeof updateRemotePlayer === 'function') updateRemotePlayer();
@@ -7797,6 +7943,7 @@ function buildSandboxMenu() {
 
 // ---- Sandbox button + menu wiring ----
 document.getElementById('sandboxBtn').addEventListener('click', enterSandbox);
+document.getElementById('tutorialBtn').addEventListener('click', enterTutorial);
 document.getElementById('sandboxCloseBtn').addEventListener('click', () => toggleSandboxMenu(false));
 document.getElementById('sandboxExitBtn').addEventListener('click', exitSandbox);
 
@@ -8080,6 +8227,42 @@ function sandboxSpawnEnemy(type, gunKey, atPoint = null) {
 }
 
 // ---- Per-frame sandbox tick (fly physics, freeze AI, coords HUD) ----
+function updateLobbyPanel() {
+  const lobby = document.getElementById('mpLobby');
+  const list = document.getElementById('mpLobbyList');
+  if (!lobby || !list) return;
+  if (!mpActive() || !window.Playroom) { lobby.style.display = 'none'; return; }
+  lobby.style.display = 'block';
+  // Show the lobby only while the home/roundend/win/lost overlays are visible
+  const ov = document.getElementById('overlay');
+  const overlayVisible = ov && !ov.classList.contains('hidden');
+  const winVisible = document.getElementById('winScreen').style.display === 'flex';
+  lobby.style.display = (overlayVisible || winVisible) ? 'block' : 'none';
+  const titleCase = (n) => (n || '').replace(/\b\w/g, c => c.toUpperCase());
+  // Decide which "ready" state to check based on the current screen
+  const readyState = winVisible ? 'winReady' : 'ready';
+  let html = '';
+  try {
+    const me = Playroom.myPlayer && Playroom.myPlayer();
+    const ids = Array.from(mpAllPlayers.keys());
+    for (const id of ids) {
+      const p = mpAllPlayers.get(id);
+      if (!p) continue;
+      const col = getPlayerColor(id);
+      const name = titleCase(p.getState('playerName') || 'Player');
+      const isMe = me && me.id === id;
+      const isHost = !!p.getState('isHostFlag');
+      const ready = !!p.getState(readyState);
+      const badge = isHost ? ' (host)' : '';
+      html += `<div style="display:flex;align-items:center;gap:8px">
+        <span style="width:10px;height:10px;border-radius:50%;background:${col.css};box-shadow:0 0 6px ${col.css}"></span>
+        <span style="color:${col.css};font-weight:bold;flex:1">${name}${isMe ? ' (you)' : ''}${badge}</span>
+        <span style="font-size:11px;color:${ready ? '#7fff8d' : '#888'};letter-spacing:1px">${ready ? '✓ READY' : '…'}</span>
+      </div>`;
+    }
+  } catch {}
+  list.innerHTML = html || '<div style="opacity:0.55;font-size:11px">No players yet</div>';
+}
 function updateCoordsHUD() {
   const el = document.getElementById('sxCoords');
   if (!el) return;
