@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.84</span>
+  <span style="font-weight:bold;color:#eee">v2.85</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -773,6 +773,20 @@
       </div>
     </div>
   </div>
+  <div id="confirmedTabOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:200;align-items:center;justify-content:center;font-family:monospace">
+    <div style="background:#1a1228;border:1px solid #5a3a8e;border-radius:10px;padding:32px 36px;width:min(520px,92vw);color:#eee;text-align:center">
+      <div style="font-size:54px;margin-bottom:10px">✅</div>
+      <h2 style="margin:0 0 12px;color:#ffcc33;font-size:24px;letter-spacing:3px">EMAIL CONFIRMED</h2>
+      <p style="margin:0 0 14px;font-size:15px;line-height:1.5">You're signed in as <b id="confirmedUsername" style="color:#c8a0ff">Player</b>.</p>
+      <div style="background:rgba(200,160,255,0.08);border:1px solid rgba(200,160,255,0.3);border-radius:6px;padding:14px 16px;margin:0 0 18px;font-size:13px;line-height:1.5;text-align:left">
+        <b style="color:#c8a0ff">Return to your original tab</b> to play — this tab was opened just to finish signup.<br>You can safely close it now.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button type="button" id="confirmedCloseTab" style="background:#4caf50;color:white;border:0;border-radius:4px;padding:12px;cursor:pointer;font-family:monospace;font-weight:bold">Close this tab</button>
+        <button type="button" id="confirmedPlayHere" style="background:#444;color:#ccc;border:0;border-radius:4px;padding:8px;cursor:pointer;font-family:monospace;font-size:12px">I don't have the original tab — play here</button>
+      </div>
+    </div>
+  </div>
   <div id="emailPendingModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:150;align-items:center;justify-content:center;font-family:monospace">
     <div style="background:#1a1228;border:1px solid #5a3a8e;border-radius:10px;padding:28px 32px;width:min(480px,92vw);color:#eee;text-align:center">
       <div style="font-size:48px;margin-bottom:8px">📧</div>
@@ -847,6 +861,8 @@
   const SUPABASE_URL = 'https://moxskpnopwvhljccxawn.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_xwasHnK1qtEXp1pabiZECw_b0bBTkza';
   if (!window.supabase || !window.supabase.createClient) { console.warn('[auth] supabase-js not loaded'); return; }
+  // Detect if this tab was opened by the email confirmation link (before Supabase clears the hash).
+  const _isConfirmationTab = /access_token=|type=(signup|recovery|invite|magiclink|email_change)/.test(window.location.hash || '');
   const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
@@ -931,6 +947,14 @@
       if (typeof window.setPlayerName === 'function') window.setPlayerName(profile.username);
       if (nameShow) nameShow.textContent = profile.username;
       if (changeLink) changeLink.style.display = 'none';
+      // If this tab was opened by an email confirmation link, lock it with an overlay
+      // urging the user to return to their original tab.
+      if (_isConfirmationTab && !applyAuthState._lockedOnce) {
+        applyAuthState._lockedOnce = true;
+        const uname = $('confirmedUsername');
+        if (uname) uname.textContent = profile.username;
+        showModal('confirmedTabOverlay');
+      }
     } else {
       loggedOut.style.display = 'flex';
       loggedIn.style.display = 'none';
@@ -1113,6 +1137,25 @@
       if (el) el.addEventListener('click', (e) => { if (e.target === el) hideModal(id); });
     });
 
+    // Confirmation-tab lock overlay
+    $('confirmedCloseTab').addEventListener('click', () => {
+      window.close();
+      // If window.close is blocked (tab wasn't opened by script), fall back to a helpful message.
+      setTimeout(() => {
+        const msg = document.createElement('div');
+        msg.style.cssText = 'margin-top:10px;font-size:12px;color:#ffcc33';
+        msg.textContent = 'Your browser blocked auto-close — please close this tab manually.';
+        const btn = $('confirmedCloseTab');
+        if (btn && btn.parentElement && !btn.parentElement.querySelector('.closeFallback')) {
+          msg.className = 'closeFallback';
+          btn.parentElement.appendChild(msg);
+        }
+      }, 300);
+    });
+    $('confirmedPlayHere').addEventListener('click', () => {
+      hideModal('confirmedTabOverlay');
+    });
+
     // Email-pending modal buttons
     $('emailPendingResend').addEventListener('click', async () => {
       const msg = $('emailPendingMsg'); msg.textContent = ''; msg.style.color = '#ddd';
@@ -1244,6 +1287,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.85', 'New: when a tab is opened by the email-confirmation link, it now shows a full-screen "Email Confirmed — return to your original tab" overlay that locks the game. The URL hash is read at script load (before Supabase clears it) to detect confirmation tabs. Primary action tries window.close() (works when the tab was script-opened); fallback message tells the user to close manually. Escape hatch: "I don\'t have the original tab — play here" dismisses the overlay.'],
   ['v2.84', 'Logged-in UI now shows immediately even when the profile-fetch hits a cross-tab lock race — applyAuthState synthesizes a profile from user_metadata (username) as a placeholder, then a background poll (every 3s) reconciles it with the real DB row once the lock clears. Fixes the "Signed in ✓ status but still shows Log In/Sign Up" state.'],
   ['v2.83', 'Original-tab auto-login fix: storage event filter was matching "supabase*" but the actual localStorage key is "sb-<project>-auth-token", so the event was being ignored. Fixed the regex. Also added a 3-second polling fallback that checks getSession() while the confirmation modal is up — whichever fires first (storage event or poll) wins.'],
   ['v2.82', 'Cross-tab sign-in fix: after confirming the email in a new tab, the original tab now auto-logs in. Added a storage event listener that re-fetches the session when the Supabase auth-token changes in localStorage, plus retry logic in fetchProfile that handles the "Lock was stolen" race error Supabase throws during multi-tab sync.'],
