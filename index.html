@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:260px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.76</span>
+  <span style="font-weight:bold;color:#eee">v2.77</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -719,7 +719,7 @@
       <div id="mpLobbyList" style="display:flex;flex-direction:column;gap:4px;font-size:12px"></div>
     </div>
   </div>
-  <div id="acctPanel" style="position:fixed;top:14px;right:28px;max-width:calc(100vw - 28px);background:#1a1228;border:1px solid #5a3a8e;border-radius:8px;padding:10px 14px;text-align:left;font-size:13px;z-index:11;font-family:monospace;color:#eee">
+  <div id="acctPanel" style="position:fixed;top:14px;right:28px;width:220px;max-width:calc(100vw - 56px);background:#1a1228;border:1px solid #5a3a8e;border-radius:8px;padding:10px 14px;text-align:left;font-size:13px;z-index:11;font-family:monospace;color:#eee">
     <div style="font-weight:bold;color:#c8a0ff;margin-bottom:6px">Account</div>
     <div id="acctLoggedOut" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <button id="acctLoginBtn" type="button" style="background:#4c8af0;color:white;border:0;border-radius:4px;padding:8px 14px;cursor:pointer;font-family:monospace">Log In</button>
@@ -730,7 +730,7 @@
       <button id="acctLogoutBtn" type="button" style="background:#666;color:white;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Log Out</button>
     </div>
     <button id="acctLeaderboardBtn" type="button" style="background:#c8a0ff;color:#1a1228;border:0;border-radius:4px;padding:8px 14px;cursor:pointer;font-family:monospace;margin-top:8px;font-weight:bold;display:block;width:100%">🏆 Leaderboard</button>
-    <div id="acctStatus" style="margin-top:6px;opacity:0.85;font-size:12px;min-height:14px"></div>
+    <div id="acctStatus" style="margin-top:6px;opacity:0.85;font-size:12px;min-height:14px;word-break:normal;overflow-wrap:break-word;line-height:1.35"></div>
   </div>
   <!-- Auth modals -->
   <div id="loginModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100;align-items:center;justify-content:center;font-family:monospace">
@@ -1119,6 +1119,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.77', 'Account panel has a fixed 220px width and the status message now wraps inside the panel instead of expanding it sideways (which was overlapping the version tag when messages like "Check your email to confirm…" appeared).'],
   ['v2.76', 'Player name is now driven by auth state: guests always show "Playing as Guest" (both on the home screen and in MP), logged-in users show their account username. Removed the initial "enter a name" prompt — new visitors land straight on the home screen and can just hit Play.'],
   ['v2.75', 'Layout tweak: version tag + changelog dropdown moved from center to right:260px so they sit in the gap between the title and the account panel. Account panel nudged away from the edge (right:28px) so it doesn\'t feel cut off.'],
   ['v2.74', 'Usernames are now case-insensitive: "Peter" and "peter" are treated as the same name. DB has a unique index on lower(username) to enforce it; client-side availability check uses ILIKE with escaped LIKE wildcards so underscores in usernames don\'t cause false positives.'],
