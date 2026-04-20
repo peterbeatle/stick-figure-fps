@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.59</span>
+  <span style="font-weight:bold;color:#eee">v2.61</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -675,7 +675,7 @@
 <div id="overlay" data-mode="home">
   <button type="button" id="settingsGear" title="Settings">⚙</button>
   <h1 id="title">Stick Figure FPS</h1>
-  <p id="subtitle" style="margin:0 0 8px">Click to lock the mouse and start playing.</p>
+  <p id="subtitle" style="margin:0 0 8px">Kill stick figures to earn money. Buy better guns between rounds.</p>
   <div id="fullscreenHint" style="margin:2px 0 8px;display:inline-block;padding:6px 14px;background:rgba(255,204,51,0.08);border:1px solid rgba(255,204,51,0.35);border-radius:6px;color:#ffcc33;font-family:monospace;font-size:13px;letter-spacing:1px;text-shadow:0 0 10px rgba(255,160,0,0.6);animation:fsHintPulse 1.5s ease-in-out infinite alternate">Best experience in <b>FULLSCREEN</b> — press <b>F</b> to toggle</div>
   <p id="playerNameRow" style="margin:2px 0 8px;font-size:13px;opacity:0.7">Playing as <b id="playerNameShow" style="color:#ffcc33">—</b> <a href="#" id="changeNameLink" style="color:#7fc8ff;text-decoration:none;margin-left:6px">(change)</a></p>
   <div id="topActions" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:4px 0 14px">
@@ -700,7 +700,6 @@
       <b style="color:#ffcc33">Esc</b><span>Resume from pause</span>
     </div>
   </details>
-  <p>Kill stick figures to earn money. Buy better guns between rounds.</p>
   <div id="mpPanel" style="position:fixed;top:14px;left:14px;width:auto;max-width:calc(100vw - 28px);background:#122038;border:1px solid #2a4070;border-radius:8px;padding:10px 14px;text-align:left;font-size:13px;z-index:11">
     <div style="font-weight:bold;color:#7fc8ff;margin-bottom:6px">Multiplayer</div>
     <div id="mpButtons" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -815,6 +814,8 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.61', 'Home subtitle replaced with "Kill stick figures to earn money. Buy better guns between rounds." Duplicate body line removed. FPS and Ping HUD toggles now default ON (can still be disabled in Settings).'],
+  ['v2.60', 'Host-disconnect fix: if the host closes their tab, clients now see the "HOST LEFT GAME" banner via Playroom onQuit (previously only goHome triggered it). Player color fix for 4-player lobbies: host broadcasts a canonical lobbyOrder so every client agrees on slot colors; remote stick-figure meshes re-apply the correct color on the fly when the order arrives.'],
   ['v2.59', 'Forced expanded MP panel to stay at 240px — previous inline width:auto was overriding the class rule so the panel was ignoring the size constraint.'],
   ['v2.58', 'MP panel slimmed further to 240px; lobby code box tightened (padding + smaller font) so it no longer covers the middle of the screen.'],
   ['v2.57', 'MP panel slimmed down: expanded width 520→320px, lobby code box stacks label/code/button vertically so it stays compact and the panel grows down instead of stretching sideways.'],
@@ -6252,9 +6253,10 @@ function updateHUD() {
 // ---------- Main loop ----------
 let prev = performance.now();
 function safeCall(fn, dt) { try { fn(dt); } catch (e) { console.error(fn.name + ' error:', e); } }
-// Perf HUD state (persisted)
-let perfShowFps = localStorage.getItem('perfShowFps') === 'true';
-let perfShowPing = localStorage.getItem('perfShowPing') === 'true';
+// Perf HUD state (persisted). Default both to ON for first-time visitors; users can
+// disable in Settings and that choice persists across sessions.
+let perfShowFps = (localStorage.getItem('perfShowFps') === null) ? true : (localStorage.getItem('perfShowFps') === 'true');
+let perfShowPing = (localStorage.getItem('perfShowPing') === null) ? true : (localStorage.getItem('perfShowPing') === 'true');
 let perfMaxFps = parseInt(localStorage.getItem('perfMaxFps') || '0', 10) || 0;
 const _fpsSamples = [];
 function updatePerfHud(fpsNow) {
@@ -6563,7 +6565,7 @@ function goHome() {
   currentMap = 'arena'; buildMap('arena');
   // show initial overlay
   titleEl.textContent = 'Stick Figure FPS';
-  subtitleEl.textContent = 'Click to lock the mouse and start playing.';
+  subtitleEl.textContent = 'Kill stick figures to earn money. Buy better guns between rounds.';
   overlay.classList.remove('hidden');
   overlay.setAttribute('data-mode', 'home');
   document.getElementById('retryBtn').style.display = 'none';
@@ -7006,17 +7008,25 @@ const PLAYER_COLORS = [
   { hex: 0xff8833, css: '#ff8833', emissive: 0x7a3300 }, // orange
 ];
 function getMpPlayerOrder() {
-  // Returns ordered list of player IDs: host first, then clients by join id sort
+  // Prefer the host-broadcast canonical `lobbyOrder` so every client agrees on slot/color.
+  // Fallback (early in lobby before host broadcast arrives): host first, others by id sort.
   let hostId = null;
-  const otherIds = [];
+  const others = [];
+  let broadcastOrder = null;
   for (const [id, pl] of mpAllPlayers) {
     try {
-      if (pl.getState && pl.getState('isHostFlag')) hostId = id;
-      else otherIds.push(id);
-    } catch { otherIds.push(id); }
+      if (pl.getState && pl.getState('isHostFlag')) {
+        hostId = id;
+        const lo = pl.getState('lobbyOrder');
+        if (Array.isArray(lo)) broadcastOrder = lo;
+      } else {
+        others.push(id);
+      }
+    } catch { others.push(id); }
   }
-  otherIds.sort();
-  return hostId ? [hostId, ...otherIds] : otherIds;
+  if (broadcastOrder && broadcastOrder.length) return broadcastOrder.slice();
+  others.sort();
+  return hostId ? [hostId, ...others] : others;
 }
 function getPlayerColor(playerId) {
   if (!playerId) return PLAYER_COLORS[0];
@@ -7047,6 +7057,8 @@ function makeRemotePlayerMesh(color) {
   const g = new THREE.Group();
   const boneMat = new THREE.MeshBasicMaterial({ color: col.hex });
   const headMat = new THREE.MeshLambertMaterial({ color: col.hex, emissive: col.emissive, emissiveIntensity: 0.4 });
+  // Expose body materials so color can be re-applied when host's lobbyOrder updates
+  g.userData.bodyMaterials = [boneMat, headMat];
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), headMat);
   head.position.set(0, 1.75, 0);
   head.add(makeFriendlyFace(0.25));
@@ -7731,6 +7743,18 @@ async function startMultiplayer(joinCode) {
     Playroom.onPlayerJoin((p) => {
       mpAllPlayers.set(p.id, p);
       const myId = Playroom.myPlayer().id;
+      // Host maintains the canonical lobby slot order and broadcasts it
+      if (mpIsHost()) {
+        try {
+          const me = Playroom.myPlayer();
+          const cur = me.getState('lobbyOrder') || [];
+          // Keep host first, then preserve existing slot order, then append any new
+          let order = Array.isArray(cur) ? cur.slice() : [];
+          if (!order.length || order[0] !== me.id) order = [me.id, ...order.filter(x => x !== me.id)];
+          if (!order.includes(p.id)) order.push(p.id);
+          me.setState('lobbyOrder', order, true);
+        } catch {}
+      }
       if (p.id !== myId && !remotePlayers.has(p.id)) {
         console.log('[mp] remote player joined:', p.id);
         const col = getPlayerColor(p.id);
@@ -7746,16 +7770,29 @@ async function startMultiplayer(joinCode) {
         if (!remotePlayer) remotePlayer = entry;
       }
       p.onQuit(() => {
+        const wasHost = !!(mpHostPlayer && mpHostPlayer.id === p.id);
         mpAllPlayers.delete(p.id);
-        if (mpHostPlayer && mpHostPlayer.id === p.id) mpHostPlayer = null;
+        if (wasHost) mpHostPlayer = null;
         const entry = remotePlayers.get(p.id);
         if (entry) {
           scene.remove(entry.mesh);
           remotePlayers.delete(p.id);
         }
         if (remotePlayer && remotePlayer.playroomPlayer && remotePlayer.playroomPlayer.id === p.id) {
-          // Repoint the spectate pointer to whoever's left (or null if none)
           remotePlayer = remotePlayers.values().next().value || null;
+        }
+        // If the HOST quit (closed tab, lost connection), trigger the host-left flow on
+        // every remaining client. Otherwise they'd be stranded in a frozen world.
+        if (wasHost && mpIsClient() && !_hostLeftHandled) {
+          _hostLeftHandled = true;
+          document.getElementById('hostLeftBanner').style.display = 'flex';
+          document.exitPointerLock?.();
+          setTimeout(() => {
+            document.getElementById('hostLeftBanner').style.display = 'none';
+            try { leaveLobby(); } catch {}
+            try { goHome(); } catch {}
+            _hostLeftHandled = false;
+          }, 3000);
         }
       });
     });
@@ -7860,6 +7897,21 @@ function updateRemotePlayer() {
     if (!p) continue;
     const pose = p.getState('pose');
     if (!pose) continue;
+    // Re-apply the authoritative color whenever the host's lobbyOrder updates
+    const expectedCol = getPlayerColor(p.id);
+    if (entry.color !== expectedCol) {
+      entry.color = expectedCol;
+      const mats = entry.mesh.userData.bodyMaterials || [];
+      for (const m of mats) {
+        if (m.color) m.color.setHex(expectedCol.hex);
+        if (m.emissive) m.emissive.setHex(expectedCol.emissive);
+      }
+      // Refresh the name label in the new color
+      if (entry.mesh.userData.nameCanvas && entry.mesh.userData.currentName) {
+        drawPlayerNameOntoCanvas(entry.mesh.userData.nameCanvas, entry.mesh.userData.currentName, expectedCol.css);
+        entry.mesh.userData.nameTex.needsUpdate = true;
+      }
+    }
     entry.mesh.position.set(pose.x, pose.y - 1.7, pose.z);
     entry.mesh.rotation.y = pose.yaw;
     const hp = p.getState('hp');
