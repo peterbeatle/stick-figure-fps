@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.61</span>
+  <span style="font-weight:bold;color:#eee">v2.62</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -708,7 +708,7 @@
       <button type="button" id="mpLeaveBtn" style="background:#666;color:white;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace;display:none">Leave</button>
     </div>
     <div id="mpJoinRow" style="display:none;margin-top:8px;gap:6px;align-items:center;flex-wrap:wrap">
-      <input type="text" id="mpJoinCode" maxlength="10" placeholder="Enter 4-char code" style="background:#0d1830;color:#eee;border:1px solid #2a4070;border-radius:4px;padding:6px 10px;font-family:monospace;font-size:14px;letter-spacing:3px;text-transform:uppercase;width:160px">
+      <input type="text" id="mpJoinCode" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="Enter 4-digit code" style="background:#0d1830;color:#eee;border:1px solid #2a4070;border-radius:4px;padding:6px 10px;font-family:monospace;font-size:14px;letter-spacing:3px;width:160px">
       <button type="button" id="mpJoinGo" style="background:#4caf50;color:white;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Join</button>
       <button type="button" id="mpJoinCancel" style="background:#555;color:white;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Cancel</button>
     </div>
@@ -814,6 +814,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.62', 'Lobby codes are now 4-digit numbers (e.g., 3742) — easier to say and type. Removed the "Share this code..." instruction block from the host lobby panel. Join input is numeric-only, 4 char max.'],
   ['v2.61', 'Home subtitle replaced with "Kill stick figures to earn money. Buy better guns between rounds." Duplicate body line removed. FPS and Ping HUD toggles now default ON (can still be disabled in Settings).'],
   ['v2.60', 'Host-disconnect fix: if the host closes their tab, clients now see the "HOST LEFT GAME" banner via Playroom onQuit (previously only goHome triggered it). Player color fix for 4-player lobbies: host broadcasts a canonical lobbyOrder so every client agrees on slot colors; remote stick-figure meshes re-apply the correct color on the fly when the order arrives.'],
   ['v2.59', 'Forced expanded MP panel to stay at 240px — previous inline width:auto was overriding the class rule so the panel was ignoring the size constraint.'],
@@ -7571,6 +7572,9 @@ function getRoomCodeFromUrl() {
     return m ? m[1].toUpperCase() : '';
   } catch { return ''; }
 }
+function generate4DigitCode() {
+  return String(1000 + Math.floor(Math.random() * 9000));
+}
 async function startMultiplayer(joinCode) {
   if (!window.Playroom || !Playroom.insertCoin) {
     mpStatus('Playroom library failed to load (no internet?)', '#ff8080');
@@ -7580,12 +7584,10 @@ async function startMultiplayer(joinCode) {
   document.getElementById('mpJoinBtn').disabled = true;
   mpStatus(joinCode ? `Joining lobby ${joinCode}…` : 'Creating lobby…', '#ffd166');
   try {
-    // If a code is provided, Playroom will try to join that specific room; otherwise a new room is made.
+    // Hosts generate a friendly 4-digit code; joiners use the one they typed.
+    const codeForUrl = (joinCode || generate4DigitCode()).replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+    location.hash = 'r=' + codeForUrl;
     const opts = { skipLobby: true, maxPlayersPerRoom: 4 };
-    if (joinCode) {
-      // Playroom reads the room code from the URL hash, so set it before insertCoin
-      location.hash = 'r=' + joinCode.toUpperCase();
-    }
     await Playroom.insertCoin(opts);
     mpRole = Playroom.isHost() ? 'host' : 'client';
     const code = getRoomCodeFromUrl() || '????';
@@ -7597,7 +7599,7 @@ async function startMultiplayer(joinCode) {
            <div style="font-size:22px;font-weight:900;color:#ffcc33;letter-spacing:5px;text-shadow:0 0 8px rgba(255,200,50,0.5)">${code}</div>
            <button type="button" id="mpCopyCode" style="margin-top:4px;background:#2864c2;color:white;border:0;border-radius:4px;padding:3px 12px;cursor:pointer;font-family:monospace;font-size:11px;pointer-events:auto">Copy</button>
          </div>
-         <div style="margin-top:8px;padding:6px 10px;background:rgba(76,175,80,0.15);border:1px dashed #4caf50;border-radius:4px;font-size:12px;color:#c8ffcc">Share this code with friends (they click <b>Join Lobby</b> on the home screen). When everyone's in, click <b>Ready Up</b> below.</div>`
+         `
       : `<div style="color:#7fff8d">Connected ✓ — You joined lobby <b style="color:#ffcc33;letter-spacing:3px">${code}</b></div>
          <div style="margin-top:8px;padding:6px 10px;background:rgba(76,175,80,0.15);border:1px dashed #4caf50;border-radius:4px;font-size:12px;color:#c8ffcc">Wait for the host, then click the green <b>Ready Up</b> button below when you're ready to start.</div>`;
     mpStatus(shareMsg, '#7fff8d', true);
@@ -7961,8 +7963,9 @@ document.getElementById('mpJoinCancel').addEventListener('click', () => {
   document.getElementById('mpJoinRow').style.display = 'none';
 });
 function submitJoinCode() {
-  const code = (document.getElementById('mpJoinCode').value || '').trim().toUpperCase();
-  if (!code) return;
+  const raw = (document.getElementById('mpJoinCode').value || '').trim();
+  const code = raw.replace(/[^0-9]/g, '');
+  if (code.length !== 4) { alert('Enter a 4-digit code'); return; }
   document.getElementById('mpJoinRow').style.display = 'none';
   startMultiplayer(code);
 }
