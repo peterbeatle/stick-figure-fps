@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.65</span>
+  <span style="font-weight:bold;color:#eee">v2.66</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -624,6 +624,7 @@
   <div id="orbTriple" class="abilityOrb green" title="Triple Jump"></div>
   <div id="orbSlam" class="abilityOrb red" title="Power Slam — double-tap Crouch mid-air"></div>
 </div>
+<div id="chestWait" style="position:fixed;top:32%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;font-size:28px;color:#ffcc33;letter-spacing:4px;z-index:17;display:none;pointer-events:none;text-align:center;text-shadow:0 0 16px #ff8800,0 2px 6px #000">WAITING FOR OTHER PLAYERS…</div>
 <div id="abilityGranted" style="position:fixed;top:32%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;z-index:17;display:none;pointer-events:none;text-align:center">
   <div id="abilityTitle" style="font-size:54px;color:#ffe033;letter-spacing:6px;text-shadow:0 0 24px #ff8800,0 0 48px #ff8800,0 2px 8px #000">NEW ABILITY GRANTED</div>
   <div id="abilityBody" style="font-size:22px;color:#fff;letter-spacing:3px;margin-top:12px;text-shadow:0 2px 6px #000">…</div>
@@ -814,6 +815,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.66', 'MP chest ready-up: first player to open the chest triggers the full animation + ability grant for everyone. The chest can no longer be re-opened (guarded by _chestOpenedForRound on tryChestInteract + chestOpen/chestSpawn RPCs). After pressing Enter, each player sees a "WAITING FOR OTHER PLAYERS…" banner; the host\'s broadcast loop checks every player\'s chestReady state and only calls continueAfterChest (clearing chestRound and firing round-clear → gun shop for everyone) once all are ready.'],
   ['v2.65', 'MP chest fix: after a client completed the chest (grabbed the ability and dismissed the banner), the host\'s still-live chestRound broadcast was re-spawning the chest locally, letting the client open it again and blocking the round-clear animation + gun shop. Now we remember the completed chest round per-client and ignore spawn signals for it. Also fixed the client status text still breaking "lobby" across lines — the inline word-break:break-all on #mpStatus was overriding the panel CSS.'],
   ['v2.64', 'Removed the "Wait for the host…" instruction the client sees after joining. Fixed "lobby" word splitting across lines in the client panel (swapped overflow-wrap: anywhere → break-word so only overly long tokens wrap).'],
   ['v2.63', 'Fixed lobby code generation: pass roomCode explicitly to Playroom insertCoin so the 4-digit code actually takes effect (previously Playroom generated its own letters-and-numbers code, ignoring our hash). Display the passed code directly.'],
@@ -4287,7 +4289,8 @@ let _chestPodium = null;          // { group, beam, position: Vector3, lidMesh }
 let _chestInProgress = false;      // true during the open→orb→ability-text sequence
 let _pendingChestRound = 0;        // which round is waiting for chest completion before endRound continues
 let _awaitingAbilityContinue = false; // true while the NEW ABILITY banner is shown + game is frozen
-let _chestCompletedForRound = 0;   // MP: last chest round this client has fully completed (prevents re-spawn while host still broadcasts it)
+let _chestOpenedForRound = 0;      // set when openChestLocal runs — prevents re-opens of the same chest round
+let _chestWaitingOthers = false;   // MP: local dismissed, waiting for other players to press Enter
 
 // Dash state
 let _dashLastTap = { KeyW: 0, KeyA: 0, KeyS: 0, KeyD: 0 };
@@ -4396,6 +4399,21 @@ function clearChestPodium() {
   if (toast) toast.style.display = 'none';
 }
 
+function resetChestFlowState() {
+  _chestOpenedForRound = 0;
+  _chestWaitingOthers = false;
+  _pendingChestRound = 0;
+  _chestInProgress = false;
+  _awaitingAbilityContinue = false;
+  const wait = document.getElementById('chestWait');
+  if (wait) wait.style.display = 'none';
+  const banner = document.getElementById('abilityGranted');
+  if (banner) banner.style.display = 'none';
+  if (mpActive() && window.Playroom) {
+    try { Playroom.myPlayer().setState('chestReady', 0, true); } catch {}
+  }
+}
+
 function updateChestHint() {
   const hint = document.getElementById('chestHint');
   if (!hint) return;
@@ -4413,14 +4431,15 @@ function updateChestHint() {
 
 function tryChestInteract() {
   if (!_chestPodium || _chestInProgress) return;
+  if (_chestOpenedForRound && _chestOpenedForRound === _pendingChestRound) return;
   const dx = _chestPodium.position.x - camera.position.x;
   const dz = _chestPodium.position.z - camera.position.z;
   if (Math.hypot(dx, dz) > 3) return;
   if (mpActive() && window.Playroom) {
     try { Playroom.RPC.call('chestOpen', { round: _pendingChestRound }, Playroom.RPC.Mode.ALL); } catch {}
-  } else {
-    openChestLocal();
   }
+  // Also open locally — RPC.Mode.ALL semantics may not reliably include self.
+  openChestLocal();
 }
 
 // Classic Zelda "new item" fanfare, approximated with our tone helper
@@ -4439,6 +4458,8 @@ function playItemGetFanfare() {
 
 function openChestLocal() {
   if (_chestInProgress) return;
+  if (_chestOpenedForRound && _chestOpenedForRound === _pendingChestRound) return;
+  _chestOpenedForRound = _pendingChestRound;
   _chestInProgress = true;
   // Hide the toast/hint
   const hint = document.getElementById('chestHint');
@@ -4571,8 +4592,24 @@ function dismissAbilityBanner() {
   if (banner) banner.style.display = 'none';
   clearChestPodium();
   _chestInProgress = false;
-  if (mpIsClient()) _chestCompletedForRound = _pendingChestRound || _chestCompletedForRound;
+  if (mpActive() && window.Playroom) {
+    // Ready-up: mark self ready for this chest round, then wait for everyone.
+    const myRound = _pendingChestRound || _chestOpenedForRound;
+    try { Playroom.myPlayer().setState('chestReady', myRound, true); } catch {}
+    _chestWaitingOthers = true;
+    const wait = document.getElementById('chestWait');
+    if (wait) wait.style.display = 'block';
+    // Host drives the all-ready check in mpHostSync. Client just waits for the
+    // host's chestRound broadcast to drop to 0, which then fires round-clear.
+    return;
+  }
   continueAfterChest();
+}
+
+function hideChestWaitBanner() {
+  _chestWaitingOthers = false;
+  const wait = document.getElementById('chestWait');
+  if (wait) wait.style.display = 'none';
 }
 
 function continueAfterChest() {
@@ -7327,6 +7364,22 @@ function mpBroadcastWorld(dt) {
       chestRound: _pendingChestRound || 0,
     }, true);
   } catch (e) { console.warn('[mp] broadcast failed', e); }
+  // Chest ready-up: advance the round only when every connected player has dismissed their ability banner.
+  if (_pendingChestRound && !_awaitingAbilityContinue && !_chestInProgress) {
+    const target = _pendingChestRound;
+    let allReady = true, total = 0;
+    for (const p of mpAllPlayers.values()) {
+      total++;
+      try { if ((p.getState('chestReady') || 0) !== target) { allReady = false; break; } } catch { allReady = false; break; }
+    }
+    if (allReady && total >= 1) {
+      hideChestWaitBanner();
+      try { Playroom.RPC.call('chestAllReady', { round: target }, Playroom.RPC.Mode.ALL); } catch {}
+      // Reset everyone's chestReady so it's clean for the next chest round
+      try { Playroom.myPlayer().setState('chestReady', 0, true); } catch {}
+      continueAfterChest();
+    }
+  }
 }
 
 let _hostLeftHandled = false;
@@ -7686,16 +7739,20 @@ async function startMultiplayer(joinCode) {
       Playroom.RPC.register('chestSpawn', (data) => {
         // Explicit spawn signal from host — mirror the chest locally on every player
         if (_chestInProgress) return;
-        if (data && data.round && data.round === _chestCompletedForRound) return;
+        if (data && data.round && data.round === _chestOpenedForRound) return;
         if (data && data.round) _pendingChestRound = data.round;
         if (!_chestPodium) {
           try { makeChestPodium(); } catch (e) { console.warn('[mp] chestSpawn failed', e); }
         }
       });
+      Playroom.RPC.register('chestAllReady', (data) => {
+        hideChestWaitBanner();
+        try { Playroom.myPlayer().setState('chestReady', 0, true); } catch {}
+      });
       Playroom.RPC.register('chestOpen', (data) => {
         // Someone hit E near the chest — everyone opens it and gets the ability
         if (_chestInProgress) return;
-        if (data && data.round && data.round === _chestCompletedForRound) return;
+        if (data && data.round && data.round === _chestOpenedForRound) return;
         if (!_chestPodium) {
           if (data && data.round) _pendingChestRound = data.round;
           try { makeChestPodium(); } catch {}
