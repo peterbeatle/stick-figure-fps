@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.83</span>
+  <span style="font-weight:bold;color:#eee">v2.84</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -886,12 +886,19 @@
     }
   });
 
-  // Belt-and-suspenders: while the confirmation modal is up, poll getSession every 3s.
+  // Belt-and-suspenders poll (3s):
+  //   • If we're waiting for email confirmation, check for a new session.
+  //   • If we're logged in with only a synthetic profile, retry the real DB fetch.
   setInterval(async () => {
     try {
+      if (window.gameAuth.user && window.gameAuth.profile && window.gameAuth.profile._synthetic) {
+        const real = await fetchProfile(window.gameAuth.user.id);
+        if (real) { console.log('[auth] reconciled synthetic profile with DB'); applyAuthState(window.gameAuth.user, real); }
+        return;
+      }
       const pending = localStorage.getItem('pendingSignupEmail');
       if (!pending) return;
-      if (window.gameAuth.user) return; // already logged in
+      if (window.gameAuth.user) return;
       const { data: { session } } = await client.auth.getSession();
       if (session && session.user) {
         console.log('[auth] poll detected new session — refreshing');
@@ -901,6 +908,16 @@
   }, 3000);
 
   function applyAuthState(user, profile) {
+    // If we have a user but profile fetch failed (e.g. cross-tab lock race), synthesize
+    // a profile from user_metadata so the UI still reflects logged-in state.
+    if (user && !profile) {
+      const meta = user.user_metadata || {};
+      profile = {
+        username: meta.username || (user.email ? user.email.split('@')[0] : 'Player'),
+        best_kills_sp: 0, best_round_sp: 0, best_kills_mp: 0, best_round_mp: 0,
+        _synthetic: true,
+      };
+    }
     window.gameAuth.user = user;
     window.gameAuth.profile = profile;
     const loggedOut = $('acctLoggedOut');
@@ -917,7 +934,6 @@
     } else {
       loggedOut.style.display = 'flex';
       loggedIn.style.display = 'none';
-      // Guest mode: display "Guest" regardless of any local name. Hide change link since it doesn't matter.
       if (nameShow) nameShow.textContent = 'Guest';
       if (changeLink) changeLink.style.display = 'none';
     }
@@ -1228,6 +1244,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.84', 'Logged-in UI now shows immediately even when the profile-fetch hits a cross-tab lock race — applyAuthState synthesizes a profile from user_metadata (username) as a placeholder, then a background poll (every 3s) reconciles it with the real DB row once the lock clears. Fixes the "Signed in ✓ status but still shows Log In/Sign Up" state.'],
   ['v2.83', 'Original-tab auto-login fix: storage event filter was matching "supabase*" but the actual localStorage key is "sb-<project>-auth-token", so the event was being ignored. Fixed the regex. Also added a 3-second polling fallback that checks getSession() while the confirmation modal is up — whichever fires first (storage event or poll) wins.'],
   ['v2.82', 'Cross-tab sign-in fix: after confirming the email in a new tab, the original tab now auto-logs in. Added a storage event listener that re-fetches the session when the Supabase auth-token changes in localStorage, plus retry logic in fetchProfile that handles the "Lock was stolen" race error Supabase throws during multi-tab sync.'],
   ['v2.81', 'Removed the client-side username availability check — the `.maybeSingle()` call was hanging indefinitely for an as-yet-unknown reason. Dupes are still caught server-side by the unique(lower(username)) index, which surfaces as a clear "duplicate key" error in the signup modal.'],
