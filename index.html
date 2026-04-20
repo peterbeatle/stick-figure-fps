@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.90</span>
+  <span style="font-weight:bold;color:#eee">v2.91</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.20.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1064,15 +1064,43 @@
         try { localStorage.setItem('stickFigureFpsStayLoggedIn', stayLoggedIn ? '1' : '0'); } catch {}
         const err = $('loginErr'); err.textContent = '';
         if (!email || !password) { err.textContent = 'Email and password required.'; return; }
-        console.log('[auth] calling signInWithPassword… stayLoggedIn=' + stayLoggedIn);
-        // Race the call against a 15s timeout so the UI doesn't hang forever if Supabase stalls.
-        const signInCall = client.auth.signInWithPassword({ email, password });
-        const timeout = new Promise((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Request timed out after 15 seconds — possible network block. Try disabling any VPN or extension that might interfere with supabase.co.') }), 15000));
-        const { data, error } = await Promise.race([signInCall, timeout]);
-        console.log('[auth] signIn result', { hasSession: !!(data && data.session), error });
-        if (error) { err.textContent = error.message || String(error); return; }
+        // Clear any stale Supabase localStorage entries — leftover auth-token data from a prior
+        // session can cause the client's internal storage step to hang indefinitely post-response.
+        try {
+          for (const k of Object.keys(localStorage)) {
+            if (/^sb-.*-auth-token/.test(k)) localStorage.removeItem(k);
+          }
+        } catch {}
+        console.log('[auth] calling signInWithPassword via direct fetch… stayLoggedIn=' + stayLoggedIn);
+        // Use direct fetch to Supabase's REST auth endpoint to sidestep the client's hanging-storage bug.
+        // We then manually populate the session via setSession.
+        let tokenRes;
+        try {
+          const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+            body: JSON.stringify({ email, password }),
+          });
+          tokenRes = { ok: r.ok, json: await r.json() };
+        } catch (e) {
+          err.textContent = 'Network error: ' + (e && e.message || e); return;
+        }
+        console.log('[auth] direct token response', { ok: tokenRes.ok, keys: Object.keys(tokenRes.json || {}) });
+        if (!tokenRes.ok) {
+          err.textContent = (tokenRes.json && (tokenRes.json.msg || tokenRes.json.error_description || tokenRes.json.error)) || 'Login failed.';
+          return;
+        }
+        const { access_token, refresh_token } = tokenRes.json;
+        // Hand the tokens to the Supabase client so the session persists + onAuthStateChange fires.
+        const setSessionCall = client.auth.setSession({ access_token, refresh_token });
+        const setTimeout2 = new Promise((resolve) => setTimeout(() => resolve({ data: null, error: new Error('setSession timed out') }), 8000));
+        const { error: setErr } = await Promise.race([setSessionCall, setTimeout2]);
+        if (setErr) console.warn('[auth] setSession issue (continuing anyway):', setErr);
+        console.log('[auth] login complete');
         hideModal('loginModal');
         $('loginPassword').value = '';
+        // Force an auth refresh to update the UI in case onAuthStateChange didn't fire.
+        refreshAuth();
       } catch (e) {
         console.error('[auth] submitLogin threw', e);
         const err = $('loginErr');
@@ -1368,6 +1396,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.91', 'Login rewrite: the Supabase client\'s signInWithPassword was completing the network request (200 OK) but hanging on the post-response localStorage write due to stale auth-token junk. Now we (a) clear all sb-*-auth-token keys before login, (b) hit /auth/v1/token directly via fetch, and (c) hand the resulting tokens to client.auth.setSession — so the session is populated without relying on the hanging code path. Fixes "login does nothing" that appeared only in non-incognito windows.'],
   ['v2.90', 'Updated version-tag date to 4.20.26. Added a "Stay logged in" checkbox (checked by default) to the login modal — when unchecked, the Supabase auth-token is purged from localStorage on tab close so the next visit starts logged-out. Also added a 15-second timeout to signInWithPassword so we at least get an error back instead of the UI hanging forever when the call stalls.'],
   ['v2.89', 'Fix for hanging auth calls: supplied a no-op `lock` option to the Supabase client. The default implementation uses navigator.locks, which deadlocks indefinitely if a previous tab crashed or is still open holding the auth-token lock (what was making signInWithPassword and earlier .maybeSingle() hang forever with no response). Also explains why the "Lock was stolen" error was appearing on cross-tab sync.'],
   ['v2.88', 'Password reset flow: tabs opened by the reset-password email link (hash contains type=recovery) now show a dedicated "Set New Password" modal with new + confirm password fields, instead of the generic "Email Confirmed" overlay. Submitting calls client.auth.updateUser({password}). Also added diagnostic logging to submitLogin and refreshAuth to help debug the "login does nothing" + "not logged in after revisit" issues.'],
