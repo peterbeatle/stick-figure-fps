@@ -166,7 +166,8 @@
     100% { opacity: 0; }
   }
 
-  #mpPanel.expanded { width: 240px; }
+  #mpPanel.expanded { width: 240px !important; max-width: 240px !important; }
+  #mpPanel.expanded #mpStatus { word-break: break-word; overflow-wrap: anywhere; }
   #mpPanel .mpUrl { display: block; margin-top: 6px; font-family: monospace; word-break: break-all; overflow-wrap: anywhere; }
   /* Ability orb HUD (left side, stacks earned abilities top-to-bottom) */
   #abilityHud {
@@ -485,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.58</span>
+  <span style="font-weight:bold;color:#eee">v2.59</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -814,6 +815,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.59', 'Forced expanded MP panel to stay at 240px — previous inline width:auto was overriding the class rule so the panel was ignoring the size constraint.'],
   ['v2.58', 'MP panel slimmed further to 240px; lobby code box tightened (padding + smaller font) so it no longer covers the middle of the screen.'],
   ['v2.57', 'MP panel slimmed down: expanded width 520→320px, lobby code box stacks label/code/button vertically so it stays compact and the panel grows down instead of stretching sideways.'],
   ['v2.56', 'Multiplayer: "Host Lobby" + "Join Lobby" buttons replace URL sharing. Host sees a big lobby code with a Copy button; clients enter the 4–10 char code. Fixed the "Round 0 cleared" ghost animation when host leaves (round-clear path now requires cleared >= 1).'],
