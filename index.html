@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.85</span>
+  <span style="font-weight:bold;color:#eee">v2.86</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -898,7 +898,7 @@
     if (!e.key) return;
     if (/^sb-.*-auth-token$/.test(e.key) || e.key.includes('auth-token')) {
       console.log('[auth] storage event detected:', e.key);
-      setTimeout(() => { refreshAuth().catch((err) => console.warn('[auth] refreshAuth err', err)); }, 300);
+      refreshAuth().catch((err) => console.warn('[auth] refreshAuth err', err));
     }
   });
 
@@ -947,6 +947,11 @@
       if (typeof window.setPlayerName === 'function') window.setPlayerName(profile.username);
       if (nameShow) nameShow.textContent = profile.username;
       if (changeLink) changeLink.style.display = 'none';
+      // Now that the UI actually reflects the logged-in state, the pending-confirmation
+      // lock is no longer needed on the original tab.
+      try { localStorage.removeItem('pendingSignupEmail'); } catch {}
+      const pendingEl = document.getElementById('emailPendingModal');
+      if (pendingEl) pendingEl.style.display = 'none';
       // If this tab was opened by an email confirmation link, lock it with an overlay
       // urging the user to return to their original tab.
       if (_isConfirmationTab && !applyAuthState._lockedOnce) {
@@ -1192,10 +1197,8 @@
   }
   function hideEmailPendingModal() { hideModal('emailPendingModal'); }
   function clearPendingEmail() { try { localStorage.removeItem('pendingSignupEmail'); } catch {} }
-  // On any successful sign-in, the pending flag is no longer relevant.
-  client.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN' && session) { clearPendingEmail(); hideEmailPendingModal(); }
-  });
+  // Note: the modal is now cleared inside applyAuthState() once the logged-in UI is actually ready,
+  // so there's no gap where the lock is down but the UI still shows Log In/Sign Up.
 
   // Run stat submission — called from game code at end of a run
   window.gameAuth.submitRunStats = async function(kills, round, isMP, isSandbox) {
@@ -1287,6 +1290,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.86', 'Closed the gap on the original tab between email-confirmation and logged-in UI. The "Confirm your email" lock now stays up until applyAuthState() actually renders the logged-in state — not when the SIGNED_IN event fires (which was too early, since profile-fetch could still be hanging on a cross-tab lock). Also dropped the 300ms delay on the storage-event refreshAuth trigger.'],
   ['v2.85', 'New: when a tab is opened by the email-confirmation link, it now shows a full-screen "Email Confirmed — return to your original tab" overlay that locks the game. The URL hash is read at script load (before Supabase clears it) to detect confirmation tabs. Primary action tries window.close() (works when the tab was script-opened); fallback message tells the user to close manually. Escape hatch: "I don\'t have the original tab — play here" dismisses the overlay.'],
   ['v2.84', 'Logged-in UI now shows immediately even when the profile-fetch hits a cross-tab lock race — applyAuthState synthesizes a profile from user_metadata (username) as a placeholder, then a background poll (every 3s) reconciles it with the real DB row once the lock clears. Fixes the "Signed in ✓ status but still shows Log In/Sign Up" state.'],
   ['v2.83', 'Original-tab auto-login fix: storage event filter was matching "supabase*" but the actual localStorage key is "sb-<project>-auth-token", so the event was being ignored. Fixed the regex. Also added a 3-second polling fallback that checks getSession() while the confirmation modal is up — whichever fires first (storage event or poll) wins.'],
