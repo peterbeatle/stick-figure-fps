@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.86</span>
+  <span style="font-weight:bold;color:#eee">v2.87</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -863,6 +863,19 @@
   if (!window.supabase || !window.supabase.createClient) { console.warn('[auth] supabase-js not loaded'); return; }
   // Detect if this tab was opened by the email confirmation link (before Supabase clears the hash).
   const _isConfirmationTab = /access_token=|type=(signup|recovery|invite|magiclink|email_change)/.test(window.location.hash || '');
+  // Show the lock overlay IMMEDIATELY on confirmation tabs (don't wait for auth to finish loading)
+  // so the user can't start a round in the few seconds before applyAuthState runs.
+  if (_isConfirmationTab) {
+    const showOverlayNow = () => {
+      const el = document.getElementById('confirmedTabOverlay');
+      if (el) el.style.display = 'flex';
+    };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', showOverlayNow);
+    } else {
+      showOverlayNow();
+    }
+  }
   const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
@@ -1290,6 +1303,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.87', 'Confirmation-tab lock overlay now appears instantly (detected from the URL hash at script load + shown on DOMContentLoaded) instead of waiting for auth state to finish loading. Username text is filled in by applyAuthState when profile arrives, but the lock itself is already there.'],
   ['v2.86', 'Closed the gap on the original tab between email-confirmation and logged-in UI. The "Confirm your email" lock now stays up until applyAuthState() actually renders the logged-in state — not when the SIGNED_IN event fires (which was too early, since profile-fetch could still be hanging on a cross-tab lock). Also dropped the 300ms delay on the storage-event refreshAuth trigger.'],
   ['v2.85', 'New: when a tab is opened by the email-confirmation link, it now shows a full-screen "Email Confirmed — return to your original tab" overlay that locks the game. The URL hash is read at script load (before Supabase clears it) to detect confirmation tabs. Primary action tries window.close() (works when the tab was script-opened); fallback message tells the user to close manually. Escape hatch: "I don\'t have the original tab — play here" dismisses the overlay.'],
   ['v2.84', 'Logged-in UI now shows immediately even when the profile-fetch hits a cross-tab lock race — applyAuthState synthesizes a profile from user_metadata (username) as a placeholder, then a background poll (every 3s) reconciles it with the real DB row once the lock clears. Fixes the "Signed in ✓ status but still shows Log In/Sign Up" state.'],
