@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:160px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.64</span>
+  <span style="font-weight:bold;color:#eee">v2.65</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -712,7 +712,7 @@
       <button type="button" id="mpJoinGo" style="background:#4caf50;color:white;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Join</button>
       <button type="button" id="mpJoinCancel" style="background:#555;color:white;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;font-family:monospace">Cancel</button>
     </div>
-    <div id="mpStatus" style="margin-top:6px;opacity:0.85;word-break:break-all;overflow-wrap:anywhere"></div>
+    <div id="mpStatus" style="margin-top:6px;opacity:0.85;word-break:normal;overflow-wrap:break-word"></div>
     <div id="mpLobby" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #2a4070">
       <div style="font-weight:bold;color:#7fc8ff;margin-bottom:6px;font-size:12px;letter-spacing:2px">LOBBY</div>
       <div id="mpLobbyList" style="display:flex;flex-direction:column;gap:4px;font-size:12px"></div>
@@ -814,6 +814,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.65', 'MP chest fix: after a client completed the chest (grabbed the ability and dismissed the banner), the host\'s still-live chestRound broadcast was re-spawning the chest locally, letting the client open it again and blocking the round-clear animation + gun shop. Now we remember the completed chest round per-client and ignore spawn signals for it. Also fixed the client status text still breaking "lobby" across lines — the inline word-break:break-all on #mpStatus was overriding the panel CSS.'],
   ['v2.64', 'Removed the "Wait for the host…" instruction the client sees after joining. Fixed "lobby" word splitting across lines in the client panel (swapped overflow-wrap: anywhere → break-word so only overly long tokens wrap).'],
   ['v2.63', 'Fixed lobby code generation: pass roomCode explicitly to Playroom insertCoin so the 4-digit code actually takes effect (previously Playroom generated its own letters-and-numbers code, ignoring our hash). Display the passed code directly.'],
   ['v2.62', 'Lobby codes are now 4-digit numbers (e.g., 3742) — easier to say and type. Removed the "Share this code..." instruction block from the host lobby panel. Join input is numeric-only, 4 char max.'],
@@ -4286,6 +4287,7 @@ let _chestPodium = null;          // { group, beam, position: Vector3, lidMesh }
 let _chestInProgress = false;      // true during the open→orb→ability-text sequence
 let _pendingChestRound = 0;        // which round is waiting for chest completion before endRound continues
 let _awaitingAbilityContinue = false; // true while the NEW ABILITY banner is shown + game is frozen
+let _chestCompletedForRound = 0;   // MP: last chest round this client has fully completed (prevents re-spawn while host still broadcasts it)
 
 // Dash state
 let _dashLastTap = { KeyW: 0, KeyA: 0, KeyS: 0, KeyD: 0 };
@@ -4569,6 +4571,7 @@ function dismissAbilityBanner() {
   if (banner) banner.style.display = 'none';
   clearChestPodium();
   _chestInProgress = false;
+  if (mpIsClient()) _chestCompletedForRound = _pendingChestRound || _chestCompletedForRound;
   continueAfterChest();
 }
 
@@ -7381,14 +7384,15 @@ function mpClientSync(dt) {
     // Chest round: host signaled a chest spawn — mirror it locally so this client also
     // sees the chest, lightning, ability orb, and "NEW ABILITY" banner.
     const hostChestRound = roundState.chestRound || 0;
-    if (hostChestRound && !_chestPodium && !_chestInProgress && !_pendingChestRound) {
+    if (hostChestRound && hostChestRound !== _chestCompletedForRound && !_chestPodium && !_chestInProgress && !_pendingChestRound) {
       _pendingChestRound = hostChestRound;
       try { makeChestPodium(); } catch (e) { console.warn('[mp] client chest spawn failed', e); }
     }
+    const chestStillLive = hostChestRound && hostChestRound !== _chestCompletedForRound;
     // While a chest is pending or the banner is up on either side, DON'T play the
     // regular round-clear animation yet. Wait until the chest flow fully completes
     // (host clears chestRound via continueAfterChest).
-    const chestBusy = !!_pendingChestRound || !!_chestPodium || _chestInProgress || _awaitingAbilityContinue || hostChestRound;
+    const chestBusy = !!_pendingChestRound || !!_chestPodium || _chestInProgress || _awaitingAbilityContinue || chestStillLive;
     // Detect host ending a round — play the transition, then show win screen or shop
     if (!newActive && roundActive && !chestBusy && (newRound - 1) >= 1) {
       const cleared = newRound - 1;
@@ -7682,6 +7686,7 @@ async function startMultiplayer(joinCode) {
       Playroom.RPC.register('chestSpawn', (data) => {
         // Explicit spawn signal from host — mirror the chest locally on every player
         if (_chestInProgress) return;
+        if (data && data.round && data.round === _chestCompletedForRound) return;
         if (data && data.round) _pendingChestRound = data.round;
         if (!_chestPodium) {
           try { makeChestPodium(); } catch (e) { console.warn('[mp] chestSpawn failed', e); }
@@ -7690,6 +7695,7 @@ async function startMultiplayer(joinCode) {
       Playroom.RPC.register('chestOpen', (data) => {
         // Someone hit E near the chest — everyone opens it and gets the ability
         if (_chestInProgress) return;
+        if (data && data.round && data.round === _chestCompletedForRound) return;
         if (!_chestPodium) {
           if (data && data.round) _pendingChestRound = data.round;
           try { makeChestPodium(); } catch {}
