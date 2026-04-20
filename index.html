@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.81</span>
+  <span style="font-weight:bold;color:#eee">v2.82</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -858,10 +858,31 @@
   const setStatus = (msg, color) => { const el = $('acctStatus'); if (el) { el.textContent = msg || ''; el.style.color = color || '#ddd'; } };
 
   async function fetchProfile(userId) {
-    const { data, error } = await client.from('profiles').select('*').eq('id', userId).maybeSingle();
-    if (error) { console.warn('[auth] fetchProfile error', error); return null; }
-    return data;
+    // Retry on Supabase's cross-tab lock contention — the message looks like
+    // 'Lock "lock:sb-…-auth-token" was released because another request stole it'.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data, error } = await client.from('profiles').select('*').eq('id', userId).maybeSingle();
+      if (!error) return data;
+      const msg = (error && error.message) || '';
+      if (/Lock .* was (released|acquired)/.test(msg) || /stole it/.test(msg)) {
+        await new Promise(r => setTimeout(r, 250 * (attempt + 1)));
+        continue;
+      }
+      console.warn('[auth] fetchProfile error', error);
+      return null;
+    }
+    console.warn('[auth] fetchProfile gave up after retries');
+    return null;
   }
+
+  // Listen for auth-token changes in other tabs so this tab auto-picks-up a login
+  // completed via the email confirmation link (which opens in a new tab).
+  window.addEventListener('storage', (e) => {
+    if (!e.key) return;
+    if (e.key.includes('supabase') && e.key.includes('auth-token')) {
+      setTimeout(() => { refreshAuth().catch(() => {}); }, 250);
+    }
+  });
 
   function applyAuthState(user, profile) {
     window.gameAuth.user = user;
@@ -1191,6 +1212,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.82', 'Cross-tab sign-in fix: after confirming the email in a new tab, the original tab now auto-logs in. Added a storage event listener that re-fetches the session when the Supabase auth-token changes in localStorage, plus retry logic in fetchProfile that handles the "Lock was stolen" race error Supabase throws during multi-tab sync.'],
   ['v2.81', 'Removed the client-side username availability check — the `.maybeSingle()` call was hanging indefinitely for an as-yet-unknown reason. Dupes are still caught server-side by the unique(lower(username)) index, which surfaces as a clear "duplicate key" error in the signup modal.'],
   ['v2.80', 'Diagnostic: wrapped signup submit in try/catch + heavy console logging ("[auth] submitSignup fired", shows validation values, availability check result, signUp result). Also renamed the local `confirm` variable to `confirmPw` to rule out any shadowing of window.confirm.'],
   ['v2.79', 'After signup, a blocking "Confirm your email" modal now covers the game until the user either clicks the confirmation link in their inbox or explicitly cancels the signup (→ play as guest). State is persisted in localStorage so the block survives page reloads. Modal has Resend, "I confirmed — log me in", and Cancel options.'],
