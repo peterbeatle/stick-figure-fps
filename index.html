@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.88</span>
+  <span style="font-weight:bold;color:#eee">v2.89</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.19.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -890,7 +890,14 @@
     }
   }
   const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      // Bypass navigator.locks — it can deadlock indefinitely if a previous tab
+      // crashed holding the lock, which manifests as signInWithPassword / queries hanging forever.
+      lock: async (_name, _acquireTimeout, fn) => fn(),
+    }
   });
   window.gameAuth = { client, user: null, profile: null, submitRunStats: async () => {} };
 
@@ -1342,6 +1349,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.89', 'Fix for hanging auth calls: supplied a no-op `lock` option to the Supabase client. The default implementation uses navigator.locks, which deadlocks indefinitely if a previous tab crashed or is still open holding the auth-token lock (what was making signInWithPassword and earlier .maybeSingle() hang forever with no response). Also explains why the "Lock was stolen" error was appearing on cross-tab sync.'],
   ['v2.88', 'Password reset flow: tabs opened by the reset-password email link (hash contains type=recovery) now show a dedicated "Set New Password" modal with new + confirm password fields, instead of the generic "Email Confirmed" overlay. Submitting calls client.auth.updateUser({password}). Also added diagnostic logging to submitLogin and refreshAuth to help debug the "login does nothing" + "not logged in after revisit" issues.'],
   ['v2.87', 'Confirmation-tab lock overlay now appears instantly (detected from the URL hash at script load + shown on DOMContentLoaded) instead of waiting for auth state to finish loading. Username text is filled in by applyAuthState when profile arrives, but the lock itself is already there.'],
   ['v2.86', 'Closed the gap on the original tab between email-confirmation and logged-in UI. The "Confirm your email" lock now stays up until applyAuthState() actually renders the logged-in state — not when the SIGNED_IN event fires (which was too early, since profile-fetch could still be hanging on a cross-tab lock). Also dropped the 300ms delay on the storage-event refreshAuth trigger.'],
