@@ -486,8 +486,8 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.03</span>
-  <span style="opacity:0.75;font-size:11px">— Last Updated 4.20.26</span>
+  <span style="font-weight:bold;color:#eee">v3.04</span>
+  <span style="opacity:0.75;font-size:11px">— Last Updated 4.21.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
 <div id="changelogPanel" style="position:fixed;top:52px;right:300px;background:rgba(15,18,28,0.94);border:1px solid #445;border-radius:6px;padding:14px 18px;font-family:monospace;font-size:12px;color:#ddd;z-index:30;display:none;max-width:420px;max-height:60vh;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.7);line-height:1.5"></div>
@@ -1495,6 +1495,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.04', 'Scoreboard now shows a 🎮 icon next to any player using a controller. Each client broadcasts a `usingGamepad` Playroom state flag on gamepadconnected/disconnected (and when joining MP if a pad is already connected). Local player reads from gamepadCfg.connectedId; remote players read from their Playroom state — so host and clients all see the same icons.'],
   ['v3.03', 'Two fixes: (1) startRound now applies the map\'s spawn point every round (not just on map changes / round 1 / MP) — SP+MP players were keeping their end-of-round position across same-map rounds. (2) Gamepad look tuned: base sensitivity 2.4 → 4.2 rad/sec, aim-assist slowdown softened 0.4 → 0.75 (was too snappy on target acquisition), and added an exponential response curve (power 1.9) so small stick inputs are precise while full deflection is fast.'],
   ['v3.02', 'Phase 1 gamepad support. Xbox-style layout: LS move, RS look, LT ADS, RT fire, A jump, B crouch (hold), X reload, Y interact (chest), LB/RB weapon cycle, LS-click sprint. Aim assist: when an enemy is within ~10° of the crosshair, look sensitivity scales to 40% for finer tracking. Movement state merged with keyboard (gamepad + keyboard both work; no clobbering). Gamepad auto-detected on connect event. Menu nav still mouse-only for now (Phase 2 if anyone asks).'],
   ['v3.01', 'SP round 1 spawn fix: arena is the default currentMap at page load, so round 1 started with mapChanged=false and the spawn point was skipped — player stayed at (0,1.7,0). Now startRound also applies the spawn when round===1.'],
@@ -6227,7 +6228,8 @@ function updateScoreboard() {
   const myName = titleCase(getPlayerName() || 'You');
   const acc = stats.shotsFired > 0 ? Math.round(stats.shotsHit / stats.shotsFired * 100) : 0;
   const myCol = myPlayerColor();
-  rows.push({ name: myName, color: myCol.css, kR: stats.killsRound, kS: stats.killsSession, acc, dR: stats.damageRound, dS: stats.damageSession, dth: stats.deaths });
+  const iAmOnPad = !!gamepadCfg.connectedId;
+  rows.push({ name: myName, color: myCol.css, pad: iAmOnPad, kR: stats.killsRound, kS: stats.killsSession, acc, dR: stats.damageRound, dS: stats.damageSession, dth: stats.deaths });
   if (mpActive() && window.Playroom) {
     for (const p of mpAllPlayers.values()) {
       const myId = Playroom.myPlayer() && Playroom.myPlayer().id;
@@ -6237,7 +6239,8 @@ function updateScoreboard() {
         const name = titleCase(p.getState('playerName') || 'P2');
         const a = (s.sF || 0) > 0 ? Math.round((s.sH || 0) / s.sF * 100) : 0;
         const col = getPlayerColor(p.id);
-        rows.push({ name, color: col.css, kR: s.kR || 0, kS: s.kS || 0, acc: a, dR: s.dR || 0, dS: s.dS || 0, dth: s.dth || 0 });
+        const pad = !!p.getState('usingGamepad');
+        rows.push({ name, color: col.css, pad, kR: s.kR || 0, kS: s.kS || 0, acc: a, dR: s.dR || 0, dS: s.dS || 0, dth: s.dth || 0 });
       } catch {}
     }
   }
@@ -6256,8 +6259,9 @@ function updateScoreboard() {
       </tr>
     </thead><tbody>`;
   for (const r of rows) {
+    const padIcon = r.pad ? ' <span title="Using controller" style="font-size:14px">🎮</span>' : '';
     html += `<tr style="border-bottom:1px solid #2a2d3a">
-      <td style="padding:6px 8px;color:${r.color || '#fff'};font-weight:bold">${r.name}</td>
+      <td style="padding:6px 8px;color:${r.color || '#fff'};font-weight:bold">${r.name}${padIcon}</td>
       <td style="padding:6px 8px;text-align:right">${r.kR}</td>
       <td style="padding:6px 8px;text-align:right">${r.kS}</td>
       <td style="padding:6px 8px;text-align:right">${r.acc}%</td>
@@ -6290,13 +6294,22 @@ const gamepadCfg = {
   _prevRT: false,
   connectedId: null,
 };
+function _gpBroadcastState(on) {
+  try {
+    if (window.Playroom && Playroom.myPlayer) {
+      Playroom.myPlayer().setState('usingGamepad', !!on, true);
+    }
+  } catch {}
+}
 window.addEventListener('gamepadconnected', (e) => {
   gamepadCfg.connectedId = e.gamepad.id;
   console.log('[gamepad] connected:', e.gamepad.id, 'axes=' + e.gamepad.axes.length + ' btns=' + e.gamepad.buttons.length);
+  _gpBroadcastState(true);
 });
 window.addEventListener('gamepaddisconnected', (e) => {
   if (gamepadCfg.connectedId === e.gamepad.id) gamepadCfg.connectedId = null;
   console.log('[gamepad] disconnected:', e.gamepad.id);
+  _gpBroadcastState(false);
 });
 function _gpDeadzone(v, dz) {
   if (Math.abs(v) < dz) return 0;
@@ -8588,6 +8601,9 @@ async function startMultiplayer(joinCode) {
     const opts = { skipLobby: true, maxPlayersPerRoom: 4, roomCode: codeForUrl };
     await Playroom.insertCoin(opts);
     mpRole = Playroom.isHost() ? 'host' : 'client';
+    // Push current gamepad state now that we have a Playroom player — covers the case where the
+    // pad was already connected before joining MP (gamepadconnected won't fire again).
+    try { if (gamepadCfg.connectedId) _gpBroadcastState(true); } catch {}
     const code = codeForUrl || getRoomCodeFromUrl() || '????';
     const isHost = mpRole === 'host';
     const shareMsg = isHost
