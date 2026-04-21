@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.92</span>
+  <span style="font-weight:bold;color:#eee">v2.93</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.20.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -925,18 +925,19 @@
     return null;
   }
 
-  // "Stay Logged In" honoring: if user unchecked the box at login, clear session on tab close.
-  window.addEventListener('beforeunload', () => {
-    try {
-      const stay = localStorage.getItem('stickFigureFpsStayLoggedIn');
-      if (stay === '0') {
-        // Purge the Supabase session storage so next visit starts logged-out.
-        for (const k of Object.keys(localStorage)) {
-          if (/^sb-.*-auth-token$/.test(k)) localStorage.removeItem(k);
-        }
-      }
-    } catch {}
-  });
+  // If this page load's session came from sessionStorage (a "Stay logged in: OFF" login), we
+  // mirrored it into localStorage so Supabase could read it. We need to purge localStorage on
+  // unload so the next time the user opens a fresh tab/browser, the only copy is the one in
+  // sessionStorage (which the browser auto-clears when the whole session ends).
+  if (_sessSession) {
+    window.addEventListener('beforeunload', () => {
+      try {
+        const projectRef = SUPABASE_URL.replace(/^https?:\/\//, '').split('.')[0];
+        const key = `sb-${projectRef}-auth-token`;
+        localStorage.removeItem(key);
+      } catch {}
+    });
+  }
 
   // Listen for auth-token changes in other tabs so this tab auto-picks-up a login
   // completed via the email confirmation link (which opens in a new tab).
@@ -1015,6 +1016,23 @@
     }
   }
 
+  // Check sessionStorage for a session from a "Stay logged in: OFF" login. If found, promote it
+  // to localStorage temporarily so Supabase's client can read it (we put it back on page close).
+  function _pickupSessionStorageSession() {
+    try {
+      const projectRef = SUPABASE_URL.replace(/^https?:\/\//, '').split('.')[0];
+      const key = `sb-${projectRef}-auth-token`;
+      const sessRaw = sessionStorage.getItem(key);
+      if (!sessRaw) return null;
+      // Don't overwrite if localStorage already has a valid session (persistent login wins).
+      if (localStorage.getItem(key)) return JSON.parse(sessRaw);
+      // Mirror into localStorage so getSession() finds it this page load.
+      localStorage.setItem(key, sessRaw);
+      return JSON.parse(sessRaw);
+    } catch { return null; }
+  }
+  const _sessSession = _pickupSessionStorageSession();
+
   async function refreshAuth() {
     const { data: { session } } = await client.auth.getSession();
     console.log('[auth] refreshAuth — session present?', !!(session && session.user));
@@ -1090,9 +1108,7 @@
           err.textContent = (tokenRes.json && (tokenRes.json.msg || tokenRes.json.error_description || tokenRes.json.error)) || 'Login failed.';
           return;
         }
-        // Write the session directly to localStorage in the format Supabase expects, then
-        // update the UI manually. This bypasses client.auth.setSession (which hangs on the
-        // same storage-write bug we hit with signInWithPassword).
+        // Write the session directly to storage in the format Supabase expects, then update UI manually.
         const projectRef = SUPABASE_URL.replace(/^https?:\/\//, '').split('.')[0];
         const storageKey = `sb-${projectRef}-auth-token`;
         const sessionObj = {
@@ -1103,8 +1119,18 @@
           expires_at: Math.floor(Date.now() / 1000) + (tokenRes.json.expires_in || 3600),
           user: tokenRes.json.user,
         };
-        try { localStorage.setItem(storageKey, JSON.stringify(sessionObj)); } catch (e) { console.warn('[auth] direct localStorage write failed', e); }
-        console.log('[auth] session written directly to localStorage');
+        try {
+          // Clear both stores first so there's no conflict, then write to the one the user picked.
+          localStorage.removeItem(storageKey);
+          sessionStorage.removeItem(storageKey);
+          if (stayLoggedIn) {
+            localStorage.setItem(storageKey, JSON.stringify(sessionObj));
+            console.log('[auth] session written to localStorage (persistent)');
+          } else {
+            sessionStorage.setItem(storageKey, JSON.stringify(sessionObj));
+            console.log('[auth] session written to sessionStorage (clears on browser close)');
+          }
+        } catch (e) { console.warn('[auth] direct storage write failed', e); }
         hideModal('loginModal');
         $('loginPassword').value = '';
         // Immediately reflect logged-in state in the UI (synthetic profile fallback until DB fetch completes).
@@ -1407,6 +1433,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.93', '"Stay logged in" now actually works. Login with the box checked writes the session to localStorage (persists across browser restarts). Unchecked writes to sessionStorage (auto-cleared when the browser/tab closes) — we mirror it into localStorage temporarily so Supabase can read it, then purge that mirror on unload. The old beforeunload-based cleanup wasn\'t reliable; this approach lets the browser itself enforce the persistence boundary.'],
   ['v2.92', 'Login now fully bypasses Supabase client\'s hanging storage layer — after the direct fetch succeeds, we write the session JSON to localStorage ourselves (key `sb-<ref>-auth-token`) and update the UI via applyAuthState directly. On next page load, the Supabase client reads the session from localStorage as if it came from its own setSession. Fixes: "logged in server-side but UI goes back to home as Guest".'],
   ['v2.91', 'Login rewrite: the Supabase client\'s signInWithPassword was completing the network request (200 OK) but hanging on the post-response localStorage write due to stale auth-token junk. Now we (a) clear all sb-*-auth-token keys before login, (b) hit /auth/v1/token directly via fetch, and (c) hand the resulting tokens to client.auth.setSession — so the session is populated without relying on the hanging code path. Fixes "login does nothing" that appeared only in non-incognito windows.'],
   ['v2.90', 'Updated version-tag date to 4.20.26. Added a "Stay logged in" checkbox (checked by default) to the login modal — when unchecked, the Supabase auth-token is purged from localStorage on tab close so the next visit starts logged-out. Also added a 15-second timeout to signInWithPassword so we at least get an error back instead of the UI hanging forever when the call stalls.'],
