@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.04</span>
+  <span style="font-weight:bold;color:#eee">v3.06</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.21.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1495,6 +1495,8 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.06', 'Hardened startMultiplayer state reset: also clears sandboxActive, spectating, survivorMode, and forces the home overlay visible. The update-loop gate that runs updatePlayer is `(roundActive || sandboxActive || _chestPodium || _chestInProgress)` — any of those being stale would keep the camera moving from mouse input even after Home was clicked. That explains why the friend\'s POV was being controlled by mouse after joining MP post-SP-death.'],
+  ['v3.05', 'Fix for "played SP → clicked Home → joined MP → broken hybrid state": startMultiplayer now clears all SP round state (enemies/bullets/boosters/abilities/pointer lock/paused) at the top, and disables the main Start Round button during the Playroom connect so users can\'t accidentally start a local SP round mid-join. Button is re-enabled once mpRole is set (connect succeeded) or the connect errors out.'],
   ['v3.04', 'Scoreboard now shows a 🎮 icon next to any player using a controller. Each client broadcasts a `usingGamepad` Playroom state flag on gamepadconnected/disconnected (and when joining MP if a pad is already connected). Local player reads from gamepadCfg.connectedId; remote players read from their Playroom state — so host and clients all see the same icons.'],
   ['v3.03', 'Two fixes: (1) startRound now applies the map\'s spawn point every round (not just on map changes / round 1 / MP) — SP+MP players were keeping their end-of-round position across same-map rounds. (2) Gamepad look tuned: base sensitivity 2.4 → 4.2 rad/sec, aim-assist slowdown softened 0.4 → 0.75 (was too snappy on target acquisition), and added an exponential response curve (power 1.9) so small stick inputs are precise while full deflection is fast.'],
   ['v3.02', 'Phase 1 gamepad support. Xbox-style layout: LS move, RS look, LT ADS, RT fire, A jump, B crouch (hold), X reload, Y interact (chest), LB/RB weapon cycle, LS-click sprint. Aim assist: when an enemy is within ~10° of the crosshair, look sensitivity scales to 40% for finer tracking. Movement state merged with keyboard (gamepad + keyboard both work; no clobbering). Gamepad auto-detected on connect event. Menu nav still mouse-only for now (Phase 2 if anyone asks).'],
@@ -8590,6 +8592,33 @@ async function startMultiplayer(joinCode) {
     mpStatus('Playroom library failed to load (no internet?)', '#ff8080');
     return;
   }
+  // Reset any leftover state from a prior SP run so we don't enter MP mid-round with a stale
+  // roundActive=true / sandbox active / pointer-lock held.
+  roundActive = false;
+  sandboxActive = false;
+  spectating = false;
+  survivorMode = false;
+  gameOver = false;
+  paused = false;
+  const pm = document.getElementById('pauseMenu'); if (pm) pm.style.display = 'none';
+  document.exitPointerLock?.();
+  // Force the home overlay visible. If we're entering MP from a lingering shop screen / game-over
+  // state, the round-active overlay-hidden flag may still be set and mouse clicks on the canvas
+  // would grab pointer lock again.
+  try { overlay.classList.remove('hidden'); overlay.setAttribute('data-mode', 'home'); } catch {}
+  for (const e of enemies) scene.remove(e); enemies.length = 0;
+  for (const b of enemyBullets) scene.remove(b.mesh); enemyBullets.length = 0;
+  for (const f of muzzleFlashes) scene.remove(f.mesh); muzzleFlashes.length = 0;
+  for (const b of ammoBoxes) scene.remove(b.mesh); ammoBoxes.length = 0;
+  clearBoosters();
+  for (const r of rockets) scene.remove(r.mesh); rockets.length = 0;
+  for (const x of explosions) scene.remove(x.mesh); explosions.length = 0;
+  resetAbilities(); clearChestPodium();
+  bossSpawned = false; stickKingSpawned = false;
+  mouseDown = false;
+  startBtn.disabled = true;
+  startBtn.style.pointerEvents = 'none';
+  startBtn.style.opacity = 0.6;
   document.getElementById('mpStartBtn').disabled = true;
   document.getElementById('mpJoinBtn').disabled = true;
   mpStatus(joinCode ? `Joining lobby ${joinCode}…` : 'Creating lobby…', '#ffd166');
@@ -8601,6 +8630,10 @@ async function startMultiplayer(joinCode) {
     const opts = { skipLobby: true, maxPlayersPerRoom: 4, roomCode: codeForUrl };
     await Playroom.insertCoin(opts);
     mpRole = Playroom.isHost() ? 'host' : 'client';
+    // Connect succeeded — re-enable the main Start Round button (it'll now act as the ready-up toggle in MP).
+    startBtn.disabled = false;
+    startBtn.style.pointerEvents = 'auto';
+    startBtn.style.opacity = 1;
     // Push current gamepad state now that we have a Playroom player — covers the case where the
     // pad was already connected before joining MP (gamepadconnected won't fire again).
     try { if (gamepadCfg.connectedId) _gpBroadcastState(true); } catch {}
@@ -8842,6 +8875,10 @@ async function startMultiplayer(joinCode) {
     console.error('[mp] insertCoin failed', e);
     mpStatus('Multiplayer failed to start: ' + (e && e.message || e), '#ff8080');
     document.getElementById('mpStartBtn').disabled = false;
+    document.getElementById('mpJoinBtn').disabled = false;
+    startBtn.disabled = false;
+    startBtn.style.pointerEvents = 'auto';
+    startBtn.style.opacity = 1;
   }
 }
 
