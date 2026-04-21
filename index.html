@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.95</span>
+  <span style="font-weight:bold;color:#eee">v2.96</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.20.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -907,22 +907,30 @@
   const hideModal = (id) => { const el = $(id); if (el) el.style.display = 'none'; };
   const setStatus = (msg, color) => { const el = $('acctStatus'); if (el) { el.textContent = msg || ''; el.style.color = color || '#ddd'; } };
 
-  async function fetchProfile(userId) {
-    // Retry on Supabase's cross-tab lock contention — the message looks like
-    // 'Lock "lock:sb-…-auth-token" was released because another request stole it'.
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const { data, error } = await client.from('profiles').select('*').eq('id', userId).maybeSingle();
-      if (!error) return data;
-      const msg = (error && error.message) || '';
-      if (/Lock .* was (released|acquired)/.test(msg) || /stole it/.test(msg)) {
-        await new Promise(r => setTimeout(r, 250 * (attempt + 1)));
-        continue;
+  // Direct REST helper — bypasses the Supabase client's hanging storage layer.
+  async function restQuery(path) {
+    const url = `${SUPABASE_URL}/rest/v1/${path}`;
+    const headers = { 'apikey': SUPABASE_KEY, 'Accept': 'application/json' };
+    // Include auth token if we have a session so RLS policies using auth.uid() work.
+    try {
+      const stored = _readStoredSession();
+      if (stored) {
+        const s = JSON.parse(stored.raw);
+        if (s.access_token) headers['Authorization'] = `Bearer ${s.access_token}`;
       }
-      console.warn('[auth] fetchProfile error', error);
+    } catch {}
+    const r = await fetch(url, { headers });
+    if (!r.ok) { throw new Error(`REST ${r.status}: ${await r.text()}`); }
+    return r.json();
+  }
+  async function fetchProfile(userId) {
+    try {
+      const rows = await restQuery(`profiles?id=eq.${encodeURIComponent(userId)}&select=*&limit=1`);
+      return (rows && rows[0]) || null;
+    } catch (e) {
+      console.warn('[auth] fetchProfile error', e);
       return null;
     }
-    console.warn('[auth] fetchProfile gave up after retries');
-    return null;
   }
 
   const _projectRef = SUPABASE_URL.replace(/^https?:\/\//, '').split('.')[0];
@@ -1251,15 +1259,18 @@
       const col = _lbStat === 'kills' ? `best_kills_${_lbMode}` : `best_round_${_lbMode}`;
       const list = $('lbList');
       list.innerHTML = '<div style="padding:14px;opacity:0.6">Loading…</div>';
-      const { data, error } = await client.from('profiles').select(`username, ${col}`).order(col, { ascending: false }).limit(50);
-      if (error) { list.innerHTML = `<div style="padding:14px;color:#ff8080">Error: ${error.message}</div>`; return; }
-      const rows = (data || []).filter(r => (r[col] || 0) > 0);
-      if (!rows.length) { list.innerHTML = '<div style="padding:14px;opacity:0.6">No scores yet. Be the first!</div>'; return; }
-      list.innerHTML = rows.map((row, i) => {
-        const val = row[col] || 0;
-        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #222"><span style="color:#ddd">${medal} ${row.username.replace(/</g, '&lt;')}</span><span style="color:#ffcc33;font-weight:bold">${val}</span></div>`;
-      }).join('');
+      try {
+        const data = await restQuery(`profiles?select=username,${col}&order=${col}.desc&limit=50`);
+        const rows = (data || []).filter(r => (r[col] || 0) > 0);
+        if (!rows.length) { list.innerHTML = '<div style="padding:14px;opacity:0.6">No scores yet. Be the first!</div>'; return; }
+        list.innerHTML = rows.map((row, i) => {
+          const val = row[col] || 0;
+          const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #222"><span style="color:#ddd">${medal} ${row.username.replace(/</g, '&lt;')}</span><span style="color:#ffcc33;font-weight:bold">${val}</span></div>`;
+        }).join('');
+      } catch (e) {
+        list.innerHTML = `<div style="padding:14px;color:#ff8080">Error: ${(e && e.message) || e}</div>`;
+      }
     }
     function updateTabStyles() {
       document.querySelectorAll('.lbTab').forEach(b => {
@@ -1382,11 +1393,26 @@
     if ((kills || 0) > (profile[killsCol] || 0)) updates[killsCol] = kills;
     if ((round || 0) > (profile[roundCol] || 0)) updates[roundCol] = round;
     if (!Object.keys(updates).length) return;
-    const { error } = await client.from('profiles').update(updates).eq('id', user.id);
-    if (error) { console.warn('[auth] submit stats error', error); return; }
-    Object.assign(profile, updates);
-    console.log('[auth] new personal best!', updates);
-    setStatus('New personal best saved! 🏆', '#ffcc33');
+    // Direct PATCH to sidestep the hanging Supabase client.
+    try {
+      const stored = _readStoredSession();
+      if (!stored) return;
+      const sess = JSON.parse(stored.raw);
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${sess.access_token}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify(updates),
+      });
+      if (!r.ok) { console.warn('[auth] submit stats failed', r.status, await r.text()); return; }
+      Object.assign(profile, updates);
+      console.log('[auth] new personal best!', updates);
+      setStatus('New personal best saved! 🏆', '#ffcc33');
+    } catch (e) { console.warn('[auth] submit stats error', e); }
   };
 
   if (document.readyState === 'loading') {
@@ -1461,6 +1487,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.96', 'Leaderboard + fetchProfile + submitRunStats now use direct REST fetches (with Bearer token from stored session) instead of Supabase client.from() — the client.from() code path was hanging forever too, which is why the leaderboard was stuck on "Loading…". Added a restQuery() helper that all reads go through. Writes use direct PATCH with Prefer: return=minimal.'],
   ['v2.95', 'Full bypass of Supabase client\'s hanging storage layer: refreshAuth now reads sb-<ref>-auth-token directly from sessionStorage/localStorage, checks expiry, and refreshes expired JWTs via direct fetch to /auth/v1/token?grant_type=refresh_token. Fixes "closed Chrome + reopened = not logged in" — the client\'s getSession() was hanging on page load too, the same way signInWithPassword was. Login/logout rewired through new _readStoredSession / _writeStoredSession / _clearStoredSession helpers so there\'s one consistent place where persistence policy lives.'],
   ['v2.94', 'Fixed a ReferenceError from v2.93 where the beforeunload handler referenced _sessSession before its declaration — moved the sessionStorage pickup logic up so the const is initialized first. Also moved the ⚙ settings gear from absolute top:14px (overlapped by the account panel) to fixed top:210px so it always sits below the panel.'],
   ['v2.93', '"Stay logged in" now actually works. Login with the box checked writes the session to localStorage (persists across browser restarts). Unchecked writes to sessionStorage (auto-cleared when the browser/tab closes) — we mirror it into localStorage temporarily so Supabase can read it, then purge that mirror on unload. The old beforeunload-based cleanup wasn\'t reliable; this approach lets the browser itself enforce the persistence boundary.'],
