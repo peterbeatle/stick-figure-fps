@@ -511,7 +511,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.17</span>
+  <span style="font-weight:bold;color:#eee">v3.18</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.21.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1524,6 +1524,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.18', 'Gun level stars are now color-differentiated: current-level stars are gold with a glow (as before), remaining-slot stars are dim gray #444 (no glow). Previously both filled and empty glyphs were in the same yellow span, making the distinction hard to read at a glance. Applies everywhere buildShop renders — home, between rounds, and restart screens.'],
   ['v3.17', 'Home (🏠) button is now visible on the home screen too (was hidden by a CSS rule that only made sense when there was also a Start Round button; now the right-side icon stack ⚙ → 🏠 → Discord → ☕ is consistent across all modes).'],
   ['v3.16', 'Added Discord (purple, inline SVG logo) and Buy Me a Coffee (yellow, ☕) icon buttons to the right-side stack on the home screen, under the settings gear + home icons. Open in new tabs.'],
   ['v3.15', 'Discoverability pass: added title, description, keywords, theme-color, canonical, author, viewport meta tags + full Open Graph set (og:title/description/url/image/type/site_name) + Twitter summary_large_image card. Pasting stickfigurefps.com into Discord/iMessage/Twitter/Slack will now show a proper preview card. OG image points to /og-image.png — user to upload a 1200x630 gameplay screenshot with that filename to the repo root.'],
@@ -6726,14 +6727,16 @@ function buildShop() {
                  : canAfford  ? `Buy $${g.cost}`
                  :              `$${g.cost} (need more)`;
     const statusStyle = canBuy ? 'color:#4caf50' : '';
-    // Gold stars for levels 2-4
-    const lvlPips = '★'.repeat(lvl) + '☆'.repeat(GUN_MAX_LEVEL - lvl);
+    // Filled gold stars for the current level + dim outline stars for remaining slots.
+    const filledStars = '★'.repeat(lvl);
+    const emptyStars = '★'.repeat(GUN_MAX_LEVEL - lvl); // use the same glyph in both — color differentiates them
+    const lvlPips = `<span style="color:#ffcc33;text-shadow:0 0 8px rgba(255,200,0,0.4)">${filledStars}</span><span style="color:#444;text-shadow:none">${emptyStars}</span>`;
     const upgradeBtn = isOwned
       ? (uCost === null
           ? `<div style="margin-top:4px;font-size:11px;color:#ffcc33"><b>MAX LEVEL</b></div>`
           : `<button type="button" class="gunUpgrade" style="margin-top:4px;background:${canUpgrade?'#4caf50':'#555'};color:#fff;border:0;border-radius:3px;padding:3px 8px;font-family:monospace;font-size:11px;cursor:${canUpgrade?'pointer':'not-allowed'};width:100%">Upgrade → Lvl ${lvl+1} ($${uCost})</button>`)
       : '';
-    el.innerHTML = `<h3>${g.name} <span style="font-size:18px;color:#ffcc33;letter-spacing:2px;text-shadow:0 0 8px rgba(255,200,0,0.4)">${lvlPips}</span></h3>
+    el.innerHTML = `<h3>${g.name} <span style="font-size:18px;letter-spacing:2px">${lvlPips}</span></h3>
       <small>DMG ${dmgNow} • RPS ${rpsNow} • Mag ${magNow}</small>
       <small style="${statusStyle}"><b>${status}</b></small>
       ${upgradeBtn}`;
