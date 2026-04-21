@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.02</span>
+  <span style="font-weight:bold;color:#eee">v3.03</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.20.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1495,6 +1495,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.03', 'Two fixes: (1) startRound now applies the map\'s spawn point every round (not just on map changes / round 1 / MP) — SP+MP players were keeping their end-of-round position across same-map rounds. (2) Gamepad look tuned: base sensitivity 2.4 → 4.2 rad/sec, aim-assist slowdown softened 0.4 → 0.75 (was too snappy on target acquisition), and added an exponential response curve (power 1.9) so small stick inputs are precise while full deflection is fast.'],
   ['v3.02', 'Phase 1 gamepad support. Xbox-style layout: LS move, RS look, LT ADS, RT fire, A jump, B crouch (hold), X reload, Y interact (chest), LB/RB weapon cycle, LS-click sprint. Aim assist: when an enemy is within ~10° of the crosshair, look sensitivity scales to 40% for finer tracking. Movement state merged with keyboard (gamepad + keyboard both work; no clobbering). Gamepad auto-detected on connect event. Menu nav still mouse-only for now (Phase 2 if anyone asks).'],
   ['v3.01', 'SP round 1 spawn fix: arena is the default currentMap at page load, so round 1 started with mapChanged=false and the spawn point was skipped — player stayed at (0,1.7,0). Now startRound also applies the spawn when round===1.'],
   ['v3.00', 'Cheats unlock is now per-session: the passcode must be re-entered every time the site is opened (moved from localStorage to sessionStorage). Existing persisted unlock is migrated away on first load so users start fresh.'],
@@ -6278,11 +6279,12 @@ let aimbotLockedEnemy = null;
 // Gamepad support (Phase 1) — Xbox-style layout assumed. Works via navigator.getGamepads().
 // =========================================================================
 const gamepadCfg = {
-  sensitivity: 2.4,           // rad/sec at full right-stick deflection
-  deadzone: 0.15,
+  sensitivity: 4.2,           // rad/sec at full right-stick deflection
+  deadzone: 0.12,
+  curveExp: 1.9,              // exponential curve — higher = more precise at small inputs, faster at full deflection
   invertY: false,
   aimAssist: true,
-  aimAssistSlowdown: 0.4,     // while an enemy is within ~10° of crosshair, scale sensitivity
+  aimAssistSlowdown: 0.75,    // while an enemy is within ~10° of crosshair, slow to 75% (was 40% — too snappy)
   _prev: [],
   _prevLT: false,
   _prevRT: false,
@@ -6356,13 +6358,17 @@ function updateGamepad(dt) {
     right: lx >  0.1,
   };
 
-  // Right stick → look. ADS halves sensitivity; aim assist scales further when crosshair is near an enemy.
+  // Right stick → look. Exponential curve for precision at small inputs + speed at full deflection.
+  // ADS halves sensitivity; aim assist scales further when crosshair is near an enemy.
   const rx = _gpDeadzone(gp.axes[2] || 0, dz);
   const ry = _gpDeadzone(gp.axes[3] || 0, dz);
   if (rx || ry) {
+    const exp = gamepadCfg.curveExp;
+    const curveX = Math.sign(rx) * Math.pow(Math.abs(rx), exp);
+    const curveY = Math.sign(ry) * Math.pow(Math.abs(ry), exp);
     const s = gamepadCfg.sensitivity * (adsActive ? 0.5 : 1) * _gpAimAssistMul();
-    player.yaw   -= rx * s * dt;
-    player.pitch -= (gamepadCfg.invertY ? -ry : ry) * s * dt;
+    player.yaw   -= curveX * s * dt;
+    player.pitch -= (gamepadCfg.invertY ? -curveY : curveY) * s * dt;
     player.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, player.pitch));
   }
 
@@ -6804,15 +6810,9 @@ function startRound() {
     currentMap = want;
     buildMap(currentMap);
   }
-  // Apply a spawn point when:
-  //   • the map just changed (SP + MP), OR
-  //   • this is round 1 of a fresh game (SP starts on arena, currentMap was already 'arena' so
-  //     mapChanged=false — without this, the player stays at the initial (0,1.7,0)), OR
-  //   • we're in MP (mpClientSync updates currentMap before startRound runs, so mapChanged is
-  //     always false on clients; every player still needs their per-slot spawn each round).
-  if (mapChanged || round === 1 || mpActive()) {
-    applySpawnPoint(currentMap);
-  }
+  // Always respawn at the map's designated spawn point at the start of every round.
+  // SP uses slot 0 (P1). MP uses each player's lobby index (P1–P4).
+  applySpawnPoint(currentMap);
   // HP resets every round + exit spectate + respawn local camera at spawn
   player.hp = 100;
   player.alive = true;
