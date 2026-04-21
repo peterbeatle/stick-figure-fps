@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.07</span>
+  <span style="font-weight:bold;color:#eee">v3.08</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.21.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1495,6 +1495,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.08', 'MP You-Lost retry + Leave Lobby full reset. The "Restart Game" button on MP game-over is now "Ready Up to Retry" (orange). All players ready up, host broadcasts `mpRestartGame` RPC, everyone mirrors a local restartGame() — no more each-player-restarting-independently desync. Also: updateReadyUI now force-resets startBtn.dataset.mode to "start" each frame so a lingering "restart" mode can never hijack the click handler. Leave Lobby now calls goHome() after tearing down the MP state, so clicking Leave returns to a fully fresh home screen instead of a half-reset one.'],
   ['v3.07', 'Two fixes. (1) Ready-up click after SP death spawned a local SP round: startMultiplayer now resets startBtn.dataset.mode to "start" — the click handler checks .dataset.mode FIRST and was calling restartGame() despite the label reading "Ready Up". (2) Home button missing on the SP You-Lost shop: endGame\'s openShop callback now sets overlay data-mode to "roundend" so the CSS rule that hides #shopHomeBtn on the home screen no longer applies — the 🏠 button appears under the ⚙ gear as expected.'],
   ['v3.06', 'Hardened startMultiplayer state reset: also clears sandboxActive, spectating, survivorMode, and forces the home overlay visible. The update-loop gate that runs updatePlayer is `(roundActive || sandboxActive || _chestPodium || _chestInProgress)` — any of those being stale would keep the camera moving from mouse input even after Home was clicked. That explains why the friend\'s POV was being controlled by mouse after joining MP post-SP-death.'],
   ['v3.05', 'Fix for "played SP → clicked Home → joined MP → broken hybrid state": startMultiplayer now clears all SP round state (enemies/bullets/boosters/abilities/pointer lock/paused) at the top, and disables the main Start Round button during the Playroom connect so users can\'t accidentally start a local SP round mid-join. Button is re-enabled once mpRole is set (connect succeeded) or the connect errors out.'],
@@ -7061,6 +7062,7 @@ function updateReadyUI() {
   const allReady = Array.from(mpAllPlayers.values()).every(p => p.getState('ready') === true);
   const total = mpAllPlayers.size;
   const alone = total < 2;
+  const isRetry = gameOver; // MP You-Lost — ready-up acts as a retry
   let label;
   if (alone) {
     label = 'Waiting for players…';
@@ -7072,24 +7074,34 @@ function updateReadyUI() {
     startBtn.style.background = '#2864c2';
     startBtn.style.opacity = 1;
   } else {
-    label = mpIsHost() ? `Ready Up (Host)` : `Ready Up`;
-    startBtn.style.background = '#4caf50';
+    if (isRetry) label = 'Ready Up to Retry';
+    else label = mpIsHost() ? 'Ready Up (Host)' : 'Ready Up';
+    startBtn.style.background = isRetry ? '#c8552e' : '#4caf50';
     startBtn.style.opacity = 1;
   }
   startBtn.textContent = label;
-  // Host starts the round only once everyone is ready AND there are at least 2 players
-  if (mpIsHost() && !roundActive && !gameOver) {
+  // CRITICAL: force 'start' mode so the click handler's dataset.mode==='restart' short-circuit doesn't
+  // route to the local SP restartGame path when we're in the MP retry ready-up flow.
+  startBtn.dataset.mode = 'start';
+  // Host starts / retries the round only once everyone is ready AND there are at least 2 players
+  if (mpIsHost() && !roundActive) {
     const readyStates = Array.from(mpAllPlayers.values()).map(p => {
       try { return { id: p.id, ready: p.getState('ready') }; } catch { return { id: p.id, ready: 'err' }; }
     });
     if (!updateReadyUI._lastLog || performance.now() - updateReadyUI._lastLog > 1500) {
       updateReadyUI._lastLog = performance.now();
-      console.log('[mp] ready check — allReady=' + allReady + ' alone=' + alone + ' total=' + total, readyStates);
+      console.log('[mp] ready check — allReady=' + allReady + ' alone=' + alone + ' total=' + total + ' retry=' + isRetry, readyStates);
     }
     if (allReady && !alone) {
-      console.log('[mp] ALL READY — starting round');
       me.setState('ready', false, true);
-      startRound();
+      if (isRetry) {
+        console.log('[mp] ALL READY — restarting after loss');
+        try { Playroom.RPC.call('mpRestartGame', {}, Playroom.RPC.Mode.ALL); } catch {}
+        restartGame();
+      } else {
+        console.log('[mp] ALL READY — starting round');
+        startRound();
+      }
     }
   }
 }
@@ -8739,6 +8751,11 @@ async function startMultiplayer(joinCode) {
           try { makeChestPodium(); } catch (e) { console.warn('[mp] chestSpawn failed', e); }
         }
       });
+      Playroom.RPC.register('mpRestartGame', () => {
+        // Host ready-up-to-retry triggered a restart. Mirror locally on clients + host.
+        console.log('[mp] mpRestartGame received — restarting locally');
+        try { restartGame(); } catch (e) { console.warn('[mp] restartGame after RPC failed', e); }
+      });
       Playroom.RPC.register('chestAllReady', (data) => {
         hideChestWaitBanner();
         try { Playroom.myPlayer().setState('chestReady', 0, true); } catch {}
@@ -8915,13 +8932,9 @@ function leaveLobby() {
   document.getElementById('mpJoinRow').style.display = 'none';
   document.getElementById('mpStartBtn').disabled = false;
   document.getElementById('mpPanel').classList.remove('expanded');
-  // Reset the main start button from its MP "Waiting for players…" / "Ready Up" state
-  // back to the single-player default now that we're out of the lobby.
-  startBtn.textContent = `Start Round ${round || 1}`;
-  startBtn.dataset.mode = 'start';
-  startBtn.style.background = '';
-  startBtn.style.opacity = '';
-  mpStatus('Left lobby. Refresh the page to open a new one.');
+  mpStatus('Left lobby.');
+  // Full reset to a fresh home screen (clears any lingering SP/MP state, resets guns/money/round).
+  try { goHome(); } catch (e) { console.warn('[mp] goHome after leaveLobby failed', e); }
 }
 
 // Update the remote player's visual mesh using the pose state we read from Playroom each frame
