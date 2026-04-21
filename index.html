@@ -247,7 +247,7 @@
     transform: scale(0); opacity: 0;
   }
   /* Mode toggles: home vs round-end */
-  #overlay[data-mode="home"] #shopHomeBtn { display: none !important; }
+  /* Home button now shown on the home screen too, so the right-side icon stack (⚙ 🏠 Discord ☕) is consistent across modes. */
   /* mpPanel visible on both home + roundend so the lobby is always in view between rounds */
   /* Cheats stay visible on the round-end shop screen too */
   /* Boss HUD layout: multiple bars in a row */
@@ -511,7 +511,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.16</span>
+  <span style="font-weight:bold;color:#eee">v3.17</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.21.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1524,6 +1524,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.17', 'Home (🏠) button is now visible on the home screen too (was hidden by a CSS rule that only made sense when there was also a Start Round button; now the right-side icon stack ⚙ → 🏠 → Discord → ☕ is consistent across all modes).'],
   ['v3.16', 'Added Discord (purple, inline SVG logo) and Buy Me a Coffee (yellow, ☕) icon buttons to the right-side stack on the home screen, under the settings gear + home icons. Open in new tabs.'],
   ['v3.15', 'Discoverability pass: added title, description, keywords, theme-color, canonical, author, viewport meta tags + full Open Graph set (og:title/description/url/image/type/site_name) + Twitter summary_large_image card. Pasting stickfigurefps.com into Discord/iMessage/Twitter/Slack will now show a proper preview card. OG image points to /og-image.png — user to upload a 1200x630 gameplay screenshot with that filename to the repo root.'],
   ['v3.14', 'Final sandbox/tutorial alignment — measured Pistol tile top at 428.8px via devtools, set sandboxLaunch to top:429px for a pixel-accurate match.'],
