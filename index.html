@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v2.97</span>
+  <span style="font-weight:bold;color:#eee">v2.98</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.20.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1385,6 +1385,14 @@
   // Run stat submission — called from game code at end of a run
   window.gameAuth.submitRunStats = async function(kills, round, isMP, isSandbox) {
     if (isSandbox) return;
+    // Disqualify cheat runs: either a cheat was toggled on during the run, or one is still on now.
+    try {
+      if (window.cheatsUsedThisRun) { console.log('[auth] run had cheats active — not submitting'); return; }
+      if (typeof window.cheats === 'object' && window.cheats && Object.values(window.cheats).some(v => v)) {
+        console.log('[auth] cheats currently on — not submitting');
+        return;
+      }
+    } catch {}
     const { user, profile } = window.gameAuth;
     if (!user || !profile) return; // guests don't count
     const killsCol = isMP ? 'best_kills_mp' : 'best_kills_sp';
@@ -1487,6 +1495,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v2.98', 'Leaderboard submissions now skip any run that had cheats active. Sticky `cheatsUsedThisRun` flag flips true whenever any cheat is toggled on (in either the settings gear or pause-menu panels) or if any cheat is on at startRound; reset on restartGame / goHome. submitRunStats also double-checks the current cheats object state at submission time. Sandbox mode was already excluded.'],
   ['v2.97', 'Leaderboard trimmed to top 10 (from 50). Gun-shop home button moved to fixed top:270px right:28px so it sits below the settings gear instead of being covered by the account panel. Added per-map, per-player-slot spawn points (SPAWN_POINTS for arena/hills/city/neon × P1–P4) with facing directions baked in as yaw values. SP uses slot 0 (P1); MP uses each player\'s lobby index. Centralized spawn logic behind an applySpawnPoint() helper that the 5 existing callers now share.'],
   ['v2.96', 'Leaderboard + fetchProfile + submitRunStats now use direct REST fetches (with Bearer token from stored session) instead of Supabase client.from() — the client.from() code path was hanging forever too, which is why the leaderboard was stuck on "Loading…". Added a restQuery() helper that all reads go through. Writes use direct PATCH with Prefer: return=minimal.'],
   ['v2.95', 'Full bypass of Supabase client\'s hanging storage layer: refreshAuth now reads sb-<ref>-auth-token directly from sessionStorage/localStorage, checks expiry, and refreshes expired JWTs via direct fetch to /auth/v1/token?grant_type=refresh_token. Fixes "closed Chrome + reopened = not logged in" — the client\'s getSession() was hanging on page load too, the same way signInWithPassword was. Login/logout rewired through new _readStoredSession / _writeStoredSession / _clearStoredSession helpers so there\'s one consistent place where persistence policy lives.'],
@@ -3447,6 +3456,12 @@ flash.position.set(0.25, -0.15, -0.8);
 const cheats = { money: false, mag: false, rate: false, invuln: false, skip: false, heavy: false, aimbot: false, wand: false };
 const CHEAT_CODE = '1211999';
 let cheatsUnlocked = localStorage.getItem('cheatsUnlocked') === 'true';
+// Flips true the moment any cheat is active during a run; reset in startRound / restartGame.
+// Used to disqualify the run from leaderboard submission.
+let cheatsUsedThisRun = false;
+// Bridge to the auth script (which runs in a separate <script> tag and can't see module scope).
+window.cheats = cheats;
+Object.defineProperty(window, 'cheatsUsedThisRun', { get: () => cheatsUsedThisRun, configurable: true });
 // Sniper aim-down-sights state
 let adsActive = false;
 const baseFov = 75;
@@ -6638,6 +6653,9 @@ function mapForRound(r) {
 
 function startRound() {
   resetStatsRound();
+  // Sticky flag: if any cheat is on at the start of a round, the whole run is disqualified
+  // from the leaderboard (even if they toggle cheats off before dying).
+  if (Object.values(cheats).some(v => v)) cheatsUsedThisRun = true;
   overlay.classList.add('hidden');
   roundActive = true;
   bossSpawned = false; stickKingSpawned = false;
@@ -6801,6 +6819,7 @@ function retryRound() {
 }
 
 function restartGame() {
+  cheatsUsedThisRun = false;
   // clear enemies and bullets
   for (const e of enemies) scene.remove(e);
   enemies.length = 0;
@@ -7309,6 +7328,7 @@ document.getElementById('homeBtn').addEventListener('click', () => {
   goHome();
 });
 function goHome() {
+  cheatsUsedThisRun = false;
   // If the host is leaving an active MP session, signal clients so they can display
   // a banner and follow us back to the home screen instead of getting stranded.
   try {
@@ -7445,6 +7465,7 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   const bind = (id, key) => {
     document.getElementById(id).addEventListener('change', e => {
       cheats[key] = e.target.checked;
+      if (e.target.checked) cheatsUsedThisRun = true;
       updateHUD();
       buildShop();
     });
@@ -7461,6 +7482,7 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
     const homeMap = { money:'cheatMoney', mag:'cheatMag', rate:'cheatRate', invuln:'cheatInvuln', skip:'cheatSkip', heavy:'cheatHeavy', aimbot:'cheatAimbot', wand:'cheatWand' };
     const anyOff = Object.keys(homeMap).some(k => !cheats[k]);
     const value = anyOff; // if any is off → turn all on; otherwise turn all off
+    if (value) cheatsUsedThisRun = true;
     for (const key of Object.keys(homeMap)) {
       cheats[key] = value;
       const cb = document.getElementById(homeMap[key]);
@@ -7539,6 +7561,7 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
     cb.addEventListener('change', e => {
       const key = cb.dataset.cheat;
       cheats[key] = e.target.checked;
+      if (e.target.checked) cheatsUsedThisRun = true;
       // Keep the home checkbox in sync so they don't drift
       const homeMap = { money:'cheatMoney', mag:'cheatMag', rate:'cheatRate', invuln:'cheatInvuln', skip:'cheatSkip', heavy:'cheatHeavy', aimbot:'cheatAimbot', wand:'cheatWand' };
       const homeId = homeMap[key];
@@ -8977,6 +9000,7 @@ function buildSandboxMenu() {
     cb.checked = !!cheats[key];
     cb.addEventListener('change', () => {
       cheats[key] = cb.checked;
+      if (cb.checked) cheatsUsedThisRun = true;
       if (key === 'wand') {
         if (cheats.wand) owned.wand = true; else delete owned.wand;
         if (!cheats.wand && currentGun === 'wand') equipGun('pistol');
