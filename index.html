@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.08</span>
+  <span style="font-weight:bold;color:#eee">v3.09</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.21.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1495,6 +1495,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.09', 'Host/Join Lobby after a leave no longer requires a manual refresh. Playroom doesn\'t support leave + rejoin in the same page, so we now stash the intent in sessionStorage ("autoMp" = "host" or "join:<code>") and auto-reload — a bootstrap check on page load reads the flag and calls startMultiplayer() with the right args. To the user it just looks like clicking Host/Join works instantly.'],
   ['v3.08', 'MP You-Lost retry + Leave Lobby full reset. The "Restart Game" button on MP game-over is now "Ready Up to Retry" (orange). All players ready up, host broadcasts `mpRestartGame` RPC, everyone mirrors a local restartGame() — no more each-player-restarting-independently desync. Also: updateReadyUI now force-resets startBtn.dataset.mode to "start" each frame so a lingering "restart" mode can never hijack the click handler. Leave Lobby now calls goHome() after tearing down the MP state, so clicking Leave returns to a fully fresh home screen instead of a half-reset one.'],
   ['v3.07', 'Two fixes. (1) Ready-up click after SP death spawned a local SP round: startMultiplayer now resets startBtn.dataset.mode to "start" — the click handler checks .dataset.mode FIRST and was calling restartGame() despite the label reading "Ready Up". (2) Home button missing on the SP You-Lost shop: endGame\'s openShop callback now sets overlay data-mode to "roundend" so the CSS rule that hides #shopHomeBtn on the home screen no longer applies — the 🏠 button appears under the ⚙ gear as expected.'],
   ['v3.06', 'Hardened startMultiplayer state reset: also clears sandboxActive, spectating, survivorMode, and forces the home overlay visible. The update-loop gate that runs updatePlayer is `(roundActive || sandboxActive || _chestPodium || _chestInProgress)` — any of those being stale would keep the camera moving from mouse input even after Home was clicked. That explains why the friend\'s POV was being controlled by mouse after joining MP post-SP-death.'],
@@ -7981,6 +7982,10 @@ const PEER_CONFIG = {
 let peer = null;
 let conn = null;
 let mpRole = 'none'; // 'host' or 'client' or 'none'
+// Tracks whether Playroom.insertCoin has been called in this page session. Playroom doesn't
+// support cleanly leaving + rejoining a new room in the same page, so after a leave we use
+// a sessionStorage flag + location.reload() to re-enter MP — feels seamless to the user.
+let _lobbyUsed = false;
 // Map of remote player id → { playroomPlayer, pose, mesh }. With 4-player lobbies you
 // may have up to 3 remotes at once. `remotePlayer` is kept as a compatibility pointer
 // to the first remote (used by spectate-camera logic).
@@ -8648,6 +8653,7 @@ async function startMultiplayer(joinCode) {
     // Passing `roomCode` forces Playroom to use OUR code instead of generating its own.
     const opts = { skipLobby: true, maxPlayersPerRoom: 4, roomCode: codeForUrl };
     await Playroom.insertCoin(opts);
+    _lobbyUsed = true;
     mpRole = Playroom.isHost() ? 'host' : 'client';
     // Connect succeeded — re-enable the main Start Round button (it'll now act as the ready-up toggle in MP).
     startBtn.disabled = false;
@@ -9040,7 +9046,14 @@ function updateRemotePlayer() {
   }
 }
 
-document.getElementById('mpStartBtn').addEventListener('click', () => startMultiplayer());
+document.getElementById('mpStartBtn').addEventListener('click', () => {
+  if (_lobbyUsed) {
+    try { sessionStorage.setItem('autoMp', 'host'); } catch {}
+    location.reload();
+    return;
+  }
+  startMultiplayer();
+});
 document.getElementById('mpJoinBtn').addEventListener('click', () => {
   document.getElementById('mpJoinRow').style.display = 'flex';
   const input = document.getElementById('mpJoinCode');
@@ -9055,8 +9068,28 @@ function submitJoinCode() {
   const code = raw.replace(/[^0-9]/g, '');
   if (code.length !== 4) { alert('Enter a 4-digit code'); return; }
   document.getElementById('mpJoinRow').style.display = 'none';
+  if (_lobbyUsed) {
+    try { sessionStorage.setItem('autoMp', 'join:' + code); } catch {}
+    location.reload();
+    return;
+  }
   startMultiplayer(code);
 }
+// On page load, resume MP if the previous page marked it (after a leave + click Host/Join).
+(function _maybeResumeMp() {
+  try {
+    const flag = sessionStorage.getItem('autoMp');
+    if (!flag) return;
+    sessionStorage.removeItem('autoMp');
+    if (flag === 'host') {
+      // Wait a tick so Playroom SDK + DOM are ready.
+      setTimeout(() => { startMultiplayer(); }, 100);
+    } else if (flag.startsWith('join:')) {
+      const code = flag.slice(5);
+      setTimeout(() => { startMultiplayer(code); }, 100);
+    }
+  } catch {}
+})();
 document.getElementById('mpJoinGo').addEventListener('click', submitJoinCode);
 document.getElementById('mpJoinCode').addEventListener('keydown', (e) => {
   if (e.code === 'Enter') submitJoinCode();
