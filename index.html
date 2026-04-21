@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.00</span>
+  <span style="font-weight:bold;color:#eee">v3.01</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.20.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1495,6 +1495,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.01', 'SP round 1 spawn fix: arena is the default currentMap at page load, so round 1 started with mapChanged=false and the spawn point was skipped — player stayed at (0,1.7,0). Now startRound also applies the spawn when round===1.'],
   ['v3.00', 'Cheats unlock is now per-session: the passcode must be re-entered every time the site is opened (moved from localStorage to sessionStorage). Existing persisted unlock is migrated away on first load so users start fresh.'],
   ['v2.99', 'MP fixes: (1) per-slot spawn points now apply on every round start in MP (not just map changes) — mpClientSync updates currentMap before startRound runs, which was making the spawn condition always false on clients, so P2/P3/P4 were stuck at the initial (0,1.7,0) position. (2) Client booster pickup now uses RPC.Mode.ALL (host filters) with a Y-distance check (prevents grabbing boosters on a different floor of city) and a 1.5s stale-claim timeout so walking away and back re-triggers. (3) Added diagnostic logging to updateReadyUI so the host\'s console shows each player\'s ready state once/sec while waiting, to debug the "round 9 never started" case next time it happens.'],
   ['v2.98', 'Leaderboard submissions now skip any run that had cheats active. Sticky `cheatsUsedThisRun` flag flips true whenever any cheat is toggled on (in either the settings gear or pause-menu panels) or if any cheat is on at startRound; reset on restartGame / goHome. submitRunStats also double-checks the current cheats object state at submission time. Sandbox mode was already excluded.'],
@@ -6685,10 +6686,13 @@ function startRound() {
     currentMap = want;
     buildMap(currentMap);
   }
-  // In MP, always respawn at the player's slot-specific point each round. mpClientSync updates
-  // currentMap before calling startRound, so `mapChanged` is always false on clients — without this
-  // override, remote players would never apply their per-slot spawn points.
-  if (mapChanged || mpActive()) {
+  // Apply a spawn point when:
+  //   • the map just changed (SP + MP), OR
+  //   • this is round 1 of a fresh game (SP starts on arena, currentMap was already 'arena' so
+  //     mapChanged=false — without this, the player stays at the initial (0,1.7,0)), OR
+  //   • we're in MP (mpClientSync updates currentMap before startRound runs, so mapChanged is
+  //     always false on clients; every player still needs their per-slot spawn each round).
+  if (mapChanged || round === 1 || mpActive()) {
     applySpawnPoint(currentMap);
   }
   // HP resets every round + exit spectate + respawn local camera at spawn
