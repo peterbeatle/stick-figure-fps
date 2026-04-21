@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.01</span>
+  <span style="font-weight:bold;color:#eee">v3.02</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.20.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1495,6 +1495,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.02', 'Phase 1 gamepad support. Xbox-style layout: LS move, RS look, LT ADS, RT fire, A jump, B crouch (hold), X reload, Y interact (chest), LB/RB weapon cycle, LS-click sprint. Aim assist: when an enemy is within ~10° of the crosshair, look sensitivity scales to 40% for finer tracking. Movement state merged with keyboard (gamepad + keyboard both work; no clobbering). Gamepad auto-detected on connect event. Menu nav still mouse-only for now (Phase 2 if anyone asks).'],
   ['v3.01', 'SP round 1 spawn fix: arena is the default currentMap at page load, so round 1 started with mapChanged=false and the spawn point was skipped — player stayed at (0,1.7,0). Now startRound also applies the spawn when round===1.'],
   ['v3.00', 'Cheats unlock is now per-session: the passcode must be re-entered every time the site is opened (moved from localStorage to sessionStorage). Existing persisted unlock is migrated away on first load so users start fresh.'],
   ['v2.99', 'MP fixes: (1) per-slot spawn points now apply on every round start in MP (not just map changes) — mpClientSync updates currentMap before startRound runs, which was making the spawn condition always false on clients, so P2/P3/P4 were stuck at the initial (0,1.7,0) position. (2) Client booster pickup now uses RPC.Mode.ALL (host filters) with a Y-distance check (prevents grabbing boosters on a different floor of city) and a 1.5s stale-claim timeout so walking away and back re-triggers. (3) Added diagnostic logging to updateReadyUI so the host\'s console shows each player\'s ready state once/sec while waiting, to debug the "round 9 never started" case next time it happens.'],
@@ -6273,6 +6274,122 @@ function updateScoreboard() {
 }
 
 let aimbotLockedEnemy = null;
+// =========================================================================
+// Gamepad support (Phase 1) — Xbox-style layout assumed. Works via navigator.getGamepads().
+// =========================================================================
+const gamepadCfg = {
+  sensitivity: 2.4,           // rad/sec at full right-stick deflection
+  deadzone: 0.15,
+  invertY: false,
+  aimAssist: true,
+  aimAssistSlowdown: 0.4,     // while an enemy is within ~10° of crosshair, scale sensitivity
+  _prev: [],
+  _prevLT: false,
+  _prevRT: false,
+  connectedId: null,
+};
+window.addEventListener('gamepadconnected', (e) => {
+  gamepadCfg.connectedId = e.gamepad.id;
+  console.log('[gamepad] connected:', e.gamepad.id, 'axes=' + e.gamepad.axes.length + ' btns=' + e.gamepad.buttons.length);
+});
+window.addEventListener('gamepaddisconnected', (e) => {
+  if (gamepadCfg.connectedId === e.gamepad.id) gamepadCfg.connectedId = null;
+  console.log('[gamepad] disconnected:', e.gamepad.id);
+});
+function _gpDeadzone(v, dz) {
+  if (Math.abs(v) < dz) return 0;
+  const s = v > 0 ? 1 : -1;
+  return s * (Math.abs(v) - dz) / (1 - dz);
+}
+function _gpBtnVal(b) { return typeof b === 'object' ? b.value : (b ? 1 : 0); }
+function _gpBtnPressed(b) { return typeof b === 'object' ? b.pressed : !!b; }
+function _gpAimAssistMul() {
+  if (!gamepadCfg.aimAssist) return 1;
+  try {
+    const targets = mpIsClient() ? Array.from(ghostEnemies.values()) : enemies;
+    if (!targets || !targets.length) return 1;
+    const camDir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    let bestDot = -Infinity;
+    for (const e of targets) {
+      if (!e || (e.userData && e.userData.dead)) continue;
+      const s = e.scale.x || 1;
+      const head = e.position.clone().add(new THREE.Vector3(0, 1.2 * s, 0));
+      const toE = head.sub(camera.position);
+      if (toE.lengthSq() > 60 * 60) continue;
+      toE.normalize();
+      const dot = toE.dot(camDir);
+      if (dot > bestDot) bestDot = dot;
+    }
+    // cos(10°) ≈ 0.9848 — if any enemy within 10° of the crosshair, slow down for fine aim.
+    if (bestDot > 0.9848) return gamepadCfg.aimAssistSlowdown;
+  } catch {}
+  return 1;
+}
+function _gpCycleWeapon(dir) {
+  try {
+    const ownedList = getSlotOrder().filter(k => owned[k]);
+    if (ownedList.length < 2) return;
+    const idx = ownedList.indexOf(currentGun);
+    const next = dir > 0
+      ? ownedList[(idx + 1) % ownedList.length]
+      : ownedList[(idx - 1 + ownedList.length) % ownedList.length];
+    equipGun(next);
+  } catch (e) { console.warn('[gamepad] weapon cycle failed', e); }
+}
+function updateGamepad(dt) {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let gp = null;
+  for (const p of pads) { if (p && p.connected) { gp = p; break; } }
+  if (!gp) return;
+  const btnPressed = gp.buttons.map(_gpBtnPressed);
+  const prev = gamepadCfg._prev;
+  const edge = (i) => btnPressed[i] && !prev[i];
+  const dz = gamepadCfg.deadzone;
+
+  // Left stick → movement. Written to gamepadCfg.move; updatePlayer ORs this with keyboard state.
+  const lx = _gpDeadzone(gp.axes[0] || 0, dz);
+  const ly = _gpDeadzone(gp.axes[1] || 0, dz);
+  gamepadCfg.move = {
+    fwd:   ly < -0.1,
+    back:  ly >  0.1,
+    left:  lx < -0.1,
+    right: lx >  0.1,
+  };
+
+  // Right stick → look. ADS halves sensitivity; aim assist scales further when crosshair is near an enemy.
+  const rx = _gpDeadzone(gp.axes[2] || 0, dz);
+  const ry = _gpDeadzone(gp.axes[3] || 0, dz);
+  if (rx || ry) {
+    const s = gamepadCfg.sensitivity * (adsActive ? 0.5 : 1) * _gpAimAssistMul();
+    player.yaw   -= rx * s * dt;
+    player.pitch -= (gamepadCfg.invertY ? -ry : ry) * s * dt;
+    player.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, player.pitch));
+  }
+
+  // Triggers: LT (6) → ADS, RT (7) → fire.
+  const lt = _gpBtnVal(gp.buttons[6] || 0);
+  const rt = _gpBtnVal(gp.buttons[7] || 0);
+  const ltDown = lt > 0.5, rtDown = rt > 0.5;
+  if (ltDown !== gamepadCfg._prevLT) { try { setADS(ltDown); } catch {} gamepadCfg._prevLT = ltDown; }
+  if (rtDown !== gamepadCfg._prevRT) { mouseDown = rtDown; gamepadCfg._prevRT = rtDown; }
+  else if (rtDown) { mouseDown = true; } // keep firing while held
+
+  // Face buttons (Xbox): A=0 jump, B=1 crouch (hold), X=2 reload, Y=3 interact.
+  if (edge(0)) tryJump();
+  gamepadCfg.crouch = !!btnPressed[1];
+  if (edge(2)) { try { tryReload(); } catch {} }
+  if (edge(3)) { try { tryChestInteract(); } catch {} }
+
+  // Bumpers: weapon cycle.
+  if (edge(4)) _gpCycleWeapon(-1);
+  if (edge(5)) _gpCycleWeapon(1);
+
+  // Left stick click (10) → sprint (hold).
+  gamepadCfg.sprint = !!btnPressed[10];
+
+  gamepadCfg._prev = btnPressed;
+}
+
 function updatePlayer(dt) {
   if (!player.alive || spectating) return;
   if (_awaitingAbilityContinue) return; // freeze until Enter is pressed
@@ -6360,15 +6477,16 @@ function updatePlayer(dt) {
 
   const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
   const right   = new THREE.Vector3( Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+  const gpMv = gamepadCfg.move || {};
   let move = new THREE.Vector3();
-  if (keys[keyBind.forward]) move.add(forward);
-  if (keys[keyBind.back])    move.sub(forward);
-  if (keys[keyBind.right])   move.add(right);
-  if (keys[keyBind.left])    move.sub(right);
+  if (keys[keyBind.forward] || gpMv.fwd)   move.add(forward);
+  if (keys[keyBind.back]    || gpMv.back)  move.sub(forward);
+  if (keys[keyBind.right]   || gpMv.right) move.add(right);
+  if (keys[keyBind.left]    || gpMv.left)  move.sub(right);
   if (move.lengthSq() > 0) move.normalize();
 
-  const crouching = keys[keyBind.crouch];
-  const sprinting = (keys[keyBind.sprint] || keys['ShiftRight']) && !crouching;
+  const crouching = keys[keyBind.crouch] || gamepadCfg.crouch;
+  const sprinting = (keys[keyBind.sprint] || keys['ShiftRight'] || gamepadCfg.sprint) && !crouching;
   const speedMul = speedBoostT > 0 ? 1.85 : 1;
   let speed = (crouching ? 2.5 : sprinting ? 8 : 5) * speedMul;
   // Sandbox fly: horizontal movement uses the fly-speed slider (Shift = 2.5× faster)
@@ -7158,6 +7276,7 @@ function loop() {
   if (mpActive() && !roundActive) updateReadyUI();
   if (mpActive() && document.getElementById('winScreen').style.display === 'flex') updateWinReadyUI();
   if ((roundActive || sandboxActive || _chestPodium || _chestInProgress) && !paused && !(mpIsClient() && hostPaused)) {
+    safeCall(updateGamepad, dt);
     safeCall(updatePlayer, dt);
     if (!mpActive() || mpIsHost()) {
       safeCall(updateEnemies, dt);
