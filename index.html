@@ -486,7 +486,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.06</span>
+  <span style="font-weight:bold;color:#eee">v3.07</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.21.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1495,6 +1495,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.07', 'Two fixes. (1) Ready-up click after SP death spawned a local SP round: startMultiplayer now resets startBtn.dataset.mode to "start" — the click handler checks .dataset.mode FIRST and was calling restartGame() despite the label reading "Ready Up". (2) Home button missing on the SP You-Lost shop: endGame\'s openShop callback now sets overlay data-mode to "roundend" so the CSS rule that hides #shopHomeBtn on the home screen no longer applies — the 🏠 button appears under the ⚙ gear as expected.'],
   ['v3.06', 'Hardened startMultiplayer state reset: also clears sandboxActive, spectating, survivorMode, and forces the home overlay visible. The update-loop gate that runs updatePlayer is `(roundActive || sandboxActive || _chestPodium || _chestInProgress)` — any of those being stale would keep the camera moving from mouse input even after Home was clicked. That explains why the friend\'s POV was being controlled by mouse after joining MP post-SP-death.'],
   ['v3.05', 'Fix for "played SP → clicked Home → joined MP → broken hybrid state": startMultiplayer now clears all SP round state (enemies/bullets/boosters/abilities/pointer lock/paused) at the top, and disables the main Start Round button during the Playroom connect so users can\'t accidentally start a local SP round mid-join. Button is re-enabled once mpRole is set (connect succeeded) or the connect errors out.'],
   ['v3.04', 'Scoreboard now shows a 🎮 icon next to any player using a controller. Each client broadcasts a `usingGamepad` Playroom state flag on gamepadconnected/disconnected (and when joining MP if a pad is already connected). Local player reads from gamepadCfg.connectedId; remote players read from their Playroom state — so host and clients all see the same icons.'],
@@ -6916,6 +6917,7 @@ function endGame() {
   try { window.gameAuth?.submitRunStats?.(killCounter, round, mpActive(), sandboxActive); } catch (e) { console.warn('[auth] submit failed', e); }
   showLostAnim(() => {
     openShop('You Lost', `You reached round ${round}. Restart the game or head back home.`);
+    overlay.setAttribute('data-mode', 'roundend');
     startBtn.textContent = 'Restart Game';
     startBtn.dataset.mode = 'restart';
     document.getElementById('retryBtn').style.display = 'none';
@@ -8616,6 +8618,11 @@ async function startMultiplayer(joinCode) {
   resetAbilities(); clearChestPodium();
   bossSpawned = false; stickKingSpawned = false;
   mouseDown = false;
+  // CRITICAL: reset startBtn.dataset.mode from any leftover SP-death state. If it's still
+  // 'restart' from a prior You-Lost screen, the button handler checks .dataset.mode FIRST and
+  // would call restartGame() (spinning up a local SP round) even if the label has been updated
+  // to "Ready Up" by updateReadyUI.
+  startBtn.dataset.mode = 'start';
   startBtn.disabled = true;
   startBtn.style.pointerEvents = 'none';
   startBtn.style.opacity = 0.6;
