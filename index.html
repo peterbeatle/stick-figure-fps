@@ -417,6 +417,20 @@
       Scoped (ADS) <input type="range" id="sensAds" min="0.1" max="1.5" step="0.05" style="flex:1"> <span id="sensAdsVal"></span>
     </label>
 
+    <h3 style="margin:16px 0 6px;color:#ffcc33">Controller 🎮</h3>
+    <div id="gpStatus" style="font-size:11px;opacity:0.7;margin-bottom:6px">Plug in an Xbox-style controller (USB or Bluetooth). Menu navigation uses a virtual cursor moved by the left stick; <b>A</b> clicks.</div>
+    <label style="display:flex;align-items:center;gap:8px;margin:6px 0">Look sensitivity <input type="range" id="gpSens" min="1.0" max="8.0" step="0.1" style="flex:1"> <span id="gpSensVal"></span></label>
+    <label style="display:flex;align-items:center;gap:8px;margin:6px 0">Deadzone <input type="range" id="gpDead" min="0.05" max="0.35" step="0.01" style="flex:1"> <span id="gpDeadVal"></span></label>
+    <label style="display:flex;align-items:center;gap:8px;margin:6px 0">Response curve <input type="range" id="gpCurve" min="1.0" max="3.0" step="0.1" style="flex:1"> <span id="gpCurveVal"></span></label>
+    <div style="font-size:11px;opacity:0.6;margin:-2px 0 4px">Higher curve = more precise at small stick inputs, faster at full tilt.</div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:4px">
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="gpInvertY"> Invert Y axis</label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="gpAimAssist"> Aim assist</label>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin:6px 0">Aim assist strength <input type="range" id="gpAssistStr" min="0.4" max="1.0" step="0.05" style="flex:1"> <span id="gpAssistStrVal"></span></label>
+    <div style="font-size:11px;opacity:0.6;margin:-2px 0 4px">1.0 = no slowdown, lower = more slowdown when crosshair is near an enemy.</div>
+    <button type="button" id="gpResetBtn" style="background:#555;color:white;border:0;border-radius:3px;padding:5px 12px;cursor:pointer;font-family:monospace;font-size:12px;margin-top:4px">Reset to Defaults</button>
+
     <h3 style="margin:16px 0 6px;color:#ffcc33">Music</h3>
     <label style="display:flex;align-items:center;gap:8px;margin:6px 0">
       Volume <input type="range" id="musicVolSlider" min="0" max="1" step="0.01" style="flex:1"> <span id="musicVolVal"></span>
@@ -511,7 +525,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.18</span>
+  <span style="font-weight:bold;color:#eee">v3.19</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.21.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1524,6 +1538,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.19', 'Controller Phase 2. Settings → Controller 🎮 section: look sensitivity (1–8), deadzone (0.05–0.35), response-curve exponent (1–3), invert Y, aim assist toggle, aim-assist slowdown strength (0.4–1.0) + Reset to Defaults. All prefs persist in localStorage. Virtual cursor for menu navigation: a yellow dot follows the left stick whenever you\'re NOT in a round + NOT in pointer lock; A button clicks whatever\'s under it (synthesizes an element.click() via document.elementFromPoint). Works with every existing UI element — shop tiles, leaderboard buttons, login modal, etc.'],
   ['v3.18', 'Gun level stars are now color-differentiated: current-level stars are gold with a glow (as before), remaining-slot stars are dim gray #444 (no glow). Previously both filled and empty glyphs were in the same yellow span, making the distinction hard to read at a glance. Applies everywhere buildShop renders — home, between rounds, and restart screens.'],
   ['v3.17', 'Home (🏠) button is now visible on the home screen too (was hidden by a CSS rule that only made sense when there was also a Start Round button; now the right-side icon stack ⚙ → 🏠 → Discord → ☕ is consistent across all modes).'],
   ['v3.16', 'Added Discord (purple, inline SVG logo) and Buy Me a Coffee (yellow, ☕) icon buttons to the right-side stack on the home screen, under the settings gear + home icons. Open in new tabs.'],
@@ -6452,6 +6467,129 @@ function updateGamepad(dt) {
   gamepadCfg._prev = btnPressed;
 }
 
+// =========================================================================
+// Virtual cursor for menu navigation (when NOT in an active round)
+// =========================================================================
+const gpCursor = {
+  el: null,
+  x: (typeof window !== 'undefined') ? window.innerWidth / 2 : 600,
+  y: (typeof window !== 'undefined') ? window.innerHeight / 2 : 400,
+  speed: 900,         // pixels/sec at full stick deflection
+  visible: false,
+  _prevA: false,
+};
+function ensureGpCursorEl() {
+  if (gpCursor.el) return gpCursor.el;
+  const d = document.createElement('div');
+  d.id = 'gpCursor';
+  d.style.cssText = 'position:fixed;width:22px;height:22px;border-radius:50%;background:rgba(255,204,51,0.35);border:2px solid #ffcc33;pointer-events:none;z-index:99999;display:none;transform:translate(-50%,-50%);box-shadow:0 0 12px rgba(0,0,0,0.7);will-change:transform,left,top';
+  document.body.appendChild(d);
+  gpCursor.el = d;
+  return d;
+}
+function updateGpCursor(dt) {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let gp = null;
+  for (const p of pads) { if (p && p.connected) { gp = p; break; } }
+  if (!gp) { if (gpCursor.el) gpCursor.el.style.display = 'none'; gpCursor.visible = false; return; }
+  // Only show cursor when NOT in an active round and NOT in pointer-lock.
+  const inGame = roundActive || sandboxActive;
+  if (inGame || pointerLocked) {
+    if (gpCursor.el) gpCursor.el.style.display = 'none';
+    gpCursor.visible = false;
+    return;
+  }
+  ensureGpCursorEl();
+  if (!gpCursor.visible) {
+    gpCursor.el.style.display = 'block';
+    gpCursor.visible = true;
+  }
+  const dz = gamepadCfg.deadzone;
+  const lx = _gpDeadzone(gp.axes[0] || 0, dz);
+  const ly = _gpDeadzone(gp.axes[1] || 0, dz);
+  gpCursor.x += lx * gpCursor.speed * dt;
+  gpCursor.y += ly * gpCursor.speed * dt;
+  gpCursor.x = Math.max(0, Math.min(window.innerWidth, gpCursor.x));
+  gpCursor.y = Math.max(0, Math.min(window.innerHeight, gpCursor.y));
+  gpCursor.el.style.left = gpCursor.x + 'px';
+  gpCursor.el.style.top = gpCursor.y + 'px';
+  // A button (button 0) → click whatever element is under the cursor
+  const aNow = _gpBtnPressed(gp.buttons[0] || 0);
+  if (aNow && !gpCursor._prevA) {
+    const target = document.elementFromPoint(gpCursor.x, gpCursor.y);
+    if (target) {
+      try { target.click(); } catch {}
+      // If it's a text input, focus it so typing keys actually goes there
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') { try { target.focus(); } catch {} }
+    }
+  }
+  gpCursor._prevA = aNow;
+}
+
+// =========================================================================
+// Controller settings — load, save, wire UI
+// =========================================================================
+function _loadGpPrefs() {
+  try {
+    const raw = localStorage.getItem('gpPrefs');
+    if (!raw) return;
+    const p = JSON.parse(raw);
+    if (typeof p.sensitivity === 'number') gamepadCfg.sensitivity = p.sensitivity;
+    if (typeof p.deadzone === 'number') gamepadCfg.deadzone = p.deadzone;
+    if (typeof p.curveExp === 'number') gamepadCfg.curveExp = p.curveExp;
+    if (typeof p.invertY === 'boolean') gamepadCfg.invertY = p.invertY;
+    if (typeof p.aimAssist === 'boolean') gamepadCfg.aimAssist = p.aimAssist;
+    if (typeof p.aimAssistSlowdown === 'number') gamepadCfg.aimAssistSlowdown = p.aimAssistSlowdown;
+  } catch {}
+}
+function _saveGpPrefs() {
+  try {
+    localStorage.setItem('gpPrefs', JSON.stringify({
+      sensitivity: gamepadCfg.sensitivity,
+      deadzone: gamepadCfg.deadzone,
+      curveExp: gamepadCfg.curveExp,
+      invertY: gamepadCfg.invertY,
+      aimAssist: gamepadCfg.aimAssist,
+      aimAssistSlowdown: gamepadCfg.aimAssistSlowdown,
+    }));
+  } catch {}
+}
+_loadGpPrefs();
+function _syncGpUi() {
+  const s = (id) => document.getElementById(id);
+  const set = (id, v) => { const el = s(id); if (el) el.value = v; };
+  const setTxt = (id, v) => { const el = s(id); if (el) el.textContent = v; };
+  const chk = (id, b) => { const el = s(id); if (el) el.checked = !!b; };
+  set('gpSens', gamepadCfg.sensitivity); setTxt('gpSensVal', gamepadCfg.sensitivity.toFixed(1));
+  set('gpDead', gamepadCfg.deadzone);     setTxt('gpDeadVal', gamepadCfg.deadzone.toFixed(2));
+  set('gpCurve', gamepadCfg.curveExp);    setTxt('gpCurveVal', gamepadCfg.curveExp.toFixed(1));
+  set('gpAssistStr', gamepadCfg.aimAssistSlowdown); setTxt('gpAssistStrVal', gamepadCfg.aimAssistSlowdown.toFixed(2));
+  chk('gpInvertY', gamepadCfg.invertY);
+  chk('gpAimAssist', gamepadCfg.aimAssist);
+}
+function _wireGpUi() {
+  const on = (id, ev, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(ev, fn); };
+  on('gpSens', 'input', (e) => { gamepadCfg.sensitivity = +e.target.value; document.getElementById('gpSensVal').textContent = gamepadCfg.sensitivity.toFixed(1); _saveGpPrefs(); });
+  on('gpDead', 'input', (e) => { gamepadCfg.deadzone = +e.target.value; document.getElementById('gpDeadVal').textContent = gamepadCfg.deadzone.toFixed(2); _saveGpPrefs(); });
+  on('gpCurve', 'input', (e) => { gamepadCfg.curveExp = +e.target.value; document.getElementById('gpCurveVal').textContent = gamepadCfg.curveExp.toFixed(1); _saveGpPrefs(); });
+  on('gpAssistStr', 'input', (e) => { gamepadCfg.aimAssistSlowdown = +e.target.value; document.getElementById('gpAssistStrVal').textContent = gamepadCfg.aimAssistSlowdown.toFixed(2); _saveGpPrefs(); });
+  on('gpInvertY', 'change', (e) => { gamepadCfg.invertY = e.target.checked; _saveGpPrefs(); });
+  on('gpAimAssist', 'change', (e) => { gamepadCfg.aimAssist = e.target.checked; _saveGpPrefs(); });
+  on('gpResetBtn', 'click', () => {
+    gamepadCfg.sensitivity = 4.2;
+    gamepadCfg.deadzone = 0.12;
+    gamepadCfg.curveExp = 1.9;
+    gamepadCfg.invertY = false;
+    gamepadCfg.aimAssist = true;
+    gamepadCfg.aimAssistSlowdown = 0.75;
+    _saveGpPrefs();
+    _syncGpUi();
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => { _wireGpUi(); _syncGpUi(); });
+} else { _wireGpUi(); _syncGpUi(); }
+
 function updatePlayer(dt) {
   if (!player.alive || spectating) return;
   if (_awaitingAbilityContinue) return; // freeze until Enter is pressed
@@ -7342,6 +7480,8 @@ function loop() {
     try { hostPaused = !!mpHostPlayer.getState('hostPaused'); } catch {}
   }
   document.getElementById('hostPausedBanner').style.display = (mpIsClient() && hostPaused) ? 'flex' : 'none';
+  // Virtual cursor for controller menu navigation (only active when NOT in a round + no pointer lock)
+  safeCall(updateGpCursor, dt);
   // Keep the ready-up button label in sync between rounds in multiplayer
   if (mpActive() && !roundActive) updateReadyUI();
   if (mpActive() && document.getElementById('winScreen').style.display === 'flex') updateWinReadyUI();
