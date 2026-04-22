@@ -525,7 +525,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.23</span>
+  <span style="font-weight:bold;color:#eee">v3.26</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.21.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1563,6 +1563,8 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.26', 'Start button now unpauses too (was only pausing) — the Start-button edge-detect was inside updateGamepad which is gated behind !paused, so once paused the button press went unnoticed. Moved it to updateGpCursor which runs every frame. Also: virtual cursor now shows on the pause menu (previous gate "(roundActive||sandbox) || pointerLocked" hid it when paused during a round; new gate requires "active gameplay + pointer lock + NOT paused" before hiding).'],
+  ['v3.24', 'Cursor speed tuned to 1050 (midpoint between the original 900 and the overshoot 1200).'],
   ['v3.23', 'Controller polish round 2: (1) Chest + nuke podium hints now read "Press E (Y on controller)". (2) Ability banner now reads "PRESS ENTER (Y ON CONTROLLER) TO CONTINUE" — Y dismisses it same as Enter. (3) Dash changed: double-click the L3 stick button (actual click, not direction wiggle) — direction taken from current LS deflection, defaults to forward if LS is centered. (4) Start button (btn 9) now pauses/unpauses during a round. (5) Jetpack now works on controller — hold A for upward thrust (jetpack code now checks gamepadCfg.jump alongside keys[Space]). (6) Cheats passcode has a full on-screen numeric keypad that opens when the Cheats button is clicked while controller is the active input. 12-button grid (0–9, ⌫, CLR) + Cancel/Submit.'],
   ['v3.22', 'Nuke alarm now stops on death: endGame (SP) and the MP client "You Lost" path both call clearNukePodium() to kill the ticking alarm sound + hide the podium. Previously if you picked up the Bomb booster and died before arming it, the ticking kept playing on the restart screen.'],
   ['v3.21', 'Controller polish pass. (1) Cursor speed dialed back 1500→1200. (2) <select> elements (difficulty dropdown, music track, etc.) cycle options when A is pressed — browsers won\'t open native dropdowns via .click(), so A now advances to the next option. Checkboxes/radios toggle on A too. (3) Difficulty selector moved to below Start Round, above Show Controls. (4) After Host Lobby → Leave, the main Start Round button\'s gray/blue "Waiting for players" inline styles are now cleared. (5) Double-tap D-pad right toggles auto-run (sprint on indefinitely) — status shown in the Settings → Controller panel. (6) Double-tap Left Stick in any cardinal direction triggers Dash (round 3 ability) — same physics as the keyboard W/A/S/D double-tap. Dash ability banner text updated to mention controller. (7) Active-input detection: mouse/controller. Using the controller hides the OS mouse pointer; moving the mouse hides the virtual cursor. No more two-cursors-on-screen. (8) New music track: "Midnight Drive" — 95 BPM mid-tempo dark synthwave in A minor, fills the BPM gap between Starfall and Overdrive.'],
@@ -6545,8 +6547,8 @@ function updateGamepad(dt) {
   if (edge(4)) _gpCycleWeapon(-1);
   if (edge(5)) _gpCycleWeapon(1);
 
-  // Start button (9) → pause / unpause (only in-round; mirrors keyboard P).
-  if (edge(9) && roundActive && !gameOver) { try { setPaused(!paused); } catch {} }
+  // Start button pause/unpause is handled in updateGpCursor — that loop runs even while paused,
+  // which is required to unpause (this function is gated behind !paused in the main loop).
 
   // L3 (button 10): single-click hold = sprint (or toggled via auto-run). Double-click = DASH.
   gamepadCfg.sprint = !!btnPressed[10] || !!gamepadCfg.autoRun;
@@ -6597,7 +6599,7 @@ const gpCursor = {
   el: null,
   x: (typeof window !== 'undefined') ? window.innerWidth / 2 : 600,
   y: (typeof window !== 'undefined') ? window.innerHeight / 2 : 400,
-  speed: 1200,        // pixels/sec at full stick deflection
+  speed: 1050,        // pixels/sec at full stick deflection
   scrollSpeed: 1400,  // pixels/sec at full RS deflection
   visible: false,
   _prevA: false,
@@ -6646,9 +6648,17 @@ function updateGpCursor(dt) {
   let gp = null;
   for (const p of pads) { if (p && p.connected) { gp = p; break; } }
   if (!gp) { if (gpCursor.el) gpCursor.el.style.display = 'none'; gpCursor.visible = false; return; }
-  // Only show cursor when NOT in an active round and NOT in pointer-lock.
-  const inGame = roundActive || sandboxActive;
-  if (inGame || pointerLocked) {
+  // Start button (9) is handled here (outside the paused gate that shields updateGamepad) so it
+  // can both pause AND unpause. Edge-detect via a persistent flag.
+  const startNow = _gpBtnPressed(gp.buttons[9] || 0);
+  if (startNow && !gpCursor._prevStart) {
+    if (roundActive && !gameOver) { try { setPaused(!paused); } catch {} }
+  }
+  gpCursor._prevStart = startNow;
+  // Show cursor on menus + overlays, including the pause screen. Hide only during active gameplay
+  // (pointer-locked + not paused). This keeps the pause menu navigable with the controller.
+  const inActiveGameplay = (roundActive || sandboxActive) && !paused && pointerLocked;
+  if (inActiveGameplay) {
     if (gpCursor.el) gpCursor.el.style.display = 'none';
     gpCursor.visible = false;
     return;
