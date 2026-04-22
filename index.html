@@ -527,7 +527,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.36</span>
+  <span style="font-weight:bold;color:#eee">v3.37</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.22.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1565,6 +1565,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.37', 'Slam pose v2 — "hulk smash". Both forearms converge to a single clasped fist in front of the player (single larger fist sphere) instead of two separate fists spread apart. Previous pose had fists at (-0.15, 0.55) and (+0.15, 0.55) which read weird; now both bones end at (0, 0.15, 0.55).'],
   ['v3.36', 'Round-skip cheat now grants the chest abilities you would\'ve earned up to that round: skip to 4–6 = Dash, 7–9 = Dash + Triple Jump, 10+ = all three (Dash + Triple Jump + Power Slam). HUD orbs on the left-side ability panel update immediately.'],
   ['v3.35', 'Slam 3rd-person pose now animates: fists stay overhead during the fall, then swing down to a ground-pounded pose over 180ms starting at ground impact (arms interpolate from shoulder→overhead-fist to shoulder→forward-elbow→low-fist). Arms are rebuilt each frame from the two pose endpoints, so the swing reads clearly even on a short linger.'],
   ['v3.34', 'Slam 3rd-person view timing: slam descent velocity slowed from -60 → -35 m/s (more time to watch yourself fall) AND camera now lingers in 3rd person for 900ms after ground impact before snapping back to 1st. The AoE explosion still fires at the exact landing frame as before.'],
@@ -5264,23 +5265,21 @@ function _rebuildSlamArms(t) {
   const lerpPt = (a, b) => [lerp(a[0], b[0]), lerp(a[1], b[1]), lerp(a[2], b[2])];
   // Shoulder (pivot). Elbow + fist interpolate between the two poses.
   const shoulder = [0, 1.4, 0];
-  // Raised pose: elbows up+in, fists clasped overhead at (0, 2.35, 0)
-  // Slammed pose: arms forward+down, fists side-by-side near ground
-  const lElbow = lerpPt([-0.25, 1.9, 0.05], [-0.30, 0.90, 0.25]);
-  const lFist  = lerpPt([0.00, 2.35, 0.00], [-0.15, 0.15, 0.55]);
-  const rElbow = lerpPt([ 0.25, 1.9, 0.05], [ 0.30, 0.90, 0.25]);
-  const rFist  = lerpPt([0.00, 2.35, 0.00], [ 0.15, 0.15, 0.55]);
+  // Raised pose (t=0):  elbows up+in, fists clasped overhead at (0, 2.35, 0)
+  // Slammed pose (t=1): elbows slightly apart, BOTH forearms converge to a single clasped fist
+  //                     in front of the player — a "hulk smash" hammer pose, not spread out.
+  const lElbow = lerpPt([-0.25, 1.9, 0.05], [-0.18, 0.85, 0.30]);
+  const rElbow = lerpPt([ 0.25, 1.9, 0.05], [ 0.18, 0.85, 0.30]);
+  const clasped = lerpPt([0.00, 2.35, 0.00], [0.00, 0.15, 0.55]); // shared fist position
   const g = new THREE.Group();
   g.add(makeBone(shoulder, lElbow, mat));
-  g.add(makeBone(lElbow, lFist, mat));
+  g.add(makeBone(lElbow, clasped, mat));
   g.add(makeBone(shoulder, rElbow, mat));
-  g.add(makeBone(rElbow, rFist, mat));
-  const lf = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), mat);
-  lf.position.set(lFist[0], lFist[1], lFist[2]);
-  g.add(lf);
-  const rf = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), mat);
-  rf.position.set(rFist[0], rFist[1], rFist[2]);
-  g.add(rf);
+  g.add(makeBone(rElbow, clasped, mat));
+  // Single clasped-fist sphere, slightly larger than a normal fist to read as "both hands together"
+  const fist = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), mat);
+  fist.position.set(clasped[0], clasped[1], clasped[2]);
+  g.add(fist);
   _slam3P.figure.add(g);
   _slam3P.armGroup = g;
 }
