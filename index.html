@@ -429,6 +429,7 @@
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="gpAimAssist"> Aim assist</label>
     </div>
     <label style="display:flex;align-items:center;gap:8px;margin:6px 0">Aim assist strength <input type="range" id="gpAssistStr" min="0.4" max="1.0" step="0.05" style="flex:1"> <span id="gpAssistStrVal"></span></label>
+    <label style="display:flex;align-items:center;gap:8px;margin:6px 0">Menu cursor speed <input type="range" id="gpCursorSpeed" min="500" max="2000" step="50" style="flex:1"> <span id="gpCursorSpeedVal"></span></label>
     <div style="font-size:11px;opacity:0.6;margin:-2px 0 4px">1.0 = no slowdown, lower = more slowdown when crosshair is near an enemy.</div>
     <button type="button" id="gpResetBtn" style="background:#555;color:white;border:0;border-radius:3px;padding:5px 12px;cursor:pointer;font-family:monospace;font-size:12px;margin-top:4px">Reset to Defaults</button>
 
@@ -526,8 +527,8 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.29</span>
-  <span style="opacity:0.75;font-size:11px">— Last Updated 4.21.26</span>
+  <span style="font-weight:bold;color:#eee">v3.34</span>
+  <span style="opacity:0.75;font-size:11px">— Last Updated 4.22.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
 <div id="changelogPanel" style="position:fixed;top:52px;right:300px;background:rgba(15,18,28,0.94);border:1px solid #445;border-radius:6px;padding:14px 18px;font-family:monospace;font-size:12px;color:#ddd;z-index:30;display:none;max-width:420px;max-height:60vh;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.7);line-height:1.5"></div>
@@ -1564,6 +1565,11 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.34', 'Slam 3rd-person view timing: slam descent velocity slowed from -60 → -35 m/s (more time to watch yourself fall) AND camera now lingers in 3rd person for 900ms after ground impact before snapping back to 1st. The AoE explosion still fires at the exact landing frame as before.'],
+  ['v3.33', '3rd-person slam fix: on the entry frame, now also calls _updateSlam3P(dt) so the camera offset applies immediately instead of waiting a frame (slam is fast — waiting a frame meant the 3P view sometimes never rendered before ground contact). Added console logs ([slam3p] enter/exit) to confirm triggering during testing.'],
+  ['v3.32', 'Power Slam → 3rd-person view. When you trigger Power Slam (double-tap Crouch/B while airborne), camera pulls back + up and a stick figure of yourself (colored to your player slot) appears in fist-overhead slam pose, so you can watch your own slam. Camera reverts to 1st person on ground impact (the existing AoE explosion still fires). First-person weapon mesh is hidden during the 3rd-person segment so it doesn\'t hang in the middle of the screen.'],
+  ['v3.31', 'Fixed the "spawn jumping" bug where pressing A to click Start Round also made the character jump on the first frame of the round. Cursor-click handler now seeds gamepadCfg._prev[0]=true so the in-round poll sees A as already-held (no fresh edge = no tryJump()) until the user releases and re-presses it.'],
+  ['v3.30', 'Added a "Menu cursor speed" slider in Settings → Controller (500–2000 px/sec, default 1050). Persists to localStorage alongside other controller prefs and is included in the Reset to Defaults button.'],
   ['v3.29', 'Power Slam now triggers on double-tap B (button 1) with the controller while airborne — was keyboard-only before. Ability banner updated to mention both inputs. Third-person slam animation (see self fist-slam in 3rd person before reverting to 1st) added to the project roadmap for later.'],
   ['v3.28', 'Virtual cursor now hides during the "Round X cleared" transition animation, the NEW ABILITY banner (_awaitingAbilityContinue), and chest interaction (_chestInProgress) — previously it was popping up the moment roundActive flipped false, even though the shop/ready-up button wasn\'t interactive yet.'],
   ['v3.27', 'Hotbar now wraps to a second row if it overflows (flex-wrap + max-width:96vw) — fixes the Booster Wand slot being pushed off-screen when the player owns many guns at once (e.g. money-cheat + all weapons + wand cheat = 14 slots, too wide to fit on one line).'],
@@ -3695,7 +3701,7 @@ addEventListener('keydown', e => {
     const now = performance.now();
     if (now - _slamLastCrouchTap < 300 && !player.onGround && !_slamActive) {
       _slamActive = true;
-      player.vy = -60; // very fast drop
+      player.vy = -35; // dramatic slam descent — slow enough to see in 3rd person
     }
     _slamLastCrouchTap = now;
   }
@@ -5221,6 +5227,69 @@ let _dashVz = 0;
 let _slamLastCrouchTap = 0;
 let _slamActive = false;
 
+// =========================================================================
+// Third-person camera + visible stick-figure during Power Slam
+// =========================================================================
+let _slam3P = null; // { figure, startTime, truePos }
+function _enterSlam3P() {
+  if (_slam3P) return;
+  const col = (typeof myPlayerColor === 'function') ? myPlayerColor() : { hex: 0x3aa0ff, emissive: 0x003060 };
+  const boneMat = new THREE.MeshBasicMaterial({ color: col.hex });
+  const headMat = new THREE.MeshLambertMaterial({ color: col.hex, emissive: col.emissive || 0x000000, emissiveIntensity: 0.4 });
+  const g = new THREE.Group();
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), headMat);
+  head.position.set(0, 1.75, 0);
+  g.add(head);
+  // Torso
+  g.add(makeBone([0, 1.5, 0], [0, 0.9, 0], boneMat));
+  // Arms both raised overhead with fists together (slam pose — shoulder→elbow→fist via two bones per arm)
+  // Left arm goes up and slightly in, right arm symmetric
+  g.add(makeBone([0, 1.4, 0], [-0.25, 1.9, 0.05], boneMat));   // left upper
+  g.add(makeBone([-0.25, 1.9, 0.05], [0, 2.35, 0], boneMat));  // left forearm → fist
+  g.add(makeBone([0, 1.4, 0], [0.25, 1.9, 0.05], boneMat));    // right upper
+  g.add(makeBone([0.25, 1.9, 0.05], [0, 2.35, 0], boneMat));   // right forearm → fist
+  // Clenched fist (small sphere at fist apex)
+  const fist = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), boneMat);
+  fist.position.set(0, 2.35, 0);
+  g.add(fist);
+  // Legs bent like a skydiving slam
+  g.add(makeBone([0, 0.9, 0], [-0.25, 0.4, 0.1], boneMat));
+  g.add(makeBone([-0.25, 0.4, 0.1], [-0.3, 0.0, 0], boneMat));
+  g.add(makeBone([0, 0.9, 0], [0.25, 0.4, 0.1], boneMat));
+  g.add(makeBone([0.25, 0.4, 0.1], [0.3, 0.0, 0], boneMat));
+  scene.add(g);
+  _slam3P = { figure: g, startTime: performance.now() };
+  // Hide the first-person weapon so it doesn't hang in front of the 3rd-person camera
+  try { for (const k of Object.keys(weaponModels)) weaponModels[k].visible = false; } catch {}
+}
+function _updateSlam3P(dt) {
+  if (!_slam3P) return;
+  const truePos = camera.position.clone();
+  _slam3P.truePos = truePos;
+  const eyeH = player.crouching ? CROUCH_Y : STANDING_Y;
+  _slam3P.figure.position.set(truePos.x, truePos.y - eyeH, truePos.z);
+  _slam3P.figure.rotation.y = player.yaw + Math.PI; // figures face -Z; flip 180 to face camera-forward
+  // 3P camera: pull back along the player's backward direction + rise
+  const yaw = player.yaw;
+  const back = 5.5, up = 2.5;
+  const fwdX = -Math.sin(yaw), fwdZ = -Math.cos(yaw);
+  camera.position.x = truePos.x - fwdX * back;
+  camera.position.y = truePos.y + up;
+  camera.position.z = truePos.z - fwdZ * back;
+  camera.lookAt(truePos.x, truePos.y - 0.3, truePos.z); // aim slightly below eye-level so the figure is centered
+}
+function _exitSlam3P() {
+  if (!_slam3P) return;
+  scene.remove(_slam3P.figure);
+  if (_slam3P.truePos) camera.position.copy(_slam3P.truePos);
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = player.yaw;
+  camera.rotation.x = player.pitch;
+  // Restore the equipped first-person weapon mesh
+  try { for (const k of Object.keys(weaponModels)) weaponModels[k].visible = (k === currentGun); } catch {}
+  _slam3P = null;
+}
+
 function resetAbilities() {
   hasDash = false; hasTripleJump = false; hasPowerSlam = false;
   _dashTimer = 0; _slamActive = false;
@@ -6541,7 +6610,7 @@ function updateGamepad(dt) {
     const nowMs = performance.now();
     if (nowMs - (gamepadCfg._lastB || 0) < 300 && hasPowerSlam && !player.onGround && !_slamActive) {
       _slamActive = true;
-      player.vy = -60;
+      player.vy = -35;
     }
     gamepadCfg._lastB = nowMs;
   }
@@ -6734,6 +6803,11 @@ function updateGpCursor(dt) {
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') { try { target.focus(); } catch {} }
       }
     }
+    // Mark A as already-held for the in-game gamepad handler so it doesn't ALSO read this same
+    // press as a "jump edge" when the round starts (was causing the player to spawn mid-jump
+    // because the Start Round button click + the in-round jump fired off the same A press).
+    if (!gamepadCfg._prev) gamepadCfg._prev = [];
+    gamepadCfg._prev[0] = true;
   }
   gpCursor._prevA = aNow;
 }
@@ -6752,6 +6826,7 @@ function _loadGpPrefs() {
     if (typeof p.invertY === 'boolean') gamepadCfg.invertY = p.invertY;
     if (typeof p.aimAssist === 'boolean') gamepadCfg.aimAssist = p.aimAssist;
     if (typeof p.aimAssistSlowdown === 'number') gamepadCfg.aimAssistSlowdown = p.aimAssistSlowdown;
+    if (typeof p.cursorSpeed === 'number' && typeof gpCursor !== 'undefined') gpCursor.speed = p.cursorSpeed;
   } catch {}
 }
 function _saveGpPrefs() {
@@ -6763,6 +6838,7 @@ function _saveGpPrefs() {
       invertY: gamepadCfg.invertY,
       aimAssist: gamepadCfg.aimAssist,
       aimAssistSlowdown: gamepadCfg.aimAssistSlowdown,
+      cursorSpeed: (typeof gpCursor !== 'undefined') ? gpCursor.speed : 1050,
     }));
   } catch {}
 }
@@ -6877,6 +6953,8 @@ function _syncGpUi() {
   set('gpDead', gamepadCfg.deadzone);     setTxt('gpDeadVal', gamepadCfg.deadzone.toFixed(2));
   set('gpCurve', gamepadCfg.curveExp);    setTxt('gpCurveVal', gamepadCfg.curveExp.toFixed(1));
   set('gpAssistStr', gamepadCfg.aimAssistSlowdown); setTxt('gpAssistStrVal', gamepadCfg.aimAssistSlowdown.toFixed(2));
+  const cs = (typeof gpCursor !== 'undefined') ? gpCursor.speed : 1050;
+  set('gpCursorSpeed', cs); setTxt('gpCursorSpeedVal', Math.round(cs) + ' px/s');
   chk('gpInvertY', gamepadCfg.invertY);
   chk('gpAimAssist', gamepadCfg.aimAssist);
 }
@@ -6886,6 +6964,7 @@ function _wireGpUi() {
   on('gpDead', 'input', (e) => { gamepadCfg.deadzone = +e.target.value; document.getElementById('gpDeadVal').textContent = gamepadCfg.deadzone.toFixed(2); _saveGpPrefs(); });
   on('gpCurve', 'input', (e) => { gamepadCfg.curveExp = +e.target.value; document.getElementById('gpCurveVal').textContent = gamepadCfg.curveExp.toFixed(1); _saveGpPrefs(); });
   on('gpAssistStr', 'input', (e) => { gamepadCfg.aimAssistSlowdown = +e.target.value; document.getElementById('gpAssistStrVal').textContent = gamepadCfg.aimAssistSlowdown.toFixed(2); _saveGpPrefs(); });
+  on('gpCursorSpeed', 'input', (e) => { if (typeof gpCursor !== 'undefined') gpCursor.speed = +e.target.value; document.getElementById('gpCursorSpeedVal').textContent = Math.round(+e.target.value) + ' px/s'; _saveGpPrefs(); });
   on('gpInvertY', 'change', (e) => { gamepadCfg.invertY = e.target.checked; _saveGpPrefs(); });
   on('gpAimAssist', 'change', (e) => { gamepadCfg.aimAssist = e.target.checked; _saveGpPrefs(); });
   on('gpResetBtn', 'click', () => {
@@ -6895,6 +6974,7 @@ function _wireGpUi() {
     gamepadCfg.invertY = false;
     gamepadCfg.aimAssist = true;
     gamepadCfg.aimAssistSlowdown = 0.75;
+    if (typeof gpCursor !== 'undefined') gpCursor.speed = 1050;
     _saveGpPrefs();
     _syncGpUi();
   });
@@ -7803,7 +7883,22 @@ function loop() {
   if (mpActive() && document.getElementById('winScreen').style.display === 'flex') updateWinReadyUI();
   if ((roundActive || sandboxActive || _chestPodium || _chestInProgress) && !paused && !(mpIsClient() && hostPaused)) {
     safeCall(updateGamepad, dt);
+    // Power Slam 3P: before updatePlayer, restore camera to the "true" player position so
+    // updatePlayer's gravity / landing logic works on the actual player, not the offset camera.
+    if (_slam3P && _slam3P.truePos) camera.position.copy(_slam3P.truePos);
     safeCall(updatePlayer, dt);
+    // Slam 3P lifecycle: enter on slam start, linger ~900ms after ground impact so the player can
+    // actually see the slam from 3rd person, then exit back to 1st.
+    if (_slamActive && !_slam3P) { console.log('[slam3p] enter'); _enterSlam3P(); _updateSlam3P(dt); }
+    else if (!_slamActive && _slam3P && !_slam3P.landedAt) {
+      _slam3P.landedAt = performance.now();
+      _updateSlam3P(dt); // keep camera at 3P on the exact landing frame
+    }
+    else if (_slam3P && _slam3P.landedAt && performance.now() - _slam3P.landedAt > 900) {
+      console.log('[slam3p] exit');
+      _exitSlam3P();
+    }
+    else if (_slam3P) _updateSlam3P(dt);
     if (!mpActive() || mpIsHost()) {
       safeCall(updateEnemies, dt);
       safeCall(updateBullets, dt);
