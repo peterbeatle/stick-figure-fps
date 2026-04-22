@@ -525,7 +525,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.19</span>
+  <span style="font-weight:bold;color:#eee">v3.20</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.21.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -718,6 +718,17 @@
   <p id="subtitle" style="margin:0 0 8px">Kill stick figures to earn money. Buy better guns between rounds.</p>
   <div id="fullscreenHint" style="margin:2px 0 8px;display:inline-block;padding:6px 14px;background:rgba(255,204,51,0.08);border:1px solid rgba(255,204,51,0.35);border-radius:6px;color:#ffcc33;font-family:monospace;font-size:13px;letter-spacing:1px;text-shadow:0 0 10px rgba(255,160,0,0.6);animation:fsHintPulse 1.5s ease-in-out infinite alternate">Best experience in <b>FULLSCREEN</b> — press <b>F</b> to toggle</div>
   <p id="playerNameRow" style="margin:2px 0 8px;font-size:13px;opacity:0.7">Playing as <b id="playerNameShow" style="color:#ffcc33">—</b> <a href="#" id="changeNameLink" style="color:#7fc8ff;text-decoration:none;margin-left:6px">(change)</a></p>
+  <div id="difficultyRow" style="margin:2px 0 8px;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px">
+    <span style="opacity:0.8">Difficulty:</span>
+    <select id="difficultySel" style="background:#222;color:#ffcc33;border:1px solid #555;border-radius:4px;padding:4px 10px;font-family:monospace;font-weight:bold;cursor:pointer">
+      <option value="1">1 — Easy</option>
+      <option value="2" selected>2 — Normal</option>
+      <option value="3">3 — Hard</option>
+      <option value="4">4 — Insane</option>
+      <option value="5">5 — Nightmare</option>
+    </select>
+    <span id="difficultyMpLabel" style="display:none;font-size:12px;opacity:0.75">(set by host)</span>
+  </div>
   <div id="topActions" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:4px 0 14px">
     <button class="primary big" id="startBtn">Start Round</button>
     <button class="primary" id="retryBtn" style="display:none"></button>
@@ -1538,6 +1549,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.20', 'Difficulty system (5 levels × HP/count/aim): 1 Easy / 2 Normal (default, the old feel) / 3 Hard / 4 Insane / 5 Nightmare. Dropdown on home screen; persists in localStorage. In MP, host\'s selection is broadcast via round state; clients see a read-only "(set by host)" label. Affects grunt HP, boss HP, Stick King HP, per-round enemy count, and enemy shot spread (tighter spread at higher difficulty). Cursor smoothness fix: switched from left/top to translate3d so the browser GPU-composites it — much smoother at any FPS cap. Speed bumped 900→1500 px/sec. RS now scrolls whichever element is under the cursor (settings modal, leaderboard list, anything with overflow:auto) — walks up the DOM to find the nearest scrollable ancestor.'],
   ['v3.19', 'Controller Phase 2. Settings → Controller 🎮 section: look sensitivity (1–8), deadzone (0.05–0.35), response-curve exponent (1–3), invert Y, aim assist toggle, aim-assist slowdown strength (0.4–1.0) + Reset to Defaults. All prefs persist in localStorage. Virtual cursor for menu navigation: a yellow dot follows the left stick whenever you\'re NOT in a round + NOT in pointer lock; A button clicks whatever\'s under it (synthesizes an element.click() via document.elementFromPoint). Works with every existing UI element — shop tiles, leaderboard buttons, login modal, etc.'],
   ['v3.18', 'Gun level stars are now color-differentiated: current-level stars are gold with a glow (as before), remaining-slot stars are dim gray #444 (no glow). Previously both filled and empty glyphs were in the same yellow span, making the distinction hard to read at a glance. Applies everywhere buildShop renders — home, between rounds, and restart screens.'],
   ['v3.17', 'Home (🏠) button is now visible on the home screen too (was hidden by a CSS rule that only made sense when there was also a Start Round button; now the right-side icon stack ⚙ → 🏠 → Discord → ☕ is consistent across all modes).'],
@@ -2904,7 +2916,7 @@ function makeStickFigure() {
   gun.castShadow = true;
   g.add(gun);
   g.userData.gunMesh = gun;
-  const enemyHp = 30 + round * 6;
+  const enemyHp = Math.max(1, Math.round((30 + round * 6) * diff().hp));
   g.userData.hp = enemyHp;
   g.userData.maxHp = enemyHp;
   g.userData.radius = 0.5;
@@ -2961,7 +2973,7 @@ function makeBoss() {
   g.scale.setScalar(1.4);
   g.userData.isBoss = true;
   g.userData.gunMesh = gun;
-  g.userData.hp = 200 + round * 150;
+  g.userData.hp = Math.max(1, Math.round((200 + round * 150) * diff().hp));
   g.userData.maxHp = g.userData.hp;
   g.userData.radius = 0.9;
   g.userData.speed = 2.0;
@@ -3050,7 +3062,7 @@ function makeStickKing() {
   g.userData.isBoss = true;
   g.userData.isStickKing = true;
   g.userData.gunMesh = gunR; // shoot from the right hand
-  g.userData.hp = 3000 + round * 400; // doubled again
+  g.userData.hp = Math.max(1, Math.round((3000 + round * 400) * diff().hp));
   g.userData.maxHp = g.userData.hp;
   g.userData.radius = 1.4;
   g.userData.speed = 9.6;
@@ -3521,6 +3533,39 @@ const cheats = { money: false, mag: false, rate: false, invuln: false, skip: fal
 const CHEAT_CODE = '1211999';
 // Cheats unlock is per-session only — user has to re-enter the passcode every time they open the site.
 let cheatsUnlocked = sessionStorage.getItem('cheatsUnlocked') === 'true';
+
+// ============ Difficulty (1=Easy, 2=Normal default, 3=Hard, 4=Insane, 5=Nightmare) ============
+// Multipliers applied to: enemy HP, enemy count per round, enemy aim (spread inverse).
+const DIFFICULTY = {
+  1: { name: 'Easy',       hp: 0.6, count: 0.7,  aim: 0.5 },
+  2: { name: 'Normal',     hp: 1.0, count: 1.0,  aim: 1.0 },
+  3: { name: 'Hard',       hp: 1.3, count: 1.15, aim: 1.25 },
+  4: { name: 'Insane',     hp: 1.6, count: 1.3,  aim: 1.5 },
+  5: { name: 'Nightmare',  hp: 2.0, count: 1.5,  aim: 1.8 },
+};
+let gameDifficulty = (() => {
+  const v = parseInt(localStorage.getItem('gameDifficulty') || '2', 10);
+  return (v >= 1 && v <= 5) ? v : 2;
+})();
+function diff() {
+  // In MP clients, host broadcasts their difficulty — clients use that for display + any local math.
+  if (mpActive && mpActive() && mpIsClient && mpIsClient() && mpHostPlayer) {
+    try {
+      const d = mpHostPlayer.getState('round');
+      if (d && d.diff && DIFFICULTY[d.diff]) return DIFFICULTY[d.diff];
+    } catch {}
+  }
+  return DIFFICULTY[gameDifficulty] || DIFFICULTY[2];
+}
+function getActiveDifficultyLevel() {
+  if (mpActive && mpActive() && mpIsClient && mpIsClient() && mpHostPlayer) {
+    try {
+      const d = mpHostPlayer.getState('round');
+      if (d && d.diff) return d.diff;
+    } catch {}
+  }
+  return gameDifficulty;
+}
 // Migrate away from any previously-persisted unlock (pre-v3 stored this in localStorage).
 try { localStorage.removeItem('cheatsUnlocked'); } catch {}
 // Flips true the moment any cheat is active during a run; reset in startRound / restartGame.
@@ -6025,7 +6070,7 @@ function updateEnemies(dt) {
       const cdBase = profile.cdMin + Math.random() * (profile.cdMax - profile.cdMin);
       e.userData.shootCd = e.userData.isBoss ? cdBase * 0.55 : cdBase;
       const accuracyBoost = Math.min(0.05, round * 0.005);
-      let spread = Math.max(0.01, profile.spread - accuracyBoost) + Math.min(0.05, dist * 0.002);
+      let spread = (Math.max(0.01, profile.spread - accuracyBoost) + Math.min(0.05, dist * 0.002)) / diff().aim;
       if (e.userData.isStickKing) spread *= 0.18; // sharply more accurate per request
       // Projectile weapons (bazooka/plasma/crossbow) fire slow arcing rounds the player
       // can strafe away from — tighten spread AND aim for the feet so splash hits reliably.
@@ -6474,7 +6519,8 @@ const gpCursor = {
   el: null,
   x: (typeof window !== 'undefined') ? window.innerWidth / 2 : 600,
   y: (typeof window !== 'undefined') ? window.innerHeight / 2 : 400,
-  speed: 900,         // pixels/sec at full stick deflection
+  speed: 1500,        // pixels/sec at full stick deflection
+  scrollSpeed: 1400,  // pixels/sec at full RS deflection
   visible: false,
   _prevA: false,
 };
@@ -6482,10 +6528,22 @@ function ensureGpCursorEl() {
   if (gpCursor.el) return gpCursor.el;
   const d = document.createElement('div');
   d.id = 'gpCursor';
-  d.style.cssText = 'position:fixed;width:22px;height:22px;border-radius:50%;background:rgba(255,204,51,0.35);border:2px solid #ffcc33;pointer-events:none;z-index:99999;display:none;transform:translate(-50%,-50%);box-shadow:0 0 12px rgba(0,0,0,0.7);will-change:transform,left,top';
+  // GPU-accelerated via transform:translate3d; position is 0,0 + transform offset for smooth movement.
+  d.style.cssText = 'position:fixed;left:0;top:0;width:22px;height:22px;border-radius:50%;background:rgba(255,204,51,0.35);border:2px solid #ffcc33;pointer-events:none;z-index:99999;display:none;box-shadow:0 0 12px rgba(0,0,0,0.7);will-change:transform;transform:translate3d(0,0,0)';
   document.body.appendChild(d);
   gpCursor.el = d;
   return d;
+}
+function _gpFindScrollable(el) {
+  let cur = el;
+  while (cur && cur !== document.body) {
+    const s = getComputedStyle(cur);
+    const oy = s.overflowY;
+    if ((oy === 'auto' || oy === 'scroll' || oy === 'overlay') && cur.scrollHeight > cur.clientHeight) return cur;
+    cur = cur.parentElement;
+  }
+  // Fallback: whole window
+  return document.scrollingElement || document.documentElement;
 }
 function updateGpCursor(dt) {
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -6505,21 +6563,30 @@ function updateGpCursor(dt) {
     gpCursor.visible = true;
   }
   const dz = gamepadCfg.deadzone;
+  // LEFT stick → move cursor
   const lx = _gpDeadzone(gp.axes[0] || 0, dz);
   const ly = _gpDeadzone(gp.axes[1] || 0, dz);
-  gpCursor.x += lx * gpCursor.speed * dt;
-  gpCursor.y += ly * gpCursor.speed * dt;
-  gpCursor.x = Math.max(0, Math.min(window.innerWidth, gpCursor.x));
-  gpCursor.y = Math.max(0, Math.min(window.innerHeight, gpCursor.y));
-  gpCursor.el.style.left = gpCursor.x + 'px';
-  gpCursor.el.style.top = gpCursor.y + 'px';
+  if (lx || ly) {
+    gpCursor.x += lx * gpCursor.speed * dt;
+    gpCursor.y += ly * gpCursor.speed * dt;
+    gpCursor.x = Math.max(0, Math.min(window.innerWidth, gpCursor.x));
+    gpCursor.y = Math.max(0, Math.min(window.innerHeight, gpCursor.y));
+  }
+  // Use transform3d for GPU-composited movement (smoother than left/top writes)
+  gpCursor.el.style.transform = `translate3d(${gpCursor.x - 11}px, ${gpCursor.y - 11}px, 0)`;
+  // RIGHT stick → scroll whichever element is under the cursor (or the page if none)
+  const ry = _gpDeadzone(gp.axes[3] || 0, dz);
+  if (ry) {
+    const under = document.elementFromPoint(gpCursor.x, gpCursor.y);
+    const scroller = _gpFindScrollable(under);
+    if (scroller) scroller.scrollTop += ry * gpCursor.scrollSpeed * dt;
+  }
   // A button (button 0) → click whatever element is under the cursor
   const aNow = _gpBtnPressed(gp.buttons[0] || 0);
   if (aNow && !gpCursor._prevA) {
     const target = document.elementFromPoint(gpCursor.x, gpCursor.y);
     if (target) {
       try { target.click(); } catch {}
-      // If it's a text input, focus it so typing keys actually goes there
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') { try { target.focus(); } catch {} }
     }
   }
@@ -6555,6 +6622,37 @@ function _saveGpPrefs() {
   } catch {}
 }
 _loadGpPrefs();
+
+// ============ Difficulty dropdown wiring ============
+(function wireDifficultyUi() {
+  const sel = document.getElementById('difficultySel');
+  const mpLbl = document.getElementById('difficultyMpLabel');
+  if (!sel) return;
+  sel.value = String(gameDifficulty);
+  sel.addEventListener('change', (e) => {
+    const v = parseInt(e.target.value, 10);
+    if (v >= 1 && v <= 5) {
+      gameDifficulty = v;
+      try { localStorage.setItem('gameDifficulty', String(v)); } catch {}
+    }
+  });
+  // Poll each frame (cheap) to update display for MP clients (read-only) vs host (editable).
+  setInterval(() => {
+    const isMp = !!(window.mpActive && mpActive());
+    const isClient = !!(window.mpIsClient && mpIsClient());
+    const lvl = getActiveDifficultyLevel();
+    if (isMp && isClient) {
+      // Client in MP: show host's difficulty as read-only.
+      if (!sel.disabled) { sel.disabled = true; sel.style.opacity = 0.65; sel.style.cursor = 'not-allowed'; }
+      if (sel.value !== String(lvl)) sel.value = String(lvl);
+      if (mpLbl) mpLbl.style.display = 'inline';
+    } else {
+      if (sel.disabled) { sel.disabled = false; sel.style.opacity = 1; sel.style.cursor = 'pointer'; }
+      if (mpLbl) mpLbl.style.display = 'none';
+      if (sel.value !== String(gameDifficulty)) sel.value = String(gameDifficulty);
+    }
+  }, 500);
+})();
 function _syncGpUi() {
   const s = (id) => document.getElementById(id);
   const set = (id, v) => { const el = s(id); if (el) el.value = v; };
@@ -7037,7 +7135,7 @@ function startRound() {
   reloadToken++;
   // In multiplayer, only the host spawns the shared enemies/pickups. Client sees them via broadcast.
   if (!mpActive() || mpIsHost()) {
-    const count = 3 + round * 2 + Math.floor(round / 3);
+    const count = Math.max(1, Math.round((3 + round * 2 + Math.floor(round / 3)) * diff().count));
     for (let i = 0; i < count; i++) spawnEnemy();
     // Ammo no longer pre-spawns at round start — only drops from kills.
     // Boosters: each type has a chance to spawn this round
@@ -8491,6 +8589,7 @@ function mpBroadcastWorld(dt) {
       n: round, active: roundActive, map: currentMap, bossSpawned,
       won: (round >= 13 && !survivorMode), lost: !!gameOver,
       chestRound: _pendingChestRound || 0,
+      diff: gameDifficulty,
     }, true);
   } catch (e) { console.warn('[mp] broadcast failed', e); }
   // Chest ready-up: advance the round only when every connected player has dismissed their ability banner.
