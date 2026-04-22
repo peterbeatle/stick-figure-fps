@@ -525,7 +525,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.20</span>
+  <span style="font-weight:bold;color:#eee">v3.22</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.21.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -718,7 +718,14 @@
   <p id="subtitle" style="margin:0 0 8px">Kill stick figures to earn money. Buy better guns between rounds.</p>
   <div id="fullscreenHint" style="margin:2px 0 8px;display:inline-block;padding:6px 14px;background:rgba(255,204,51,0.08);border:1px solid rgba(255,204,51,0.35);border-radius:6px;color:#ffcc33;font-family:monospace;font-size:13px;letter-spacing:1px;text-shadow:0 0 10px rgba(255,160,0,0.6);animation:fsHintPulse 1.5s ease-in-out infinite alternate">Best experience in <b>FULLSCREEN</b> — press <b>F</b> to toggle</div>
   <p id="playerNameRow" style="margin:2px 0 8px;font-size:13px;opacity:0.7">Playing as <b id="playerNameShow" style="color:#ffcc33">—</b> <a href="#" id="changeNameLink" style="color:#7fc8ff;text-decoration:none;margin-left:6px">(change)</a></p>
-  <div id="difficultyRow" style="margin:2px 0 8px;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px">
+  <div id="topActions" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:4px 0 14px">
+    <button class="primary big" id="startBtn">Start Round</button>
+    <button class="primary" id="retryBtn" style="display:none"></button>
+    <!-- shopSettingsBtn kept hidden for legacy callers; gear icon supersedes it -->
+    <button type="button" id="shopSettingsBtn" style="display:none"></button>
+    <button type="button" id="shopHomeBtn" class="cornerIcon" title="Home">🏠</button>
+  </div>
+  <div id="difficultyRow" style="margin:8px 0 12px;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px">
     <span style="opacity:0.8">Difficulty:</span>
     <select id="difficultySel" style="background:#222;color:#ffcc33;border:1px solid #555;border-radius:4px;padding:4px 10px;font-family:monospace;font-weight:bold;cursor:pointer">
       <option value="1">1 — Easy</option>
@@ -729,12 +736,7 @@
     </select>
     <span id="difficultyMpLabel" style="display:none;font-size:12px;opacity:0.75">(set by host)</span>
   </div>
-  <div id="topActions" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:4px 0 14px">
-    <button class="primary big" id="startBtn">Start Round</button>
-    <button class="primary" id="retryBtn" style="display:none"></button>
-    <!-- shopSettingsBtn kept hidden for legacy callers; gear icon supersedes it -->
-    <button type="button" id="shopSettingsBtn" style="display:none"></button>
-    <button type="button" id="shopHomeBtn" class="cornerIcon" title="Home">🏠</button>
+  <div>
     <a href="https://discord.gg/WYGhvmmnBA" target="_blank" rel="noopener" id="homeDiscordBtn" title="Join our Discord" style="position:fixed;top:330px;right:28px;width:46px;height:46px;background:#5865F2;border:1px solid #4752c4;border-radius:50%;color:white;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:monospace;z-index:11;user-select:none;text-decoration:none;line-height:1" onmouseover="this.style.background='#4752c4'" onmouseout="this.style.background='#5865F2'">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M19.54 0c1.356 0 2.46 1.104 2.46 2.472v21.528l-2.58-2.28-1.452-1.344-1.536-1.428.636 2.22h-13.608c-1.356 0-2.46-1.104-2.46-2.472v-16.224c0-1.368 1.104-2.472 2.46-2.472h16.08zm-4.632 15.672c2.652-.084 3.672-1.824 3.672-1.824 0-3.864-1.728-6.996-1.728-6.996-1.728-1.296-3.372-1.26-3.372-1.26l-.168.192c2.04.624 2.988 1.524 2.988 1.524-1.248-.684-2.472-1.02-3.612-1.152-.864-.096-1.692-.072-2.424.024l-.204.024c-.42.036-1.44.192-2.724.756-.444.204-.708.348-.708.348s.996-.948 3.156-1.572l-.12-.144s-1.644-.036-3.372 1.26c0 0-1.728 3.132-1.728 6.996 0 0 1.008 1.74 3.66 1.824 0 0 .444-.54.804-.996-1.524-.456-2.1-1.416-2.1-1.416l.336.204.048.036.047.027.014.006.047.027c.3.168.6.3.876.408.492.192 1.08.384 1.764.516.9.168 1.956.228 3.108.012.564-.096 1.14-.264 1.74-.516.42-.156.888-.384 1.38-.708 0 0-.6.984-2.172 1.428.36.456.792.972.792.972zm-5.58-5.604c-.684 0-1.224.6-1.224 1.332 0 .732.552 1.332 1.224 1.332.684 0 1.224-.6 1.224-1.332.012-.732-.54-1.332-1.224-1.332zm4.38 0c-.684 0-1.224.6-1.224 1.332 0 .732.552 1.332 1.224 1.332.684 0 1.224-.6 1.224-1.332 0-.732-.54-1.332-1.224-1.332z"/></svg>
     </a>
@@ -1549,6 +1551,8 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.22', 'Nuke alarm now stops on death: endGame (SP) and the MP client "You Lost" path both call clearNukePodium() to kill the ticking alarm sound + hide the podium. Previously if you picked up the Bomb booster and died before arming it, the ticking kept playing on the restart screen.'],
+  ['v3.21', 'Controller polish pass. (1) Cursor speed dialed back 1500→1200. (2) <select> elements (difficulty dropdown, music track, etc.) cycle options when A is pressed — browsers won\'t open native dropdowns via .click(), so A now advances to the next option. Checkboxes/radios toggle on A too. (3) Difficulty selector moved to below Start Round, above Show Controls. (4) After Host Lobby → Leave, the main Start Round button\'s gray/blue "Waiting for players" inline styles are now cleared. (5) Double-tap D-pad right toggles auto-run (sprint on indefinitely) — status shown in the Settings → Controller panel. (6) Double-tap Left Stick in any cardinal direction triggers Dash (round 3 ability) — same physics as the keyboard W/A/S/D double-tap. Dash ability banner text updated to mention controller. (7) Active-input detection: mouse/controller. Using the controller hides the OS mouse pointer; moving the mouse hides the virtual cursor. No more two-cursors-on-screen. (8) New music track: "Midnight Drive" — 95 BPM mid-tempo dark synthwave in A minor, fills the BPM gap between Starfall and Overdrive.'],
   ['v3.20', 'Difficulty system (5 levels × HP/count/aim): 1 Easy / 2 Normal (default, the old feel) / 3 Hard / 4 Insane / 5 Nightmare. Dropdown on home screen; persists in localStorage. In MP, host\'s selection is broadcast via round state; clients see a read-only "(set by host)" label. Affects grunt HP, boss HP, Stick King HP, per-round enemy count, and enemy shot spread (tighter spread at higher difficulty). Cursor smoothness fix: switched from left/top to translate3d so the browser GPU-composites it — much smoother at any FPS cap. Speed bumped 900→1500 px/sec. RS now scrolls whichever element is under the cursor (settings modal, leaderboard list, anything with overflow:auto) — walks up the DOM to find the nearest scrollable ancestor.'],
   ['v3.19', 'Controller Phase 2. Settings → Controller 🎮 section: look sensitivity (1–8), deadzone (0.05–0.35), response-curve exponent (1–3), invert Y, aim assist toggle, aim-assist slowdown strength (0.4–1.0) + Reset to Defaults. All prefs persist in localStorage. Virtual cursor for menu navigation: a yellow dot follows the left stick whenever you\'re NOT in a round + NOT in pointer lock; A button clicks whatever\'s under it (synthesizes an element.click() via document.elementFromPoint). Works with every existing UI element — shop tiles, leaderboard buttons, login modal, etc.'],
   ['v3.18', 'Gun level stars are now color-differentiated: current-level stars are gold with a glow (as before), remaining-slot stars are dim gray #444 (no glow). Previously both filled and empty glyphs were in the same yellow span, making the distinction hard to read at a glance. Applies everywhere buildShop renders — home, between rounds, and restart screens.'],
@@ -1912,6 +1916,17 @@ const MUSIC_TRACKS = [
       { root: 'A1',  notes: ['A3','C#4','E4','G4'] },  // A7
       { root: 'E1',  notes: ['E3','G#3','B3','D4'] },  // E7
       { root: 'B1',  notes: ['B2','D#3','F#3','A3'] }, // B7
+    ],
+  },
+  {
+    // Mid-tempo dark synthwave — classic Am–Em–F–Dm7 progression. Fills the gap between the
+    // slow ambient Starfall and the fast driving Overdrive.
+    name: 'Midnight Drive', bpm: 95, pattern: 'driving',
+    chords: [
+      { root: 'A1', notes: ['A3','C4','E4','G4'] },   // Am7
+      { root: 'E1', notes: ['E3','G3','B3','D4'] },   // Em7
+      { root: 'F1', notes: ['F3','A3','C4','E4'] },   // Fmaj7
+      { root: 'D1', notes: ['D3','F3','A3','C4'] },   // Dm7
     ],
   },
 ];
@@ -5463,7 +5478,7 @@ function grantAbilityForRound(r) {
   const body = document.getElementById('abilityBody');
   const banner = document.getElementById('abilityGranted');
   let text = '';
-  if (r === 3) { hasDash = true; text = 'DASH — double-tap W / A / S / D to dash in that direction'; }
+  if (r === 3) { hasDash = true; text = 'DASH — double-tap W / A / S / D (keyboard) or double-tap Left Stick in any direction (controller) to dash that way'; }
   else if (r === 6) { hasTripleJump = true; text = 'TRIPLE JUMP — you can now jump three times in a row'; }
   else if (r === 9) { hasPowerSlam = true; text = 'POWER SLAM — double-tap Crouch while airborne to slam down into the ground, try this with triple jump!'; }
   updateAbilityHud();
@@ -6506,10 +6521,70 @@ function updateGamepad(dt) {
   if (edge(4)) _gpCycleWeapon(-1);
   if (edge(5)) _gpCycleWeapon(1);
 
-  // Left stick click (10) → sprint (hold).
-  gamepadCfg.sprint = !!btnPressed[10];
+  // Left stick click (10) → sprint (hold). OR auto-run toggled via double-tap D-pad right.
+  gamepadCfg.sprint = !!btnPressed[10] || !!gamepadCfg.autoRun;
+
+  // D-pad right (15) double-tap → toggle auto-run
+  if (btnPressed[15] && !prev[15]) {
+    const nowMs = performance.now();
+    if (nowMs - (gamepadCfg._lastDpadR || 0) < 400) {
+      gamepadCfg.autoRun = !gamepadCfg.autoRun;
+      console.log('[gamepad] auto-run ' + (gamepadCfg.autoRun ? 'ON' : 'OFF'));
+      try { const el = document.getElementById('gpStatus'); if (el) el.textContent = 'Auto-run: ' + (gamepadCfg.autoRun ? 'ON 🏃' : 'OFF'); } catch {}
+    }
+    gamepadCfg._lastDpadR = nowMs;
+  }
+
+  // Double-tap LS direction → dash (if the player has the dash ability from the chest round)
+  if (typeof hasDash !== 'undefined' && hasDash) {
+    _gpDashDetect(dt);
+  }
 
   gamepadCfg._prev = btnPressed;
+}
+
+// Detect double-tap of left stick in a cardinal direction → trigger dash same way as keyboard W/A/S/D double-tap.
+const _gpDashState = { lastDir: null, lastTime: 0, lastPushed: null };
+function _gpDashDetect(dt) {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let gp = null;
+  for (const p of pads) { if (p && p.connected) { gp = p; break; } }
+  if (!gp) return;
+  const dz = 0.55; // require firm push to count as a tap
+  const lx = gp.axes[0] || 0, ly = gp.axes[1] || 0;
+  let dir = null;
+  if (Math.abs(ly) > Math.abs(lx)) {
+    if (ly < -dz) dir = 'forward';
+    else if (ly > dz) dir = 'back';
+  } else {
+    if (lx < -dz) dir = 'left';
+    else if (lx > dz) dir = 'right';
+  }
+  const nowMs = performance.now();
+  // Edge: transitioned from "no direction" to a direction (a tap)
+  if (dir && _gpDashState.lastPushed !== dir) {
+    _gpDashState.lastPushed = dir;
+    // Double-tap: same direction within 350ms of previous tap release
+    if (_gpDashState.lastDir === dir && nowMs - _gpDashState.lastTime < 350 && typeof hasDash !== 'undefined' && hasDash) {
+      // Compute dash velocity in world space from camera yaw + direction (same formula as keyboard W/A/S/D dash)
+      const yaw = player.yaw;
+      const fwdX = -Math.sin(yaw), fwdZ = -Math.cos(yaw);
+      const rgtX =  Math.cos(yaw), rgtZ = -Math.sin(yaw);
+      let dx = 0, dz = 0;
+      if (dir === 'forward')      { dx = fwdX;  dz = fwdZ;  }
+      else if (dir === 'back')    { dx = -fwdX; dz = -fwdZ; }
+      else if (dir === 'right')   { dx = rgtX;  dz = rgtZ;  }
+      else if (dir === 'left')    { dx = -rgtX; dz = -rgtZ; }
+      _dashVx = dx * 30; _dashVz = dz * 30;
+      _dashTimer = 0.2;
+      _gpDashState.lastDir = null; // reset so we don't retrigger
+    } else {
+      _gpDashState.lastDir = dir;
+      _gpDashState.lastTime = nowMs;
+    }
+  } else if (!dir) {
+    _gpDashState.lastPushed = null;
+  }
 }
 
 // =========================================================================
@@ -6519,7 +6594,7 @@ const gpCursor = {
   el: null,
   x: (typeof window !== 'undefined') ? window.innerWidth / 2 : 600,
   y: (typeof window !== 'undefined') ? window.innerHeight / 2 : 400,
-  speed: 1500,        // pixels/sec at full stick deflection
+  speed: 1200,        // pixels/sec at full stick deflection
   scrollSpeed: 1400,  // pixels/sec at full RS deflection
   visible: false,
   _prevA: false,
@@ -6545,6 +6620,24 @@ function _gpFindScrollable(el) {
   // Fallback: whole window
   return document.scrollingElement || document.documentElement;
 }
+// Track which input method is currently "active" (mouse vs controller). Used to show/hide the
+// OS mouse cursor vs the virtual gamepad cursor so both aren't on screen at once.
+let _activeInput = 'mouse'; // 'mouse' | 'controller'
+function _setActiveInput(mode) {
+  if (_activeInput === mode) return;
+  _activeInput = mode;
+  if (mode === 'controller') {
+    document.documentElement.style.cursor = 'none';
+    document.body.style.cursor = 'none';
+  } else {
+    document.documentElement.style.cursor = '';
+    document.body.style.cursor = '';
+  }
+}
+// Any real mouse movement → back to mouse mode
+window.addEventListener('mousemove', () => { if (!pointerLocked) _setActiveInput('mouse'); });
+window.addEventListener('mousedown', () => { if (!pointerLocked) _setActiveInput('mouse'); });
+
 function updateGpCursor(dt) {
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   let gp = null;
@@ -6557,15 +6650,24 @@ function updateGpCursor(dt) {
     gpCursor.visible = false;
     return;
   }
-  ensureGpCursorEl();
-  if (!gpCursor.visible) {
-    gpCursor.el.style.display = 'block';
-    gpCursor.visible = true;
-  }
   const dz = gamepadCfg.deadzone;
   // LEFT stick → move cursor
   const lx = _gpDeadzone(gp.axes[0] || 0, dz);
   const ly = _gpDeadzone(gp.axes[1] || 0, dz);
+  // Any real stick/button input switches us to controller mode (hides OS cursor)
+  const anyGpInput = lx || ly || _gpBtnPressed(gp.buttons[0] || 0);
+  if (anyGpInput) _setActiveInput('controller');
+  ensureGpCursorEl();
+  // Hide the virtual cursor entirely when the user is using the mouse
+  if (_activeInput === 'mouse') {
+    gpCursor.el.style.display = 'none';
+    gpCursor.visible = false;
+    return;
+  }
+  if (!gpCursor.visible) {
+    gpCursor.el.style.display = 'block';
+    gpCursor.visible = true;
+  }
   if (lx || ly) {
     gpCursor.x += lx * gpCursor.speed * dt;
     gpCursor.y += ly * gpCursor.speed * dt;
@@ -6581,13 +6683,25 @@ function updateGpCursor(dt) {
     const scroller = _gpFindScrollable(under);
     if (scroller) scroller.scrollTop += ry * gpCursor.scrollSpeed * dt;
   }
-  // A button (button 0) → click whatever element is under the cursor
+  // A button (button 0) → click or cycle the element under the cursor
   const aNow = _gpBtnPressed(gp.buttons[0] || 0);
   if (aNow && !gpCursor._prevA) {
     const target = document.elementFromPoint(gpCursor.x, gpCursor.y);
     if (target) {
-      try { target.click(); } catch {}
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') { try { target.focus(); } catch {} }
+      // <select> doesn't respond to .click() reliably (browser security) — cycle to next option on A.
+      if (target.tagName === 'SELECT') {
+        const opts = target.options;
+        if (opts && opts.length) {
+          target.selectedIndex = (target.selectedIndex + 1) % opts.length;
+          target.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      } else if (target.tagName === 'INPUT' && (target.type === 'checkbox' || target.type === 'radio')) {
+        target.checked = !target.checked;
+        target.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        try { target.click(); } catch {}
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') { try { target.focus(); } catch {} }
+      }
     }
   }
   gpCursor._prevA = aNow;
@@ -7192,6 +7306,9 @@ function endGame() {
   gameOver = true;
   roundActive = false;
   document.exitPointerLock?.();
+  // Silence the nuke-arming alarm + hide the podium — if the player died holding the Bomb booster
+  // without arming it, the ticking sound would otherwise continue on the restart screen.
+  try { clearNukePodium(); } catch {}
   try { window.gameAuth?.submitRunStats?.(killCounter, round, mpActive(), sandboxActive); } catch (e) { console.warn('[auth] submit failed', e); }
   showLostAnim(() => {
     openShop('You Lost', `You reached round ${round}. Restart the game or head back home.`);
@@ -8667,6 +8784,7 @@ function mpClientSync(dt) {
     if (roundState.lost && !gameOver) {
       gameOver = true; roundActive = false;
       document.exitPointerLock?.();
+      try { clearNukePodium(); } catch {}
       showLostAnim(() => {
         openShop('You Lost', `You reached round ${newRound}. Restart the game or head back home.`);
         overlay.setAttribute('data-mode', 'roundend');
@@ -9218,6 +9336,12 @@ function leaveLobby() {
   document.getElementById('mpStartBtn').disabled = false;
   document.getElementById('mpPanel').classList.remove('expanded');
   mpStatus('Left lobby.');
+  // Reset the main Start Round button back to its default look (updateReadyUI was tinting it
+  // gray/blue/green while in MP; those inline styles persist until we clear them).
+  startBtn.style.background = '';
+  startBtn.style.opacity = '';
+  startBtn.textContent = 'Start Round';
+  startBtn.dataset.mode = 'start';
   // Full reset to a fresh home screen (clears any lingering SP/MP state, resets guns/money/round).
   try { goHome(); } catch (e) { console.warn('[mp] goHome after leaveLobby failed', e); }
 }
