@@ -525,7 +525,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.22</span>
+  <span style="font-weight:bold;color:#eee">v3.23</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.21.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -653,10 +653,10 @@
   Ammo: <span id="ammo">12</span> / <span id="reserve">48</span>
 </div>
 <div id="hpBottom"><div class="hpRow"><div class="hpLbl">HP <span id="hpBottomNum">100</span>/100</div><div class="hpTrack"><div id="hpBottomFill"></div></div></div></div>
-<div id="nukePodiumHint" style="position:fixed;top:60%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.75);color:#ffcc33;font-family:monospace;font-weight:bold;font-size:22px;padding:10px 18px;border-radius:6px;letter-spacing:2px;z-index:9;display:none;pointer-events:none;text-shadow:0 2px 6px #000">Press E to ARM NUKE</div>
+<div id="nukePodiumHint" style="position:fixed;top:60%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.75);color:#ffcc33;font-family:monospace;font-weight:bold;font-size:22px;padding:10px 18px;border-radius:6px;letter-spacing:2px;z-index:9;display:none;pointer-events:none;text-shadow:0 2px 6px #000">Press E (Y on controller) to ARM NUKE</div>
 <div id="nukeToast" style="position:fixed;top:18%;left:50%;transform:translate(-50%,-50%);background:rgba(80,0,0,0.88);color:#ffcc22;font-family:monospace;font-weight:bold;font-size:22px;padding:12px 24px;border-radius:8px;letter-spacing:2px;z-index:16;display:none;pointer-events:none;text-align:center;text-shadow:0 2px 6px #000;border:2px solid #ff4040;box-shadow:0 0 30px rgba(255,40,40,0.55)">☢ BOMB READY ☢<br><span style="font-size:14px;color:#fff;letter-spacing:1px">Follow the red beacon to the big red button</span></div>
 <div id="chestToast" style="position:fixed;top:18%;left:50%;transform:translate(-50%,-50%);background:rgba(80,60,0,0.88);color:#ffe033;font-family:monospace;font-weight:bold;font-size:22px;padding:12px 24px;border-radius:8px;letter-spacing:2px;z-index:16;display:none;pointer-events:none;text-align:center;text-shadow:0 2px 6px #000;border:2px solid #ffd020;box-shadow:0 0 30px rgba(255,200,40,0.55)">✦ CHEST READY ✦<br><span style="font-size:14px;color:#fff;letter-spacing:1px">Follow the yellow beacon to the chest</span></div>
-<div id="chestHint" style="position:fixed;top:60%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.75);color:#ffe033;font-family:monospace;font-weight:bold;font-size:22px;padding:10px 18px;border-radius:6px;letter-spacing:2px;z-index:9;display:none;pointer-events:none;text-shadow:0 2px 6px #000">Press E to Open Chest</div>
+<div id="chestHint" style="position:fixed;top:60%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.75);color:#ffe033;font-family:monospace;font-weight:bold;font-size:22px;padding:10px 18px;border-radius:6px;letter-spacing:2px;z-index:9;display:none;pointer-events:none;text-shadow:0 2px 6px #000">Press E (Y on controller) to Open Chest</div>
 <div id="chestLookUp" style="position:fixed;top:35%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;font-size:110px;color:#ffd020;letter-spacing:10px;z-index:15;display:none;pointer-events:none;text-shadow:0 4px 18px #000,0 0 30px #ffaa00">LOOK UP!</div>
 <div id="abilityHud">
   <div id="orbDash" class="abilityOrb yellow" title="Dash — double-tap WASD"></div>
@@ -667,7 +667,7 @@
 <div id="abilityGranted" style="position:fixed;top:32%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;z-index:17;display:none;pointer-events:none;text-align:center">
   <div id="abilityTitle" style="font-size:54px;color:#ffe033;letter-spacing:6px;text-shadow:0 0 24px #ff8800,0 0 48px #ff8800,0 2px 8px #000">NEW ABILITY GRANTED</div>
   <div id="abilityBody" style="font-size:22px;color:#fff;letter-spacing:3px;margin-top:12px;text-shadow:0 2px 6px #000">…</div>
-  <div id="abilityContinue" style="font-size:16px;color:#ffcc33;letter-spacing:4px;margin-top:26px;text-shadow:0 0 12px #ff8800,0 2px 6px #000;animation:abilityPulse 1s ease-in-out infinite alternate">PRESS ENTER TO CONTINUE</div>
+  <div id="abilityContinue" style="font-size:16px;color:#ffcc33;letter-spacing:4px;margin-top:26px;text-shadow:0 0 12px #ff8800,0 2px 6px #000;animation:abilityPulse 1s ease-in-out infinite alternate">PRESS ENTER (Y ON CONTROLLER) TO CONTINUE</div>
 </div>
 <div id="lookUpBanner" style="position:fixed;top:35%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;font-size:110px;color:#ff2222;letter-spacing:10px;z-index:15;display:none;pointer-events:none;text-shadow:0 4px 18px #000,0 0 30px #ff0000">LOOK UP!</div>
 <canvas id="minimap" width="200" height="200" style="position:fixed;left:12px;top:12px;z-index:7;border-radius:50%;background:rgba(0,0,0,0.55);box-shadow:0 0 8px rgba(0,0,0,0.6);pointer-events:none"></canvas>
@@ -852,6 +852,18 @@
       <div style="display:flex;flex-direction:column;gap:8px">
         <button type="button" id="confirmedCloseTab" style="background:#4caf50;color:white;border:0;border-radius:4px;padding:12px;cursor:pointer;font-family:monospace;font-weight:bold">Close this tab</button>
         <button type="button" id="confirmedPlayHere" style="background:#444;color:#ccc;border:0;border-radius:4px;padding:8px;cursor:pointer;font-family:monospace;font-size:12px">I don't have the original tab — play here</button>
+      </div>
+    </div>
+  </div>
+  <div id="gpKeypadModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:180;align-items:center;justify-content:center;font-family:monospace">
+    <div style="background:#1a1a1a;border:1px solid #444;border-radius:10px;padding:22px;width:min(320px,92vw);color:#eee">
+      <h3 style="margin:0 0 10px;color:#ffcc33;text-align:center;letter-spacing:2px">ENTER PASSCODE</h3>
+      <div id="gpKeypadDisplay" style="background:#0d0d0d;border:2px solid #444;border-radius:6px;padding:12px;font-size:26px;letter-spacing:10px;text-align:center;color:#ffcc33;font-weight:bold;min-height:24px;margin-bottom:6px"></div>
+      <div id="gpKeypadErr" style="color:#ff5050;font-size:12px;min-height:16px;text-align:center;margin-bottom:8px"></div>
+      <div id="gpKeypadGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px"></div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button type="button" id="gpKeypadCancel" style="flex:1;background:#666;color:white;border:0;border-radius:4px;padding:12px;font-family:monospace;cursor:pointer;font-weight:bold">Cancel</button>
+        <button type="button" id="gpKeypadSubmit" style="flex:1;background:#4caf50;color:white;border:0;border-radius:4px;padding:12px;font-family:monospace;cursor:pointer;font-weight:bold">Submit</button>
       </div>
     </div>
   </div>
@@ -1551,6 +1563,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.23', 'Controller polish round 2: (1) Chest + nuke podium hints now read "Press E (Y on controller)". (2) Ability banner now reads "PRESS ENTER (Y ON CONTROLLER) TO CONTINUE" — Y dismisses it same as Enter. (3) Dash changed: double-click the L3 stick button (actual click, not direction wiggle) — direction taken from current LS deflection, defaults to forward if LS is centered. (4) Start button (btn 9) now pauses/unpauses during a round. (5) Jetpack now works on controller — hold A for upward thrust (jetpack code now checks gamepadCfg.jump alongside keys[Space]). (6) Cheats passcode has a full on-screen numeric keypad that opens when the Cheats button is clicked while controller is the active input. 12-button grid (0–9, ⌫, CLR) + Cancel/Submit.'],
   ['v3.22', 'Nuke alarm now stops on death: endGame (SP) and the MP client "You Lost" path both call clearNukePodium() to kill the ticking alarm sound + hide the podium. Previously if you picked up the Bomb booster and died before arming it, the ticking kept playing on the restart screen.'],
   ['v3.21', 'Controller polish pass. (1) Cursor speed dialed back 1500→1200. (2) <select> elements (difficulty dropdown, music track, etc.) cycle options when A is pressed — browsers won\'t open native dropdowns via .click(), so A now advances to the next option. Checkboxes/radios toggle on A too. (3) Difficulty selector moved to below Start Round, above Show Controls. (4) After Host Lobby → Leave, the main Start Round button\'s gray/blue "Waiting for players" inline styles are now cleared. (5) Double-tap D-pad right toggles auto-run (sprint on indefinitely) — status shown in the Settings → Controller panel. (6) Double-tap Left Stick in any cardinal direction triggers Dash (round 3 ability) — same physics as the keyboard W/A/S/D double-tap. Dash ability banner text updated to mention controller. (7) Active-input detection: mouse/controller. Using the controller hides the OS mouse pointer; moving the mouse hides the virtual cursor. No more two-cursors-on-screen. (8) New music track: "Midnight Drive" — 95 BPM mid-tempo dark synthwave in A minor, fills the BPM gap between Starfall and Overdrive.'],
   ['v3.20', 'Difficulty system (5 levels × HP/count/aim): 1 Easy / 2 Normal (default, the old feel) / 3 Hard / 4 Insane / 5 Nightmare. Dropdown on home screen; persists in localStorage. In MP, host\'s selection is broadcast via round state; clients see a read-only "(set by host)" label. Affects grunt HP, boss HP, Stick King HP, per-round enemy count, and enemy shot spread (tighter spread at higher difficulty). Cursor smoothness fix: switched from left/top to translate3d so the browser GPU-composites it — much smoother at any FPS cap. Speed bumped 900→1500 px/sec. RS now scrolls whichever element is under the cursor (settings modal, leaderboard list, anything with overflow:auto) — walks up the DOM to find the nearest scrollable ancestor.'],
@@ -6513,16 +6526,55 @@ function updateGamepad(dt) {
 
   // Face buttons (Xbox): A=0 jump, B=1 crouch (hold), X=2 reload, Y=3 interact.
   if (edge(0)) tryJump();
+  // Hold A also counts as "jump held" — needed for the Jetpack booster's upward thrust (which
+  // reads keys[keyBind.jump]). We set a gamepad-local flag so we don't clobber keyboard state.
+  gamepadCfg.jump = !!btnPressed[0];
   gamepadCfg.crouch = !!btnPressed[1];
   if (edge(2)) { try { tryReload(); } catch {} }
-  if (edge(3)) { try { tryChestInteract(); } catch {} }
+  // Y (button 3) = interact (chest/nuke) when one is active, else = dismiss the ability banner.
+  if (edge(3)) {
+    if (_awaitingAbilityContinue) {
+      try { dismissAbilityBanner(); } catch {}
+    } else {
+      try { tryChestInteract(); } catch {}
+      try { tryNukeInteract && tryNukeInteract(); } catch {}
+    }
+  }
 
   // Bumpers: weapon cycle.
   if (edge(4)) _gpCycleWeapon(-1);
   if (edge(5)) _gpCycleWeapon(1);
 
-  // Left stick click (10) → sprint (hold). OR auto-run toggled via double-tap D-pad right.
+  // Start button (9) → pause / unpause (only in-round; mirrors keyboard P).
+  if (edge(9) && roundActive && !gameOver) { try { setPaused(!paused); } catch {} }
+
+  // L3 (button 10): single-click hold = sprint (or toggled via auto-run). Double-click = DASH.
   gamepadCfg.sprint = !!btnPressed[10] || !!gamepadCfg.autoRun;
+  if (edge(10)) {
+    const nowMs = performance.now();
+    if (nowMs - (gamepadCfg._lastL3 || 0) < 350 && typeof hasDash !== 'undefined' && hasDash) {
+      // Compute dash direction from current LS deflection; if LS is centered, dash forward.
+      const lx = gp.axes[0] || 0, ly = gp.axes[1] || 0;
+      const yaw = player.yaw;
+      const fwdX = -Math.sin(yaw), fwdZ = -Math.cos(yaw);
+      const rgtX =  Math.cos(yaw), rgtZ = -Math.sin(yaw);
+      let dx, dz;
+      if (Math.hypot(lx, ly) < 0.3) {
+        dx = fwdX; dz = fwdZ; // LS centered → forward
+      } else {
+        // World-space direction from the stick input + camera yaw
+        dx = fwdX * -ly + rgtX * lx;
+        dz = fwdZ * -ly + rgtZ * lx;
+        const mag = Math.hypot(dx, dz);
+        if (mag > 0) { dx /= mag; dz /= mag; }
+      }
+      _dashVx = dx * 30; _dashVz = dz * 30;
+      _dashTimer = 0.2;
+      gamepadCfg._lastL3 = 0; // reset so a third click doesn't also dash immediately
+    } else {
+      gamepadCfg._lastL3 = nowMs;
+    }
+  }
 
   // D-pad right (15) double-tap → toggle auto-run
   if (btnPressed[15] && !prev[15]) {
@@ -6535,56 +6587,7 @@ function updateGamepad(dt) {
     gamepadCfg._lastDpadR = nowMs;
   }
 
-  // Double-tap LS direction → dash (if the player has the dash ability from the chest round)
-  if (typeof hasDash !== 'undefined' && hasDash) {
-    _gpDashDetect(dt);
-  }
-
   gamepadCfg._prev = btnPressed;
-}
-
-// Detect double-tap of left stick in a cardinal direction → trigger dash same way as keyboard W/A/S/D double-tap.
-const _gpDashState = { lastDir: null, lastTime: 0, lastPushed: null };
-function _gpDashDetect(dt) {
-  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-  let gp = null;
-  for (const p of pads) { if (p && p.connected) { gp = p; break; } }
-  if (!gp) return;
-  const dz = 0.55; // require firm push to count as a tap
-  const lx = gp.axes[0] || 0, ly = gp.axes[1] || 0;
-  let dir = null;
-  if (Math.abs(ly) > Math.abs(lx)) {
-    if (ly < -dz) dir = 'forward';
-    else if (ly > dz) dir = 'back';
-  } else {
-    if (lx < -dz) dir = 'left';
-    else if (lx > dz) dir = 'right';
-  }
-  const nowMs = performance.now();
-  // Edge: transitioned from "no direction" to a direction (a tap)
-  if (dir && _gpDashState.lastPushed !== dir) {
-    _gpDashState.lastPushed = dir;
-    // Double-tap: same direction within 350ms of previous tap release
-    if (_gpDashState.lastDir === dir && nowMs - _gpDashState.lastTime < 350 && typeof hasDash !== 'undefined' && hasDash) {
-      // Compute dash velocity in world space from camera yaw + direction (same formula as keyboard W/A/S/D dash)
-      const yaw = player.yaw;
-      const fwdX = -Math.sin(yaw), fwdZ = -Math.cos(yaw);
-      const rgtX =  Math.cos(yaw), rgtZ = -Math.sin(yaw);
-      let dx = 0, dz = 0;
-      if (dir === 'forward')      { dx = fwdX;  dz = fwdZ;  }
-      else if (dir === 'back')    { dx = -fwdX; dz = -fwdZ; }
-      else if (dir === 'right')   { dx = rgtX;  dz = rgtZ;  }
-      else if (dir === 'left')    { dx = -rgtX; dz = -rgtZ; }
-      _dashVx = dx * 30; _dashVz = dz * 30;
-      _dashTimer = 0.2;
-      _gpDashState.lastDir = null; // reset so we don't retrigger
-    } else {
-      _gpDashState.lastDir = dir;
-      _gpDashState.lastTime = nowMs;
-    }
-  } else if (!dir) {
-    _gpDashState.lastPushed = null;
-  }
 }
 
 // =========================================================================
@@ -6736,6 +6739,76 @@ function _saveGpPrefs() {
   } catch {}
 }
 _loadGpPrefs();
+
+// ============ Controller-friendly numeric keypad for the Cheats passcode ============
+(function buildGpKeypad() {
+  const grid = document.getElementById('gpKeypadGrid');
+  if (!grid) return;
+  let value = '';
+  const display = document.getElementById('gpKeypadDisplay');
+  const errEl = document.getElementById('gpKeypadErr');
+  const modal = document.getElementById('gpKeypadModal');
+  const render = () => { if (display) display.textContent = value ? '•'.repeat(value.length) : ''; };
+  const layout = ['1','2','3','4','5','6','7','8','9','⌫','0','CLR'];
+  layout.forEach(ch => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = ch;
+    const isDigit = /^\d$/.test(ch);
+    b.style.cssText = `background:${isDigit ? '#2864c2' : '#555'};color:white;border:0;border-radius:4px;padding:18px;font-family:monospace;font-size:22px;font-weight:bold;cursor:pointer`;
+    b.addEventListener('click', () => {
+      if (errEl) errEl.textContent = '';
+      if (ch === '⌫') value = value.slice(0, -1);
+      else if (ch === 'CLR') value = '';
+      else if (value.length < 20) value += ch;
+      render();
+    });
+    grid.appendChild(b);
+  });
+  document.getElementById('gpKeypadCancel').addEventListener('click', () => {
+    value = ''; render();
+    if (errEl) errEl.textContent = '';
+    modal.style.display = 'none';
+  });
+  document.getElementById('gpKeypadSubmit').addEventListener('click', () => {
+    const codeInput = document.getElementById('cheatsCode');
+    if (codeInput) codeInput.value = value;
+    document.getElementById('cheatsSubmit').click();
+    // If the real unlock succeeded, the cheatsErr element is display:none — detect that.
+    setTimeout(() => {
+      const cheatsErr = document.getElementById('cheatsErr');
+      if (cheatsErr && cheatsErr.style.display === 'inline') {
+        if (errEl) errEl.textContent = 'Wrong passcode';
+        value = ''; render();
+      } else {
+        value = ''; render();
+        modal.style.display = 'none';
+      }
+    }, 30);
+  });
+  // Expose a helper so other code (cheats button click) can open the keypad.
+  window._openGpKeypad = () => {
+    value = ''; render();
+    if (errEl) errEl.textContent = '';
+    modal.style.display = 'flex';
+  };
+})();
+// Intercept the Cheats button click when the controller is the active input: route to the keypad.
+(function hookCheatsForController() {
+  const intercept = (btnId) => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.addEventListener('click', (e) => {
+      if (_activeInput === 'controller' && !cheatsUnlocked && window._openGpKeypad) {
+        // The original handler would show the passcode input; we override to show the keypad instead.
+        e.stopImmediatePropagation();
+        window._openGpKeypad();
+      }
+    }, true); // capture-phase so we run before the original handler
+  };
+  intercept('cheatsBtn');
+  intercept('pauseCheatsBtn');
+})();
 
 // ============ Difficulty dropdown wiring ============
 (function wireDifficultyUi() {
@@ -6958,7 +7031,7 @@ function updatePlayer(dt) {
   // Sandbox fly mode bypasses gravity entirely (handled by sandboxTick driving Y directly).
   if (sandboxActive && sxFly) return;
   // Jetpack: hold Space to thrust upward; partial gravity compensation while held
-  if (jetpackBoostT > 0 && keys[keyBind.jump]) {
+  if (jetpackBoostT > 0 && (keys[keyBind.jump] || gamepadCfg.jump)) {
     player.vy += 34 * dt;               // strong upward thrust
     if (player.vy > 10) player.vy = 10; // cap ascent speed
     player.onGround = false;
