@@ -527,7 +527,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.35</span>
+  <span style="font-weight:bold;color:#eee">v3.36</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.22.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1565,6 +1565,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.36', 'Round-skip cheat now grants the chest abilities you would\'ve earned up to that round: skip to 4–6 = Dash, 7–9 = Dash + Triple Jump, 10+ = all three (Dash + Triple Jump + Power Slam). HUD orbs on the left-side ability panel update immediately.'],
   ['v3.35', 'Slam 3rd-person pose now animates: fists stay overhead during the fall, then swing down to a ground-pounded pose over 180ms starting at ground impact (arms interpolate from shoulder→overhead-fist to shoulder→forward-elbow→low-fist). Arms are rebuilt each frame from the two pose endpoints, so the swing reads clearly even on a short linger.'],
   ['v3.34', 'Slam 3rd-person view timing: slam descent velocity slowed from -60 → -35 m/s (more time to watch yourself fall) AND camera now lingers in 3rd person for 900ms after ground impact before snapping back to 1st. The AoE explosion still fires at the exact landing frame as before.'],
   ['v3.33', '3rd-person slam fix: on the entry frame, now also calls _updateSlam3P(dt) so the camera offset applies immediately instead of waiting a frame (slam is fast — waiting a frame meant the 3P view sometimes never rendered before ground contact). Added console logs ([slam3p] enter/exit) to confirm triggering during testing.'],
@@ -8202,6 +8203,12 @@ document.getElementById('skipRoundBtn').addEventListener('click', () => {
   for (const x of explosions) scene.remove(x.mesh);
   explosions.length = 0;
   round = target;
+  // Skipping past ability-unlock rounds (3, 6, 9) should grant those abilities + show their HUD orbs,
+  // matching what the player would have earned by clearing those rounds normally.
+  hasDash       = target >= 4;   // round 3 reward
+  hasTripleJump = target >= 7;   // round 6 reward
+  hasPowerSlam  = target >= 10;  // round 9 reward
+  updateAbilityHud();
   killCounter = 0;
   killStreak = 0;
   if (boostActive) endBoost();
