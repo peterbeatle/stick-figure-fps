@@ -527,7 +527,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.40</span>
+  <span style="font-weight:bold;color:#eee">v3.42</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.22.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1616,29 +1616,31 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
-  ['v3.40', 'Slam pose: fists now drive below the ground plane on impact (y=-0.2) with forearms pointing straight down. Fist spheres hidden past t=0.6 so nothing floats below ground. Will read as "hands buried into the earth" through the ground plane clip.'],
-  ['v3.39', 'Two big ones: (1) Slam pose v4 — full-body animation: upright stick figure with arms raised overhead falls, then on impact the WHOLE figure squats (head/torso/hip all drop) with arms swinging straight down to his sides. No more hands-into-ground weirdness. (2) Leaderboard per-difficulty filter: new row of 6 buttons (All / 1 Easy / 2 Norm / 3 Hard / 4 Ins / 5 Nght). "All" uses the existing aggregate profile columns; specific difficulty queries a new profile_runs table that tracks bests per (mode × difficulty). Runs are submitted to BOTH tables on run-end. All filter buttons are controller-cursor clickable.'],
-  ['v3.38', 'Slam pose v3: fists now drive INTO the ground on impact. Forearm endpoints extend below y=0 so the ground plane clips them (reads as "hands buried into the earth"); fist sphere fades out past t=0.5 so there\'s nothing awkward floating around at the end of the animation.'],
-  ['v3.37', 'Slam pose v2 — "hulk smash". Both forearms converge to a single clasped fist in front of the player (single larger fist sphere) instead of two separate fists spread apart. Previous pose had fists at (-0.15, 0.55) and (+0.15, 0.55) which read weird; now both bones end at (0, 0.15, 0.55).'],
-  ['v3.36', 'Round-skip cheat now grants the chest abilities you would\'ve earned up to that round: skip to 4–6 = Dash, 7–9 = Dash + Triple Jump, 10+ = all three (Dash + Triple Jump + Power Slam). HUD orbs on the left-side ability panel update immediately.'],
-  ['v3.35', 'Slam 3rd-person pose now animates: fists stay overhead during the fall, then swing down to a ground-pounded pose over 180ms starting at ground impact (arms interpolate from shoulder→overhead-fist to shoulder→forward-elbow→low-fist). Arms are rebuilt each frame from the two pose endpoints, so the swing reads clearly even on a short linger.'],
-  ['v3.34', 'Slam 3rd-person view timing: slam descent velocity slowed from -60 → -35 m/s (more time to watch yourself fall) AND camera now lingers in 3rd person for 900ms after ground impact before snapping back to 1st. The AoE explosion still fires at the exact landing frame as before.'],
-  ['v3.33', '3rd-person slam fix: on the entry frame, now also calls _updateSlam3P(dt) so the camera offset applies immediately instead of waiting a frame (slam is fast — waiting a frame meant the 3P view sometimes never rendered before ground contact). Added console logs ([slam3p] enter/exit) to confirm triggering during testing.'],
-  ['v3.32', 'Power Slam → 3rd-person view. When you trigger Power Slam (double-tap Crouch/B while airborne), camera pulls back + up and a stick figure of yourself (colored to your player slot) appears in fist-overhead slam pose, so you can watch your own slam. Camera reverts to 1st person on ground impact (the existing AoE explosion still fires). First-person weapon mesh is hidden during the 3rd-person segment so it doesn\'t hang in the middle of the screen.'],
-  ['v3.31', 'Fixed the "spawn jumping" bug where pressing A to click Start Round also made the character jump on the first frame of the round. Cursor-click handler now seeds gamepadCfg._prev[0]=true so the in-round poll sees A as already-held (no fresh edge = no tryJump()) until the user releases and re-presses it.'],
-  ['v3.30', 'Added a "Menu cursor speed" slider in Settings → Controller (500–2000 px/sec, default 1050). Persists to localStorage alongside other controller prefs and is included in the Reset to Defaults button.'],
-  ['v3.29', 'Power Slam now triggers on double-tap B (button 1) with the controller while airborne — was keyboard-only before. Ability banner updated to mention both inputs. Third-person slam animation (see self fist-slam in 3rd person before reverting to 1st) added to the project roadmap for later.'],
-  ['v3.28', 'Virtual cursor now hides during the "Round X cleared" transition animation, the NEW ABILITY banner (_awaitingAbilityContinue), and chest interaction (_chestInProgress) — previously it was popping up the moment roundActive flipped false, even though the shop/ready-up button wasn\'t interactive yet.'],
-  ['v3.27', 'Hotbar now wraps to a second row if it overflows (flex-wrap + max-width:96vw) — fixes the Booster Wand slot being pushed off-screen when the player owns many guns at once (e.g. money-cheat + all weapons + wand cheat = 14 slots, too wide to fit on one line).'],
-  ['v3.26', 'Start button now unpauses too (was only pausing) — the Start-button edge-detect was inside updateGamepad which is gated behind !paused, so once paused the button press went unnoticed. Moved it to updateGpCursor which runs every frame. Also: virtual cursor now shows on the pause menu (previous gate "(roundActive||sandbox) || pointerLocked" hid it when paused during a round; new gate requires "active gameplay + pointer lock + NOT paused" before hiding).'],
-  ['v3.24', 'Cursor speed tuned to 1050 (midpoint between the original 900 and the overshoot 1200).'],
-  ['v3.23', 'Controller polish round 2: (1) Chest + nuke podium hints now read "Press E (Y on controller)". (2) Ability banner now reads "PRESS ENTER (Y ON CONTROLLER) TO CONTINUE" — Y dismisses it same as Enter. (3) Dash changed: double-click the L3 stick button (actual click, not direction wiggle) — direction taken from current LS deflection, defaults to forward if LS is centered. (4) Start button (btn 9) now pauses/unpauses during a round. (5) Jetpack now works on controller — hold A for upward thrust (jetpack code now checks gamepadCfg.jump alongside keys[Space]). (6) Cheats passcode has a full on-screen numeric keypad that opens when the Cheats button is clicked while controller is the active input. 12-button grid (0–9, ⌫, CLR) + Cancel/Submit.'],
-  ['v3.22', 'Nuke alarm now stops on death: endGame (SP) and the MP client "You Lost" path both call clearNukePodium() to kill the ticking alarm sound + hide the podium. Previously if you picked up the Bomb booster and died before arming it, the ticking kept playing on the restart screen.'],
-  ['v3.21', 'Controller polish pass. (1) Cursor speed dialed back 1500→1200. (2) <select> elements (difficulty dropdown, music track, etc.) cycle options when A is pressed — browsers won\'t open native dropdowns via .click(), so A now advances to the next option. Checkboxes/radios toggle on A too. (3) Difficulty selector moved to below Start Round, above Show Controls. (4) After Host Lobby → Leave, the main Start Round button\'s gray/blue "Waiting for players" inline styles are now cleared. (5) Double-tap D-pad right toggles auto-run (sprint on indefinitely) — status shown in the Settings → Controller panel. (6) Double-tap Left Stick in any cardinal direction triggers Dash (round 3 ability) — same physics as the keyboard W/A/S/D double-tap. Dash ability banner text updated to mention controller. (7) Active-input detection: mouse/controller. Using the controller hides the OS mouse pointer; moving the mouse hides the virtual cursor. No more two-cursors-on-screen. (8) New music track: "Midnight Drive" — 95 BPM mid-tempo dark synthwave in A minor, fills the BPM gap between Starfall and Overdrive.'],
-  ['v3.20', 'Difficulty system (5 levels × HP/count/aim): 1 Easy / 2 Normal (default, the old feel) / 3 Hard / 4 Insane / 5 Nightmare. Dropdown on home screen; persists in localStorage. In MP, host\'s selection is broadcast via round state; clients see a read-only "(set by host)" label. Affects grunt HP, boss HP, Stick King HP, per-round enemy count, and enemy shot spread (tighter spread at higher difficulty). Cursor smoothness fix: switched from left/top to translate3d so the browser GPU-composites it — much smoother at any FPS cap. Speed bumped 900→1500 px/sec. RS now scrolls whichever element is under the cursor (settings modal, leaderboard list, anything with overflow:auto) — walks up the DOM to find the nearest scrollable ancestor.'],
-  ['v3.19', 'Controller Phase 2. Settings → Controller 🎮 section: look sensitivity (1–8), deadzone (0.05–0.35), response-curve exponent (1–3), invert Y, aim assist toggle, aim-assist slowdown strength (0.4–1.0) + Reset to Defaults. All prefs persist in localStorage. Virtual cursor for menu navigation: a yellow dot follows the left stick whenever you\'re NOT in a round + NOT in pointer lock; A button clicks whatever\'s under it (synthesizes an element.click() via document.elementFromPoint). Works with every existing UI element — shop tiles, leaderboard buttons, login modal, etc.'],
-  ['v3.18', 'Gun level stars are now color-differentiated: current-level stars are gold with a glow (as before), remaining-slot stars are dim gray #444 (no glow). Previously both filled and empty glyphs were in the same yellow span, making the distinction hard to read at a glance. Applies everywhere buildShop renders — home, between rounds, and restart screens.'],
-  ['v3.17', 'Home (🏠) button is now visible on the home screen too (was hidden by a CSS rule that only made sense when there was also a Start Round button; now the right-side icon stack ⚙ → 🏠 → Discord → ☕ is consistent across all modes).'],
+  ['v3.42', 'Changelog entries shortened to one-liners.'],
+  ['v3.41', 'Cannonball slam pose.'],
+  ['v3.40', 'Slam pose: hands drive into the ground on impact.'],
+  ['v3.39', 'Leaderboard filterable by difficulty. Full-body slam animation.'],
+  ['v3.38', 'Slam pose: fists clip into the ground on impact.'],
+  ['v3.37', 'Slam pose: clasped fists (hulk-smash).'],
+  ['v3.36', 'Round-skip cheat now grants the abilities you would\'ve earned up to that round.'],
+  ['v3.35', 'Slam 3rd-person: arms swing down at impact.'],
+  ['v3.34', 'Slam slower + 3rd-person camera lingers after impact.'],
+  ['v3.33', '3rd-person slam camera applies immediately on entry.'],
+  ['v3.32', 'Power Slam now triggers a 3rd-person view of yourself slamming.'],
+  ['v3.31', 'Fixed "spawn jumping" bug when clicking Start Round with the A button.'],
+  ['v3.30', 'Menu cursor speed slider in Settings → Controller.'],
+  ['v3.29', 'Power Slam now works on controller (double-tap B).'],
+  ['v3.28', 'Virtual cursor hides during round-clear + ability banner + chest sequence.'],
+  ['v3.27', 'Hotbar wraps to a second row when it overflows.'],
+  ['v3.26', 'Start button (controller) now unpauses too; cursor shows on pause menu.'],
+  ['v3.24', 'Controller cursor speed tuned to 1050.'],
+  ['v3.23', 'Controller polish: Y dismisses banners, L3 double-click dash, Start pauses, jetpack on A, cheats keypad.'],
+  ['v3.22', 'Bomb booster alarm stops on death.'],
+  ['v3.21', 'Controller polish: dropdown cycle on A, double-tap D-pad auto-run, mouse/controller exclusive cursors, new "Midnight Drive" track.'],
+  ['v3.20', 'Difficulty system (5 levels) + smoother/faster cursor + RS scrolls menus.'],
+  ['v3.19', 'Controller settings panel + virtual cursor for menu navigation.'],
+  ['v3.18', 'Gun level stars show gold filled + gray empty.'],
+  ['v3.17', 'Home button shown on home screen for consistent icon stack.'],
   ['v3.16', 'Added Discord (purple, inline SVG logo) and Buy Me a Coffee (yellow, ☕) icon buttons to the right-side stack on the home screen, under the settings gear + home icons. Open in new tabs.'],
   ['v3.15', 'Discoverability pass: added title, description, keywords, theme-color, canonical, author, viewport meta tags + full Open Graph set (og:title/description/url/image/type/site_name) + Twitter summary_large_image card. Pasting stickfigurefps.com into Discord/iMessage/Twitter/Slack will now show a proper preview card. OG image points to /og-image.png — user to upload a 1200x630 gameplay screenshot with that filename to the repo root.'],
   ['v3.14', 'Final sandbox/tutorial alignment — measured Pistol tile top at 428.8px via devtools, set sandboxLaunch to top:429px for a pixel-accurate match.'],
@@ -5310,23 +5312,23 @@ function _rebuildSlamFigure(t) {
   const hMat = _slam3P.headMat;
   const lerp = (a, b) => a + (b - a) * t;
   const lerpPt = (a, b) => [lerp(a[0], b[0]), lerp(a[1], b[1]), lerp(a[2], b[2])];
-  // All body landmarks interpolate between the upright and squat poses.
-  const headPos   = lerpPt([0.00, 1.75, 0.00], [0.00, 1.30, 0.00]);
-  const neck      = lerpPt([0.00, 1.50, 0.00], [0.00, 1.10, 0.00]);
-  const hip       = lerpPt([0.00, 0.90, 0.00], [0.00, 0.70, 0.00]);
-  const shoulderL = lerpPt([0.00, 1.40, 0.00], [0.00, 1.00, 0.00]);
-  const shoulderR = shoulderL;
-  // Arms: raised-overhead (clasped above head)  →  straight down at sides, fists DRIVEN INTO the
-  // ground (below y=0 so the ground plane clips them — reads as "hands buried into the earth").
-  const lElbow = lerpPt([-0.25, 1.90, 0.05],  [-0.30, 0.50, 0.00]);
-  const rElbow = lerpPt([ 0.25, 1.90, 0.05],  [ 0.30, 0.50, 0.00]);
-  const lFist  = lerpPt([ 0.00, 2.35, 0.00],  [-0.32,-0.20, 0.00]);
-  const rFist  = lerpPt([ 0.00, 2.35, 0.00],  [ 0.32,-0.20, 0.00]);
-  // Legs: t=0 mild skydive bend, t=1 deep squat — knees forward & out, feet wider + slightly forward.
-  const lKnee = lerpPt([-0.25, 0.40, 0.10],   [-0.38, 0.35, 0.30]);
-  const rKnee = lerpPt([ 0.25, 0.40, 0.10],   [ 0.38, 0.35, 0.30]);
-  const lFoot = lerpPt([-0.30, 0.00, 0.00],   [-0.40, 0.00, 0.05]);
-  const rFoot = lerpPt([ 0.30, 0.00, 0.00],   [ 0.40, 0.00, 0.05]);
+  // Upright (t=0, airborne) → CANNONBALL (t=1, tucked ball at impact). Like jumping into a pool:
+  // knees pulled up to chest, arms wrapped around knees, head tucked forward, butt near ground.
+  const headPos   = lerpPt([0.00, 1.75, 0.00], [0.00, 0.95, 0.20]);  // head tucks forward + down
+  const neck      = lerpPt([0.00, 1.50, 0.00], [0.00, 0.85, 0.10]);  // neck bends forward
+  const hip       = lerpPt([0.00, 0.90, 0.00], [0.00, 0.45, 0.00]);  // butt drops to near ground
+  const shoulderL = lerpPt([0.00, 1.40, 0.00], [-0.15, 0.80, 0.05]); // torso hunches forward
+  const shoulderR = lerpPt([0.00, 1.40, 0.00], [ 0.15, 0.80, 0.05]);
+  // Arms start raised overhead, then wrap AROUND the knees with fists clasped in front.
+  const lElbow = lerpPt([-0.25, 1.90, 0.05],  [-0.35, 0.70, 0.30]);
+  const rElbow = lerpPt([ 0.25, 1.90, 0.05],  [ 0.35, 0.70, 0.30]);
+  const lFist  = lerpPt([ 0.00, 2.35, 0.00],  [-0.10, 0.50, 0.55]);
+  const rFist  = lerpPt([ 0.00, 2.35, 0.00],  [ 0.10, 0.50, 0.55]);
+  // Legs: knees pulled up to chest + forward; feet tucked back near butt (classic cannonball).
+  const lKnee = lerpPt([-0.25, 0.40, 0.10],   [-0.22, 0.75, 0.35]);
+  const rKnee = lerpPt([ 0.25, 0.40, 0.10],   [ 0.22, 0.75, 0.35]);
+  const lFoot = lerpPt([-0.30, 0.00, 0.00],   [-0.25, 0.40, 0.10]);
+  const rFoot = lerpPt([ 0.30, 0.00, 0.00],   [ 0.25, 0.40, 0.10]);
   const g = new THREE.Group();
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), hMat);
   head.position.set(headPos[0], headPos[1], headPos[2]);
@@ -5340,15 +5342,12 @@ function _rebuildSlamFigure(t) {
   g.add(makeBone(lKnee, lFoot, mat));              // left shin
   g.add(makeBone(hip, rKnee, mat));                // right thigh
   g.add(makeBone(rKnee, rFoot, mat));              // right shin
-  // Fist spheres hidden past t=0.6 so they don't visually float below the ground plane at impact.
-  if (t < 0.6) {
-    const lf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), mat);
-    lf.position.set(lFist[0], lFist[1], lFist[2]);
-    g.add(lf);
-    const rf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), mat);
-    rf.position.set(rFist[0], rFist[1], rFist[2]);
-    g.add(rf);
-  }
+  const lf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), mat);
+  lf.position.set(lFist[0], lFist[1], lFist[2]);
+  g.add(lf);
+  const rf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), mat);
+  rf.position.set(rFist[0], rFist[1], rFist[2]);
+  g.add(rf);
   _slam3P.figure.add(g);
   _slam3P.poseGroup = g;
 }
