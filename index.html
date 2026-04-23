@@ -527,7 +527,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.42</span>
+  <span style="font-weight:bold;color:#eee">v3.46</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.22.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -661,7 +661,7 @@
 <div id="chestHint" style="position:fixed;top:60%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.75);color:#ffe033;font-family:monospace;font-weight:bold;font-size:22px;padding:10px 18px;border-radius:6px;letter-spacing:2px;z-index:9;display:none;pointer-events:none;text-shadow:0 2px 6px #000">Press E (Y on controller) to Open Chest</div>
 <div id="chestLookUp" style="position:fixed;top:35%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:900;font-size:110px;color:#ffd020;letter-spacing:10px;z-index:15;display:none;pointer-events:none;text-shadow:0 4px 18px #000,0 0 30px #ffaa00">LOOK UP!</div>
 <div id="abilityHud">
-  <div id="orbDash" class="abilityOrb yellow" title="Dash — double-tap WASD"></div>
+  <div id="orbDash" class="abilityOrb yellow" title="Power Roll — double-tap WASD (or L3 on controller) to roll in that direction"></div>
   <div id="orbTriple" class="abilityOrb green" title="Triple Jump"></div>
   <div id="orbSlam" class="abilityOrb red" title="Power Slam — double-tap Crouch mid-air"></div>
 </div>
@@ -1616,6 +1616,10 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.46', 'Power Roll 0.75s + no-more-tunneling: horizontal movement substepped per frame so high-speed rolls/sprints can\'t clip through walls anymore.'],
+  ['v3.45', 'Power Roll camera: stays behind player\'s facing direction, so sideways rolls look like you\'re rolling across the screen.'],
+  ['v3.44', 'Power Roll: 1s duration, figure faces the roll direction, AoE radius matched to plasma (2m).'],
+  ['v3.43', 'Dash → Power Roll. 3rd-person cannonball roll deals impact damage to enemies in your path. 1.5x longer duration.'],
   ['v3.42', 'Changelog entries shortened to one-liners.'],
   ['v3.41', 'Cannonball slam pose.'],
   ['v3.40', 'Slam pose: hands drive into the ground on impact.'],
@@ -3749,8 +3753,8 @@ addEventListener('keydown', e => {
         else if (moveCode === 'KeyS') { dx = -fwdX; dz = -fwdZ; }
         else if (moveCode === 'KeyD') { dx = rgtX; dz = rgtZ; }
         else if (moveCode === 'KeyA') { dx = -rgtX; dz = -rgtZ; }
-        _dashVx = dx * 30; _dashVz = dz * 30; // 30 m/s × 0.2s = 6m dash
-        _dashTimer = 0.2;
+        _dashVx = dx * 30; _dashVz = dz * 30; // 30 m/s × 0.3s = 9m Power Roll
+        _dashTimer = 0.75;
         _dashLastTap[moveCode] = 0;
       } else {
         _dashLastTap[moveCode] = now;
@@ -5385,6 +5389,124 @@ function _exitSlam3P() {
   _slam3P = null;
 }
 
+// =========================================================================
+// Power Roll — 3rd-person cannonball roll + impact damage during _dashTimer
+// =========================================================================
+let _roll3P = null; // { outer, inner, truePos, hitSet, tumbleAngle }
+const ROLL_DAMAGE = 250;       // per-enemy impact damage
+const ROLL_HIT_RADIUS = 2.0;   // m — matches the Plasma gun's blastRadius for AoE feel
+function _buildCannonballGroup(boneMat, headMat) {
+  const g = new THREE.Group();
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), headMat);
+  head.position.set(0, 0.95, 0.20);
+  g.add(head);
+  g.add(makeBone([0.00, 0.85, 0.10], [0.00, 0.45, 0.00], boneMat)); // torso hunched
+  g.add(makeBone([-0.15, 0.80, 0.05], [-0.35, 0.70, 0.30], boneMat)); // L upper arm
+  g.add(makeBone([-0.35, 0.70, 0.30], [-0.10, 0.50, 0.55], boneMat)); // L forearm
+  g.add(makeBone([ 0.15, 0.80, 0.05], [ 0.35, 0.70, 0.30], boneMat)); // R upper arm
+  g.add(makeBone([ 0.35, 0.70, 0.30], [ 0.10, 0.50, 0.55], boneMat)); // R forearm
+  g.add(makeBone([0.00, 0.45, 0.00], [-0.22, 0.75, 0.35], boneMat)); // L thigh
+  g.add(makeBone([-0.22, 0.75, 0.35], [-0.25, 0.40, 0.10], boneMat)); // L shin
+  g.add(makeBone([0.00, 0.45, 0.00], [ 0.22, 0.75, 0.35], boneMat)); // R thigh
+  g.add(makeBone([ 0.22, 0.75, 0.35], [ 0.25, 0.40, 0.10], boneMat)); // R shin
+  const lf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), boneMat);
+  lf.position.set(-0.10, 0.50, 0.55);
+  g.add(lf);
+  const rf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), boneMat);
+  rf.position.set(0.10, 0.50, 0.55);
+  g.add(rf);
+  return g;
+}
+function _enterRoll3P() {
+  if (_roll3P) return;
+  const col = (typeof myPlayerColor === 'function') ? myPlayerColor() : { hex: 0x3aa0ff, emissive: 0x003060 };
+  const boneMat = new THREE.MeshBasicMaterial({ color: col.hex });
+  const headMat = new THREE.MeshLambertMaterial({ color: col.hex, emissive: col.emissive || 0, emissiveIntensity: 0.4 });
+  // Outer group tumbles; inner group offsets the figure so rotation happens around its center.
+  const outer = new THREE.Group();
+  const inner = _buildCannonballGroup(boneMat, headMat);
+  inner.position.y = -0.60; // drop inner so the cannonball center is at outer.position
+  outer.add(inner);
+  scene.add(outer);
+  _roll3P = { outer, inner, truePos: camera.position.clone(), hitSet: new Set(), tumbleAngle: 0 };
+  try { for (const k of Object.keys(weaponModels)) weaponModels[k].visible = false; } catch {}
+}
+function _updateRoll3P(dt) {
+  if (!_roll3P) return;
+  const truePos = camera.position.clone();
+  _roll3P.truePos = truePos;
+  // Center the cannonball roughly at the player's midsection (y = truePos.y - STANDING_Y + 0.6).
+  const eyeH = player.crouching ? CROUCH_Y : STANDING_Y;
+  const groundY = truePos.y - eyeH;
+  _roll3P.outer.position.set(truePos.x, groundY + 0.6, truePos.z);
+  // Orient the figure so its head tucks IN the direction of roll, then tumble around the
+  // figure's local X axis (perpendicular to its own forward) — this makes sideways/back rolls
+  // read as actual rolls in that direction, not just a forward-rolling figure that's sliding.
+  const vx = _dashVx, vz = _dashVz;
+  const mag = Math.hypot(vx, vz);
+  if (mag > 0) {
+    _roll3P.tumbleAngle += dt * 14;
+    // Figure yaw: the cannonball's "forward" (head-tuck direction) is +Z local. Rotate so +Z
+    // aligns with the velocity direction. atan2(-vx, -vz) matches the game's yaw convention
+    // where yaw=0 faces -Z.
+    const rollYaw = Math.atan2(-vx, -vz);
+    const yawQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rollYaw);
+    const tumbleQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), _roll3P.tumbleAngle);
+    // yawQ * tumbleQ → figure is first tumbled (around local X), then yawed into the roll direction.
+    _roll3P.outer.quaternion.multiplyQuaternions(yawQ, tumbleQ);
+  }
+  // Camera stays behind the player's FACING direction (their yaw) — not the roll direction.
+  // For left/right/back rolls, this means you see your character rolling sideways across the screen.
+  const back = 5.0, up = 2.3;
+  const yaw = player.yaw;
+  const fwdX = -Math.sin(yaw), fwdZ = -Math.cos(yaw);
+  camera.position.x = truePos.x - fwdX * back;
+  camera.position.y = truePos.y + up;
+  camera.position.z = truePos.z - fwdZ * back;
+  camera.lookAt(truePos.x, groundY + 0.6, truePos.z);
+  // Impact damage: hit any enemy within ROLL_HIT_RADIUS of the player that we haven't hit yet.
+  // In MP, only the host (or SP) applies damage directly; clients RPC claim hits.
+  try {
+    if (!mpActive() || mpIsHost()) {
+      for (const e of enemies) {
+        if (!e || !e.userData || e.userData.dead) continue;
+        const id = e.uuid;
+        if (_roll3P.hitSet.has(id)) continue;
+        const dx = e.position.x - truePos.x;
+        const dz = e.position.z - truePos.z;
+        const dy = (e.position.y) - groundY;
+        if (dx*dx + dz*dz < ROLL_HIT_RADIUS * ROLL_HIT_RADIUS && Math.abs(dy) < 2.5) {
+          _roll3P.hitSet.add(id);
+          applyDamage(e, ROLL_DAMAGE, false);
+        }
+      }
+    } else if (mpIsClient()) {
+      // Client: detect hits via ghostEnemies, RPC to host.
+      for (const [netId, ghost] of ghostEnemies) {
+        if (!ghost || !ghost.position) continue;
+        if (_roll3P.hitSet.has(netId)) continue;
+        const dx = ghost.position.x - truePos.x;
+        const dz = ghost.position.z - truePos.z;
+        const dy = (ghost.position.y) - groundY;
+        if (dx*dx + dz*dz < ROLL_HIT_RADIUS * ROLL_HIT_RADIUS && Math.abs(dy) < 2.5) {
+          _roll3P.hitSet.add(netId);
+          try { Playroom.RPC.call('rollHit', { id: netId, dmg: ROLL_DAMAGE }, Playroom.RPC.Mode.HOST); } catch {}
+        }
+      }
+    }
+  } catch {}
+}
+function _exitRoll3P() {
+  if (!_roll3P) return;
+  scene.remove(_roll3P.outer);
+  if (_roll3P.truePos) camera.position.copy(_roll3P.truePos);
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = player.yaw;
+  camera.rotation.x = player.pitch;
+  try { for (const k of Object.keys(weaponModels)) weaponModels[k].visible = (k === currentGun); } catch {}
+  _roll3P = null;
+}
+
 function resetAbilities() {
   hasDash = false; hasTripleJump = false; hasPowerSlam = false;
   _dashTimer = 0; _slamActive = false;
@@ -5661,7 +5783,7 @@ function grantAbilityForRound(r) {
   const body = document.getElementById('abilityBody');
   const banner = document.getElementById('abilityGranted');
   let text = '';
-  if (r === 3) { hasDash = true; text = 'DASH — double-tap W / A / S / D (keyboard) or double-tap Left Stick in any direction (controller) to dash that way'; }
+  if (r === 3) { hasDash = true; text = 'POWER ROLL — double-tap W / A / S / D (keyboard) or double-click L3 (controller) to roll in that direction. Slams through enemies in your path.'; }
   else if (r === 6) { hasTripleJump = true; text = 'TRIPLE JUMP — you can now jump three times in a row'; }
   else if (r === 9) { hasPowerSlam = true; text = 'POWER SLAM — double-tap Crouch (keyboard) or B (controller) while airborne to slam down into the ground. Try this with triple jump!'; }
   updateAbilityHud();
@@ -6748,7 +6870,7 @@ function updateGamepad(dt) {
         if (mag > 0) { dx /= mag; dz /= mag; }
       }
       _dashVx = dx * 30; _dashVz = dz * 30;
-      _dashTimer = 0.2;
+      _dashTimer = 0.75;
       gamepadCfg._lastL3 = 0; // reset so a third click doesn't also dash immediately
     } else {
       gamepadCfg._lastL3 = nowMs;
@@ -7182,30 +7304,41 @@ function updatePlayer(dt) {
   const eyeH = crouching ? CROUCH_Y : STANDING_Y;
   const feetY = camera.position.y - eyeH;
   const headY = camera.position.y + 0.1; // roughly top of head
-  const next = camera.position.clone().addScaledVector(move, speed * dt);
-  // Dash — add a burst velocity to the movement this frame
+  // Compute TOTAL horizontal step (movement + dash burst), then substep it so a single frame
+  // can't tunnel through walls. Without this, Power Roll (30 m/s × 0.017s ≈ 0.5m per frame > player.radius 0.35m)
+  // would skip past walls. Substeps are capped at 0.25m each so the wall collision always catches them.
+  let totalDx = move.x * speed * dt;
+  let totalDz = move.z * speed * dt;
   if (_dashTimer > 0) {
-    next.x += _dashVx * dt;
-    next.z += _dashVz * dt;
+    totalDx += _dashVx * dt;
+    totalDz += _dashVz * dt;
     _dashTimer -= dt;
   }
-  // Horizontal collision — skip floors, skip walls we are above, skip walls we pass under,
-  // and skip any wall whose top is within step-up range so the player can walk onto ramp
-  // slabs without being blocked horizontally first.
-  if (!(sandboxActive && sxNoclip)) for (const w of walls) {
-    if (w.isFloor) continue;
-    if (feetY + 0.05 >= w.max.y) continue;   // above the wall
-    if (w.max.y <= feetY + 0.3) continue;    // low enough to step onto — let the step-up logic handle it
-    if (headY - 0.05 <= w.min.y) continue;   // below the wall (walking under it)
-    const cx = Math.max(w.min.x, Math.min(next.x, w.max.x));
-    const cz = Math.max(w.min.z, Math.min(next.z, w.max.z));
-    const dx = next.x - cx, dz = next.z - cz;
-    const d2 = dx * dx + dz * dz;
-    if (d2 < player.radius * player.radius) {
-      const d = Math.sqrt(d2) || 0.0001;
-      const push = (player.radius - d);
-      next.x += (dx / d) * push;
-      next.z += (dz / d) * push;
+  const totalDist = Math.hypot(totalDx, totalDz);
+  const MAX_SUBSTEP = 0.25; // < player.radius (0.35) so nothing slips past a wall
+  const numSubsteps = Math.max(1, Math.ceil(totalDist / MAX_SUBSTEP));
+  const subDx = totalDx / numSubsteps;
+  const subDz = totalDz / numSubsteps;
+  const next = camera.position.clone();
+  for (let s = 0; s < numSubsteps; s++) {
+    next.x += subDx;
+    next.z += subDz;
+    // Horizontal collision (same checks as before, applied per substep).
+    if (!(sandboxActive && sxNoclip)) for (const w of walls) {
+      if (w.isFloor) continue;
+      if (feetY + 0.05 >= w.max.y) continue;
+      if (w.max.y <= feetY + 0.3) continue;
+      if (headY - 0.05 <= w.min.y) continue;
+      const cx = Math.max(w.min.x, Math.min(next.x, w.max.x));
+      const cz = Math.max(w.min.z, Math.min(next.z, w.max.z));
+      const dx = next.x - cx, dz = next.z - cz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < player.radius * player.radius) {
+        const d = Math.sqrt(d2) || 0.0001;
+        const push = (player.radius - d);
+        next.x += (dx / d) * push;
+        next.z += (dz / d) * push;
+      }
     }
   }
   next.x = Math.max(-half + 1, Math.min(half - 1, next.x));
@@ -7978,22 +8111,25 @@ function loop() {
   if (mpActive() && document.getElementById('winScreen').style.display === 'flex') updateWinReadyUI();
   if ((roundActive || sandboxActive || _chestPodium || _chestInProgress) && !paused && !(mpIsClient() && hostPaused)) {
     safeCall(updateGamepad, dt);
-    // Power Slam 3P: before updatePlayer, restore camera to the "true" player position so
-    // updatePlayer's gravity / landing logic works on the actual player, not the offset camera.
+    // Restore camera before updatePlayer so gravity/collision run on the real player position,
+    // not the 3rd-person offset from last frame's Slam or Roll.
     if (_slam3P && _slam3P.truePos) camera.position.copy(_slam3P.truePos);
+    else if (_roll3P && _roll3P.truePos) camera.position.copy(_roll3P.truePos);
     safeCall(updatePlayer, dt);
-    // Slam 3P lifecycle: enter on slam start, linger ~900ms after ground impact so the player can
-    // actually see the slam from 3rd person, then exit back to 1st.
-    if (_slamActive && !_slam3P) { console.log('[slam3p] enter'); _enterSlam3P(); _updateSlam3P(dt); }
+    // Slam 3P lifecycle (takes priority over Roll).
+    if (_slamActive && !_slam3P) { _enterSlam3P(); _updateSlam3P(dt); }
     else if (!_slamActive && _slam3P && !_slam3P.landedAt) {
       _slam3P.landedAt = performance.now();
-      _updateSlam3P(dt); // keep camera at 3P on the exact landing frame
+      _updateSlam3P(dt);
     }
-    else if (_slam3P && _slam3P.landedAt && performance.now() - _slam3P.landedAt > 900) {
-      console.log('[slam3p] exit');
-      _exitSlam3P();
-    }
+    else if (_slam3P && _slam3P.landedAt && performance.now() - _slam3P.landedAt > 900) _exitSlam3P();
     else if (_slam3P) _updateSlam3P(dt);
+    // Power Roll 3P lifecycle — only when not slamming.
+    else {
+      if (_dashTimer > 0 && !_roll3P) { _enterRoll3P(); _updateRoll3P(dt); }
+      else if (_dashTimer <= 0 && _roll3P) _exitRoll3P();
+      else if (_roll3P) _updateRoll3P(dt);
+    }
     if (!mpActive() || mpIsHost()) {
       safeCall(updateEnemies, dt);
       safeCall(updateBullets, dt);
@@ -9475,6 +9611,14 @@ async function startMultiplayer(joinCode) {
           try { makeChestPodium(); } catch {}
         }
         openChestLocal();
+      });
+      Playroom.RPC.register('rollHit', (data, sender) => {
+        if (!mpIsHost()) return;
+        const netId = data && data.id;
+        const dmg = (data && data.dmg) || ROLL_DAMAGE;
+        const enemy = enemies.find(e => e && e.userData && e.userData._netId === netId);
+        if (!enemy || enemy.userData.dead) return;
+        applyDamageWithCredit(enemy, dmg, false, sender && sender.id);
       });
       Playroom.RPC.register('claimBooster', (data, sender) => {
         if (!mpIsHost()) return;
