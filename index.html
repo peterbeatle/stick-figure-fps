@@ -527,7 +527,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.39</span>
+  <span style="font-weight:bold;color:#eee">v3.40</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.22.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -1616,6 +1616,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.40', 'Slam pose: fists now drive below the ground plane on impact (y=-0.2) with forearms pointing straight down. Fist spheres hidden past t=0.6 so nothing floats below ground. Will read as "hands buried into the earth" through the ground plane clip.'],
   ['v3.39', 'Two big ones: (1) Slam pose v4 — full-body animation: upright stick figure with arms raised overhead falls, then on impact the WHOLE figure squats (head/torso/hip all drop) with arms swinging straight down to his sides. No more hands-into-ground weirdness. (2) Leaderboard per-difficulty filter: new row of 6 buttons (All / 1 Easy / 2 Norm / 3 Hard / 4 Ins / 5 Nght). "All" uses the existing aggregate profile columns; specific difficulty queries a new profile_runs table that tracks bests per (mode × difficulty). Runs are submitted to BOTH tables on run-end. All filter buttons are controller-cursor clickable.'],
   ['v3.38', 'Slam pose v3: fists now drive INTO the ground on impact. Forearm endpoints extend below y=0 so the ground plane clips them (reads as "hands buried into the earth"); fist sphere fades out past t=0.5 so there\'s nothing awkward floating around at the end of the animation.'],
   ['v3.37', 'Slam pose v2 — "hulk smash". Both forearms converge to a single clasped fist in front of the player (single larger fist sphere) instead of two separate fists spread apart. Previous pose had fists at (-0.15, 0.55) and (+0.15, 0.55) which read weird; now both bones end at (0, 0.15, 0.55).'],
@@ -5315,11 +5316,12 @@ function _rebuildSlamFigure(t) {
   const hip       = lerpPt([0.00, 0.90, 0.00], [0.00, 0.70, 0.00]);
   const shoulderL = lerpPt([0.00, 1.40, 0.00], [0.00, 1.00, 0.00]);
   const shoulderR = shoulderL;
-  // Arms: raised-overhead (clasped above head)  →  straight down at sides, fists near hips.
-  const lElbow = lerpPt([-0.25, 1.90, 0.05],  [-0.30, 0.70, 0.00]);
-  const rElbow = lerpPt([ 0.25, 1.90, 0.05],  [ 0.30, 0.70, 0.00]);
-  const lFist  = lerpPt([ 0.00, 2.35, 0.00],  [-0.32, 0.40, 0.00]);
-  const rFist  = lerpPt([ 0.00, 2.35, 0.00],  [ 0.32, 0.40, 0.00]);
+  // Arms: raised-overhead (clasped above head)  →  straight down at sides, fists DRIVEN INTO the
+  // ground (below y=0 so the ground plane clips them — reads as "hands buried into the earth").
+  const lElbow = lerpPt([-0.25, 1.90, 0.05],  [-0.30, 0.50, 0.00]);
+  const rElbow = lerpPt([ 0.25, 1.90, 0.05],  [ 0.30, 0.50, 0.00]);
+  const lFist  = lerpPt([ 0.00, 2.35, 0.00],  [-0.32,-0.20, 0.00]);
+  const rFist  = lerpPt([ 0.00, 2.35, 0.00],  [ 0.32,-0.20, 0.00]);
   // Legs: t=0 mild skydive bend, t=1 deep squat — knees forward & out, feet wider + slightly forward.
   const lKnee = lerpPt([-0.25, 0.40, 0.10],   [-0.38, 0.35, 0.30]);
   const rKnee = lerpPt([ 0.25, 0.40, 0.10],   [ 0.38, 0.35, 0.30]);
@@ -5338,12 +5340,15 @@ function _rebuildSlamFigure(t) {
   g.add(makeBone(lKnee, lFoot, mat));              // left shin
   g.add(makeBone(hip, rKnee, mat));                // right thigh
   g.add(makeBone(rKnee, rFoot, mat));              // right shin
-  const lf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), mat);
-  lf.position.set(lFist[0], lFist[1], lFist[2]);
-  g.add(lf);
-  const rf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), mat);
-  rf.position.set(rFist[0], rFist[1], rFist[2]);
-  g.add(rf);
+  // Fist spheres hidden past t=0.6 so they don't visually float below the ground plane at impact.
+  if (t < 0.6) {
+    const lf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), mat);
+    lf.position.set(lFist[0], lFist[1], lFist[2]);
+    g.add(lf);
+    const rf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), mat);
+    rf.position.set(rFist[0], rFist[1], rFist[2]);
+    g.add(rf);
+  }
   _slam3P.figure.add(g);
   _slam3P.poseGroup = g;
 }
