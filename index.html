@@ -527,7 +527,7 @@
 </div>
 <div id="spectateLabel" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:monospace;font-weight:bold;font-size:38px;color:#aaf;text-shadow:0 0 12px #44f,0 0 2px #000;letter-spacing:6px;z-index:7;display:none;pointer-events:none">SPECTATING</div>
 <div id="versionTag" style="position:fixed;top:14px;right:300px;background:rgba(0,0,0,0.55);color:#aaa;font-family:monospace;font-size:12px;padding:4px 10px;border-radius:4px;z-index:30;line-height:1.4;white-space:nowrap;pointer-events:auto;cursor:default">
-  <span style="font-weight:bold;color:#eee">v3.38</span>
+  <span style="font-weight:bold;color:#eee">v3.39</span>
   <span style="opacity:0.75;font-size:11px">— Last Updated 4.22.26</span>
   <span id="versionCaret" style="color:#ffcc33;font-size:16px;margin-left:8px;display:none;font-weight:bold;text-shadow:0 0 6px rgba(255,200,50,0.6)">▼</span>
 </div>
@@ -890,9 +890,17 @@
         <button type="button" class="lbTab" data-mode="sp" style="flex:1;background:#2864c2;color:white;border:0;border-radius:4px;padding:8px;cursor:pointer;font-family:monospace;font-weight:bold">Single Player</button>
         <button type="button" class="lbTab" data-mode="mp" style="flex:1;background:#333;color:#ccc;border:0;border-radius:4px;padding:8px;cursor:pointer;font-family:monospace">Multiplayer</button>
       </div>
-      <div style="display:flex;gap:6px;margin-bottom:12px">
+      <div style="display:flex;gap:6px;margin-bottom:8px">
         <button type="button" class="lbSubTab" data-stat="round" style="flex:1;background:#4caf50;color:white;border:0;border-radius:3px;padding:6px;cursor:pointer;font-family:monospace;font-size:12px;font-weight:bold">Highest Round</button>
         <button type="button" class="lbSubTab" data-stat="kills" style="flex:1;background:#333;color:#ccc;border:0;border-radius:3px;padding:6px;cursor:pointer;font-family:monospace;font-size:12px">Most Kills</button>
+      </div>
+      <div style="display:flex;gap:4px;margin-bottom:12px;font-size:11px">
+        <button type="button" class="lbDiffTab" data-diff="all" style="flex:1;background:#c8a0ff;color:#1a1228;border:0;border-radius:3px;padding:5px;cursor:pointer;font-family:monospace;font-weight:bold">All</button>
+        <button type="button" class="lbDiffTab" data-diff="1" style="flex:1;background:#333;color:#ccc;border:0;border-radius:3px;padding:5px;cursor:pointer;font-family:monospace">1 Easy</button>
+        <button type="button" class="lbDiffTab" data-diff="2" style="flex:1;background:#333;color:#ccc;border:0;border-radius:3px;padding:5px;cursor:pointer;font-family:monospace">2 Norm</button>
+        <button type="button" class="lbDiffTab" data-diff="3" style="flex:1;background:#333;color:#ccc;border:0;border-radius:3px;padding:5px;cursor:pointer;font-family:monospace">3 Hard</button>
+        <button type="button" class="lbDiffTab" data-diff="4" style="flex:1;background:#333;color:#ccc;border:0;border-radius:3px;padding:5px;cursor:pointer;font-family:monospace">4 Ins</button>
+        <button type="button" class="lbDiffTab" data-diff="5" style="flex:1;background:#333;color:#ccc;border:0;border-radius:3px;padding:5px;cursor:pointer;font-family:monospace">5 Nght</button>
       </div>
       <div id="lbList" style="max-height:400px;overflow-y:auto;background:#0d0d0d;border:1px solid #333;border-radius:6px;font-size:13px"></div>
       <div style="display:flex;justify-content:flex-end;margin-top:14px">
@@ -1325,18 +1333,27 @@
     // Leaderboard
     let _lbMode = 'sp';
     let _lbStat = 'round';
+    let _lbDiff = 'all'; // 'all' or '1'..'5'
     async function loadLeaderboard() {
-      const col = _lbStat === 'kills' ? `best_kills_${_lbMode}` : `best_round_${_lbMode}`;
       const list = $('lbList');
       list.innerHTML = '<div style="padding:14px;opacity:0.6">Loading…</div>';
       try {
-        const data = await restQuery(`profiles?select=username,${col}&order=${col}.desc&limit=10`);
-        const rows = (data || []).filter(r => (r[col] || 0) > 0);
-        if (!rows.length) { list.innerHTML = '<div style="padding:14px;opacity:0.6">No scores yet. Be the first!</div>'; return; }
+        let rows;
+        if (_lbDiff === 'all') {
+          // "All difficulties" — use the aggregate cols on profiles (overall best across all diffs).
+          const col = _lbStat === 'kills' ? `best_kills_${_lbMode}` : `best_round_${_lbMode}`;
+          const data = await restQuery(`profiles?select=username,${col}&order=${col}.desc&limit=10`);
+          rows = (data || []).map(r => ({ username: r.username, value: r[col] || 0 })).filter(r => r.value > 0);
+        } else {
+          // Specific difficulty — pull from profile_runs + join profiles for username.
+          const col = _lbStat === 'kills' ? 'best_kills' : 'best_round';
+          const data = await restQuery(`profile_runs?select=${col},profiles!inner(username)&mode=eq.${_lbMode}&difficulty=eq.${_lbDiff}&order=${col}.desc&limit=10`);
+          rows = (data || []).map(r => ({ username: (r.profiles && r.profiles.username) || '—', value: r[col] || 0 })).filter(r => r.value > 0);
+        }
+        if (!rows.length) { list.innerHTML = '<div style="padding:14px;opacity:0.6">No scores yet on this filter.</div>'; return; }
         list.innerHTML = rows.map((row, i) => {
-          const val = row[col] || 0;
           const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #222"><span style="color:#ddd">${medal} ${row.username.replace(/</g, '&lt;')}</span><span style="color:#ffcc33;font-weight:bold">${val}</span></div>`;
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #222"><span style="color:#ddd">${medal} ${(row.username || '').replace(/</g, '&lt;')}</span><span style="color:#ffcc33;font-weight:bold">${row.value}</span></div>`;
         }).join('');
       } catch (e) {
         list.innerHTML = `<div style="padding:14px;color:#ff8080">Error: ${(e && e.message) || e}</div>`;
@@ -1355,9 +1372,15 @@
         b.style.color = active ? 'white' : '#ccc';
         b.style.fontWeight = active ? 'bold' : 'normal';
       });
+      document.querySelectorAll('.lbDiffTab').forEach(b => {
+        const active = b.dataset.diff === _lbDiff;
+        b.style.background = active ? '#c8a0ff' : '#333';
+        b.style.color = active ? '#1a1228' : '#ccc';
+        b.style.fontWeight = active ? 'bold' : 'normal';
+      });
     }
     $('acctLeaderboardBtn').addEventListener('click', () => {
-      _lbMode = 'sp'; _lbStat = 'round';
+      _lbMode = 'sp'; _lbStat = 'round'; _lbDiff = 'all';
       updateTabStyles();
       loadLeaderboard();
       showModal('leaderboardModal');
@@ -1369,6 +1392,10 @@
     }));
     document.querySelectorAll('.lbSubTab').forEach(btn => btn.addEventListener('click', () => {
       _lbStat = btn.dataset.stat;
+      updateTabStyles(); loadLeaderboard();
+    }));
+    document.querySelectorAll('.lbDiffTab').forEach(btn => btn.addEventListener('click', () => {
+      _lbDiff = btn.dataset.diff;
       updateTabStyles(); loadLeaderboard();
     }));
 
@@ -1490,6 +1517,30 @@
       Object.assign(profile, updates);
       console.log('[auth] new personal best!', updates);
       setStatus('New personal best saved! 🏆', '#ffcc33');
+      // ALSO upsert per-difficulty row in profile_runs so the Leaderboard can filter by difficulty.
+      try {
+        const diff = (typeof window.getActiveDifficultyLevel === 'function') ? window.getActiveDifficultyLevel() : 2;
+        const mode = isMP ? 'mp' : 'sp';
+        // Read existing row to compute max (server-side function would be cleaner; this is simpler).
+        const existingRows = await restQuery(`profile_runs?user_id=eq.${encodeURIComponent(user.id)}&mode=eq.${mode}&difficulty=eq.${diff}&select=best_kills,best_round&limit=1`);
+        const existing = (existingRows && existingRows[0]) || { best_kills: 0, best_round: 0 };
+        const bestK = Math.max(existing.best_kills || 0, kills || 0);
+        const bestR = Math.max(existing.best_round || 0, round || 0);
+        const onlyUpsertIfChanged = (bestK !== (existing.best_kills || 0)) || (bestR !== (existing.best_round || 0));
+        if (onlyUpsertIfChanged) {
+          const r2 = await fetch(`${SUPABASE_URL}/rest/v1/profile_runs`, {
+            method: 'POST',
+            headers: {
+              'apikey': SUPABASE_KEY,
+              'Authorization': `Bearer ${sess.access_token}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'resolution=merge-duplicates',
+            },
+            body: JSON.stringify({ user_id: user.id, mode, difficulty: diff, best_kills: bestK, best_round: bestR }),
+          });
+          if (!r2.ok) console.warn('[auth] profile_runs upsert failed', r2.status, await r2.text());
+        }
+      } catch (e) { console.warn('[auth] profile_runs upsert error', e); }
     } catch (e) { console.warn('[auth] submit stats error', e); }
   };
 
@@ -1565,6 +1616,7 @@ function hideUsernameGate() {
 
 // ---------- Changelog (dropdown from version tag on home screen) ----------
 const CHANGELOG = [
+  ['v3.39', 'Two big ones: (1) Slam pose v4 — full-body animation: upright stick figure with arms raised overhead falls, then on impact the WHOLE figure squats (head/torso/hip all drop) with arms swinging straight down to his sides. No more hands-into-ground weirdness. (2) Leaderboard per-difficulty filter: new row of 6 buttons (All / 1 Easy / 2 Norm / 3 Hard / 4 Ins / 5 Nght). "All" uses the existing aggregate profile columns; specific difficulty queries a new profile_runs table that tracks bests per (mode × difficulty). Runs are submitted to BOTH tables on run-end. All filter buttons are controller-cursor clickable.'],
   ['v3.38', 'Slam pose v3: fists now drive INTO the ground on impact. Forearm endpoints extend below y=0 so the ground plane clips them (reads as "hands buried into the earth"); fist sphere fades out past t=0.5 so there\'s nothing awkward floating around at the end of the animation.'],
   ['v3.37', 'Slam pose v2 — "hulk smash". Both forearms converge to a single clasped fist in front of the player (single larger fist sphere) instead of two separate fists spread apart. Previous pose had fists at (-0.15, 0.55) and (+0.15, 0.55) which read weird; now both bones end at (0, 0.15, 0.55).'],
   ['v3.36', 'Round-skip cheat now grants the chest abilities you would\'ve earned up to that round: skip to 4–6 = Dash, 7–9 = Dash + Triple Jump, 10+ = all three (Dash + Triple Jump + Power Slam). HUD orbs on the left-side ability panel update immediately.'],
@@ -3610,6 +3662,8 @@ function getActiveDifficultyLevel() {
   }
   return gameDifficulty;
 }
+// Bridge for the auth script (runs in a separate <script>) to read the current difficulty on run end.
+window.getActiveDifficultyLevel = getActiveDifficultyLevel;
 // Migrate away from any previously-persisted unlock (pre-v3 stored this in localStorage).
 try { localStorage.removeItem('cheatsUnlocked'); } catch {}
 // Flips true the moment any cheat is active during a run; reset in startRound / restartGame.
@@ -5240,52 +5294,58 @@ function _enterSlam3P() {
   const col = (typeof myPlayerColor === 'function') ? myPlayerColor() : { hex: 0x3aa0ff, emissive: 0x003060 };
   const boneMat = new THREE.MeshBasicMaterial({ color: col.hex });
   const headMat = new THREE.MeshLambertMaterial({ color: col.hex, emissive: col.emissive || 0x000000, emissiveIntensity: 0.4 });
-  const g = new THREE.Group();
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), headMat);
-  head.position.set(0, 1.75, 0);
-  g.add(head);
-  // Torso
-  g.add(makeBone([0, 1.5, 0], [0, 0.9, 0], boneMat));
-  // Legs bent like a skydiving slam
-  g.add(makeBone([0, 0.9, 0], [-0.25, 0.4, 0.1], boneMat));
-  g.add(makeBone([-0.25, 0.4, 0.1], [-0.3, 0.0, 0], boneMat));
-  g.add(makeBone([0, 0.9, 0], [0.25, 0.4, 0.1], boneMat));
-  g.add(makeBone([0.25, 0.4, 0.1], [0.3, 0.0, 0], boneMat));
-  scene.add(g);
-  _slam3P = { figure: g, startTime: performance.now(), boneMat, armGroup: null };
-  _rebuildSlamArms(0); // start with raised-overhead pose
-  // Hide the first-person weapon so it doesn't hang in front of the 3rd-person camera
+  const root = new THREE.Group();
+  scene.add(root);
+  _slam3P = { figure: root, startTime: performance.now(), boneMat, headMat, poseGroup: null };
+  _rebuildSlamFigure(0);
   try { for (const k of Object.keys(weaponModels)) weaponModels[k].visible = false; } catch {}
 }
-// Interpolate arms between "raised overhead" (t=0) and "slammed down at ground" (t=1).
-function _rebuildSlamArms(t) {
+// Rebuild the full stick figure each frame with positions interpolated by t (0→1).
+// t=0: upright, arms raised overhead.  t=1: squatting low, arms straight down at sides, knees bent.
+function _rebuildSlamFigure(t) {
   if (!_slam3P) return;
-  if (_slam3P.armGroup) _slam3P.figure.remove(_slam3P.armGroup);
+  if (_slam3P.poseGroup) _slam3P.figure.remove(_slam3P.poseGroup);
   const mat = _slam3P.boneMat;
+  const hMat = _slam3P.headMat;
   const lerp = (a, b) => a + (b - a) * t;
   const lerpPt = (a, b) => [lerp(a[0], b[0]), lerp(a[1], b[1]), lerp(a[2], b[2])];
-  // Shoulder (pivot). Elbow + fist interpolate between the two poses.
-  const shoulder = [0, 1.4, 0];
-  // Raised pose (t=0):  elbows up+in, fists clasped overhead at (0, 2.35, 0)
-  // Slammed pose (t=1): arms plunge into the ground — forearms extend BELOW y=0 so the ground
-  //                     plane clips them (reads as "hands buried themselves into the earth").
-  //                     No visible fist sphere.
-  const lElbow = lerpPt([-0.25, 1.9, 0.05], [-0.16, 0.55, 0.15]);
-  const rElbow = lerpPt([ 0.25, 1.9, 0.05], [ 0.16, 0.55, 0.15]);
-  const clasped = lerpPt([0.00, 2.35, 0.00], [0.00, -0.35, 0.25]); // fists driven below ground
+  // All body landmarks interpolate between the upright and squat poses.
+  const headPos   = lerpPt([0.00, 1.75, 0.00], [0.00, 1.30, 0.00]);
+  const neck      = lerpPt([0.00, 1.50, 0.00], [0.00, 1.10, 0.00]);
+  const hip       = lerpPt([0.00, 0.90, 0.00], [0.00, 0.70, 0.00]);
+  const shoulderL = lerpPt([0.00, 1.40, 0.00], [0.00, 1.00, 0.00]);
+  const shoulderR = shoulderL;
+  // Arms: raised-overhead (clasped above head)  →  straight down at sides, fists near hips.
+  const lElbow = lerpPt([-0.25, 1.90, 0.05],  [-0.30, 0.70, 0.00]);
+  const rElbow = lerpPt([ 0.25, 1.90, 0.05],  [ 0.30, 0.70, 0.00]);
+  const lFist  = lerpPt([ 0.00, 2.35, 0.00],  [-0.32, 0.40, 0.00]);
+  const rFist  = lerpPt([ 0.00, 2.35, 0.00],  [ 0.32, 0.40, 0.00]);
+  // Legs: t=0 mild skydive bend, t=1 deep squat — knees forward & out, feet wider + slightly forward.
+  const lKnee = lerpPt([-0.25, 0.40, 0.10],   [-0.38, 0.35, 0.30]);
+  const rKnee = lerpPt([ 0.25, 0.40, 0.10],   [ 0.38, 0.35, 0.30]);
+  const lFoot = lerpPt([-0.30, 0.00, 0.00],   [-0.40, 0.00, 0.05]);
+  const rFoot = lerpPt([ 0.30, 0.00, 0.00],   [ 0.40, 0.00, 0.05]);
   const g = new THREE.Group();
-  g.add(makeBone(shoulder, lElbow, mat));
-  g.add(makeBone(lElbow, clasped, mat));
-  g.add(makeBone(shoulder, rElbow, mat));
-  g.add(makeBone(rElbow, clasped, mat));
-  // Fist sphere fades away as hands go into the ground — hidden entirely past t=0.5.
-  if (t < 0.5) {
-    const fist = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), mat);
-    fist.position.set(clasped[0], clasped[1], clasped[2]);
-    g.add(fist);
-  }
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), hMat);
+  head.position.set(headPos[0], headPos[1], headPos[2]);
+  g.add(head);
+  g.add(makeBone(neck, hip, mat));                 // torso
+  g.add(makeBone(shoulderL, lElbow, mat));         // left upper arm
+  g.add(makeBone(lElbow, lFist, mat));             // left forearm
+  g.add(makeBone(shoulderR, rElbow, mat));         // right upper arm
+  g.add(makeBone(rElbow, rFist, mat));             // right forearm
+  g.add(makeBone(hip, lKnee, mat));                // left thigh
+  g.add(makeBone(lKnee, lFoot, mat));              // left shin
+  g.add(makeBone(hip, rKnee, mat));                // right thigh
+  g.add(makeBone(rKnee, rFoot, mat));              // right shin
+  const lf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), mat);
+  lf.position.set(lFist[0], lFist[1], lFist[2]);
+  g.add(lf);
+  const rf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), mat);
+  rf.position.set(rFist[0], rFist[1], rFist[2]);
+  g.add(rf);
   _slam3P.figure.add(g);
-  _slam3P.armGroup = g;
+  _slam3P.poseGroup = g;
 }
 function _updateSlam3P(dt) {
   if (!_slam3P) return;
@@ -5294,12 +5354,12 @@ function _updateSlam3P(dt) {
   const eyeH = player.crouching ? CROUCH_Y : STANDING_Y;
   _slam3P.figure.position.set(truePos.x, truePos.y - eyeH, truePos.z);
   _slam3P.figure.rotation.y = player.yaw + Math.PI;
-  // Arm animation: raised while falling, swing down over 180ms starting the frame ground is hit.
-  let armT = 0; // 0 = raised, 1 = fully slammed down
+  // Full-body animation: raised + upright while falling, then squat down with arms at sides on impact.
+  let poseT = 0; // 0 = upright/raised, 1 = fully squatted/slammed
   if (_slam3P.landedAt) {
-    armT = Math.min(1, (performance.now() - _slam3P.landedAt) / 180);
+    poseT = Math.min(1, (performance.now() - _slam3P.landedAt) / 180);
   }
-  _rebuildSlamArms(armT);
+  _rebuildSlamFigure(poseT);
   // 3P camera: pull back along the player's backward direction + rise
   const yaw = player.yaw;
   const back = 5.5, up = 2.5;
